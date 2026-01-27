@@ -97,6 +97,8 @@ export default function AttendanceScreen() {
       return;
     }
 
+    await handleExportHistory();
+
     setRawText('');
     setAttendance(emptyData);
     Alert.alert('Dados arquivados', 'A escala foi arquivada e o formulário foi limpo.');

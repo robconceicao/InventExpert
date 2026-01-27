@@ -323,6 +323,8 @@ export default function ReportBScreen() {
       return;
     }
 
+    await handleExportHistory();
+
     for (const uri of photoUris) {
       if (uri.startsWith('file://')) {
         try {

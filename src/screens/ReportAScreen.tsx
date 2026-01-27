@@ -260,6 +260,8 @@ export default function ReportAScreen() {
       return;
     }
 
+    await handleExportHistory();
+
     setReport(createInitialState());
     setPhText('');
     setPercentText({
