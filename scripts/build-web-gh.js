@@ -61,10 +61,14 @@ const htmlFiles = collectHtmlFiles(docsDir);
 
 const replaceInHtml = (filePath) => {
   const content = fs.readFileSync(filePath, 'utf8');
-  const updated = content
+  let updated = content
     .replace(/href="\/favicon\.ico"/g, 'href="./favicon.ico"')
     .replace(/src="\/_expo\//g, 'src="./_expo/')
     .replace(/href="\/_expo\//g, 'href="./_expo/');
+  if (resolvedBasePath) {
+    updated = updated.replace(/href="\//g, `href="${resolvedBasePath}`);
+    updated = updated.replace(/src="\//g, `src="${resolvedBasePath}`);
+  }
   if (updated !== content) {
     fs.writeFileSync(filePath, updated);
   }
