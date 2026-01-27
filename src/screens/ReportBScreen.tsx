@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
+import * as Print from 'expo-print';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -75,12 +77,24 @@ const numberToInput = (value: number) => (value === 0 ? '' : `${value}`);
 const percentToInput = (value: number) =>
   value === 0 ? '' : `${String(value).replace('.', ',')}%`;
 
+type ReportBPercentKey =
+  | 'avalPrepDeposito'
+  | 'avalPrepLoja'
+  | 'acuracidadeCliente'
+  | 'acuracidadeTerceirizada';
+
 export default function ReportBScreen() {
   const [report, setReport] = useState<ReportB>(createInitialState);
   const [valorFinanceiroText, setValorFinanceiroText] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [suporteSelecionado, setSuporteSelecionado] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [percentText, setPercentText] = useState<Record<ReportBPercentKey, string>>({
+    avalPrepDeposito: '',
+    avalPrepLoja: '',
+    acuracidadeCliente: '',
+    acuracidadeTerceirizada: '',
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -95,6 +109,12 @@ export default function ReportBScreen() {
         setValorFinanceiroText(
           parsed.valorFinanceiro ? formatCurrencyInput(String(parsed.valorFinanceiro * 100)) : '',
         );
+        setPercentText({
+          avalPrepDeposito: percentToInput(parsed.avalPrepDeposito),
+          avalPrepLoja: percentToInput(parsed.avalPrepLoja),
+          acuracidadeCliente: percentToInput(parsed.acuracidadeCliente),
+          acuracidadeTerceirizada: percentToInput(parsed.acuracidadeTerceirizada),
+        });
       }
       if (storedPhotos) {
         setPhotoUris(JSON.parse(storedPhotos) as string[]);
@@ -113,6 +133,13 @@ export default function ReportBScreen() {
 
   const setField = <K extends keyof ReportB>(key: K, value: ReportB[K]) => {
     setReport((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setPercentField = (key: ReportBPercentKey, text: string) => {
+    const formatted = formatPercentInput(text, 0, 100, 2);
+    const withSuffix = formatted ? `${formatted}%` : '';
+    setPercentText((prev) => ({ ...prev, [key]: withSuffix }));
+    setField(key, parsePercentInput(formatted, 0));
   };
 
   const handlePickImages = async () => {
@@ -229,21 +256,44 @@ export default function ReportBScreen() {
   };
 
   const handleSharePhotos = async () => {
+    if (photoUris.length === 0) {
+      Alert.alert('Aviso', 'Adicione fotos antes de compartilhar.');
+      return;
+    }
     const isShareAvailable = await Sharing.isAvailableAsync();
     if (!isShareAvailable) {
       Alert.alert('Aviso', 'Compartilhamento de imagens não disponível neste dispositivo.');
       return;
     }
 
-    for (const uri of photoUris) {
-      try {
+    try {
+      const imageTags: string[] = [];
+      for (const uri of photoUris) {
         const manipulated = await ImageManipulator.manipulateAsync(
           uri,
           [{ resize: { width: 1600 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
         );
-        await Sharing.shareAsync(manipulated.uri);
-      } catch {
+        if (manipulated.base64) {
+          imageTags.push(
+            `<img src="data:image/jpeg;base64,${manipulated.base64}" style="width:100%;margin:0 0 16px 0;" />`,
+          );
+        }
+      }
+
+      if (imageTags.length === 0) {
+        Alert.alert('Aviso', 'Não foi possível preparar as imagens.');
+        return;
+      }
+
+      const html = `<html><body style="margin:0;padding:16px;">${imageTags.join(
+        '',
+      )}</body></html>`;
+      const file = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(file.uri);
+      await FileSystem.deleteAsync(file.uri, { idempotent: true });
+    } catch {
+      for (const uri of photoUris) {
         await Sharing.shareAsync(uri);
       }
     }
@@ -501,10 +551,8 @@ export default function ReportBScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avaliação de preparação do depósito</Text>
             <TextInput
-              value={percentToInput(report.avalPrepDeposito)}
-              onChangeText={(text) =>
-                setField('avalPrepDeposito', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avalPrepDeposito}
+              onChangeText={(text) => setPercentField('avalPrepDeposito', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -512,10 +560,8 @@ export default function ReportBScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avaliação de preparação da loja</Text>
             <TextInput
-              value={percentToInput(report.avalPrepLoja)}
-              onChangeText={(text) =>
-                setField('avalPrepLoja', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avalPrepLoja}
+              onChangeText={(text) => setPercentField('avalPrepLoja', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -523,10 +569,8 @@ export default function ReportBScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Acuracidade cliente (%)</Text>
             <TextInput
-              value={percentToInput(report.acuracidadeCliente)}
-              onChangeText={(text) =>
-                setField('acuracidadeCliente', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.acuracidadeCliente}
+              onChangeText={(text) => setPercentField('acuracidadeCliente', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -534,13 +578,8 @@ export default function ReportBScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Acuracidade terceirizada (%)</Text>
             <TextInput
-              value={percentToInput(report.acuracidadeTerceirizada)}
-              onChangeText={(text) =>
-                setField(
-                  'acuracidadeTerceirizada',
-                  parsePercentInput(formatPercentInput(text, 0), 0),
-                )
-              }
+              value={percentText.acuracidadeTerceirizada}
+              onChangeText={(text) => setPercentField('acuracidadeTerceirizada', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -630,11 +669,11 @@ export default function ReportBScreen() {
                     await handleSendMessage();
                     Alert.alert(
                       'Enviar fotos',
-                      'Depois de enviar a mensagem no WhatsApp, volte ao app para enviar as fotos.',
+                      'Depois de enviar a mensagem no WhatsApp, volte ao app para enviar as fotos em PDF.',
                       [
                         { text: 'Cancelar', style: 'cancel' },
                         {
-                          text: 'Enviar fotos',
+                          text: 'Enviar fotos (PDF)',
                           onPress: () => {
                             void handleSharePhotos();
                           },
@@ -648,7 +687,7 @@ export default function ReportBScreen() {
                 <Pressable
                   onPress={() => void handleSharePhotos()}
                   className="flex-1 items-center rounded-lg bg-slate-900 py-2">
-                  <Text className="text-sm font-semibold text-white">Enviar fotos</Text>
+                  <Text className="text-sm font-semibold text-white">Enviar fotos (PDF)</Text>
                 </Pressable>
               </View>
             </View>

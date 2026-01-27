@@ -75,19 +75,26 @@ export function parseFloatInput(value: string): number {
 }
 
 export function formatPercentInput(value: string, min = 0, max = 100, maxDecimals = 2): string {
-  const normalized = value.replace(',', '.').replace(/[^0-9.]/g, '');
+  const cleaned = value.replace('%', '').trim();
+  const normalized = cleaned.replace(',', '.').replace(/[^0-9.]/g, '');
   if (!normalized) {
     return '';
   }
-  const [intPart, decRaw] = normalized.split('.');
+  const [intRaw, decRaw] = normalized.split('.');
+  const intPart = (intRaw ?? '').slice(0, 3);
   const decPart = (decRaw ?? '').slice(0, maxDecimals);
+
+  if (normalized.endsWith('.') && decPart.length === 0) {
+    return `${intPart},`;
+  }
+
   const numeric = Number.parseFloat(decPart ? `${intPart || '0'}.${decPart}` : intPart || '0');
   if (Number.isNaN(numeric)) {
     return '';
   }
   const clamped = Math.min(max, Math.max(min, numeric));
   const formatted = decPart.length > 0 ? clamped.toFixed(decPart.length) : `${clamped}`;
-  return `${formatted.replace('.', ',')}%`;
+  return formatted.replace('.', ',');
 }
 
 export function parsePercentInput(value: string, min = 0, max = 100): number {

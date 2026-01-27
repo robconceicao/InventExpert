@@ -65,10 +65,32 @@ const percentToInput = (value: number) =>
   value === 0 ? '' : `${String(value).replace('.', ',')}%`;
 const floatToInput = (value: number) => (value === 0 ? '' : `${value}`.replace('.', ','));
 
+type ReportAPercentKey =
+  | 'avanco22h'
+  | 'avanco00h'
+  | 'avanco01h'
+  | 'avanco03h'
+  | 'avanco04h'
+  | 'avalEstoque'
+  | 'avalLoja'
+  | 'acuracidade'
+  | 'percentualAuditoria';
+
 export default function ReportAScreen() {
   const [report, setReport] = useState<ReportA>(createInitialState);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [phText, setPhText] = useState('');
+  const [percentText, setPercentText] = useState<Record<ReportAPercentKey, string>>({
+    avanco22h: '',
+    avanco00h: '',
+    avanco01h: '',
+    avanco03h: '',
+    avanco04h: '',
+    avalEstoque: '',
+    avalLoja: '',
+    acuracidade: '',
+    percentualAuditoria: '',
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -77,6 +99,17 @@ export default function ReportAScreen() {
         const parsed = JSON.parse(stored) as ReportA;
         setReport(parsed);
         setPhText(floatToInput(parsed.ph));
+        setPercentText({
+          avanco22h: percentToInput(parsed.avanco22h),
+          avanco00h: percentToInput(parsed.avanco00h),
+          avanco01h: percentToInput(parsed.avanco01h),
+          avanco03h: percentToInput(parsed.avanco03h),
+          avanco04h: percentToInput(parsed.avanco04h),
+          avalEstoque: percentToInput(parsed.avalEstoque),
+          avalLoja: percentToInput(parsed.avalLoja),
+          acuracidade: percentToInput(parsed.acuracidade),
+          percentualAuditoria: percentToInput(parsed.percentualAuditoria),
+        });
       }
     };
     void loadData();
@@ -132,6 +165,13 @@ export default function ReportAScreen() {
 
   const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
     setReport((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setPercentField = (key: ReportAPercentKey, text: string) => {
+    const formatted = formatPercentInput(text, 0, 100, 2);
+    const withSuffix = formatted ? `${formatted}%` : '';
+    setPercentText((prev) => ({ ...prev, [key]: withSuffix }));
+    setField(key, parsePercentInput(formatted, 0));
   };
 
   const validateRequired = () => {
@@ -309,10 +349,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avanço 22:00</Text>
             <TextInput
-              value={percentToInput(report.avanco22h)}
-              onChangeText={(text) =>
-                setField('avanco22h', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avanco22h}
+              onChangeText={(text) => setPercentField('avanco22h', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -320,10 +358,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avanço 00:00</Text>
             <TextInput
-              value={percentToInput(report.avanco00h)}
-              onChangeText={(text) =>
-                setField('avanco00h', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avanco00h}
+              onChangeText={(text) => setPercentField('avanco00h', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -331,10 +367,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avanço 01:00</Text>
             <TextInput
-              value={percentToInput(report.avanco01h)}
-              onChangeText={(text) =>
-                setField('avanco01h', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avanco01h}
+              onChangeText={(text) => setPercentField('avanco01h', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -342,10 +376,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avanço 03:00</Text>
             <TextInput
-              value={percentToInput(report.avanco03h)}
-              onChangeText={(text) =>
-                setField('avanco03h', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avanco03h}
+              onChangeText={(text) => setPercentField('avanco03h', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -353,10 +385,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avanço 04:00</Text>
             <TextInput
-              value={percentToInput(report.avanco04h)}
-              onChangeText={(text) =>
-                setField('avanco04h', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avanco04h}
+              onChangeText={(text) => setPercentField('avanco04h', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -387,10 +417,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avaliação do estoque (%)</Text>
             <TextInput
-              value={percentToInput(report.avalEstoque)}
-              onChangeText={(text) =>
-                setField('avalEstoque', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avalEstoque}
+              onChangeText={(text) => setPercentField('avalEstoque', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -398,10 +426,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Avaliação da loja (%)</Text>
             <TextInput
-              value={percentToInput(report.avalLoja)}
-              onChangeText={(text) =>
-                setField('avalLoja', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.avalLoja}
+              onChangeText={(text) => setPercentField('avalLoja', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -409,10 +435,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Acuracidade (%)</Text>
             <TextInput
-              value={percentToInput(report.acuracidade)}
-              onChangeText={(text) =>
-                setField('acuracidade', parsePercentInput(formatPercentInput(text, 0), 0))
-              }
+              value={percentText.acuracidade}
+              onChangeText={(text) => setPercentField('acuracidade', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
@@ -420,13 +444,8 @@ export default function ReportAScreen() {
           <View className="mt-3">
             <Text className="text-sm font-semibold text-slate-700">Percentual de auditoria (%)</Text>
             <TextInput
-              value={percentToInput(report.percentualAuditoria)}
-              onChangeText={(text) =>
-                setField(
-                  'percentualAuditoria',
-                  parsePercentInput(formatPercentInput(text, 0), 0),
-                )
-              }
+              value={percentText.percentualAuditoria}
+              onChangeText={(text) => setPercentField('percentualAuditoria', text)}
               keyboardType="numeric"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
