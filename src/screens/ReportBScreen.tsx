@@ -33,6 +33,7 @@ import {
   parseCurrencyInput,
   parsePercentInput,
 } from '@/src/utils/parsers';
+import { shareCsvFile } from '@/src/utils/export';
 
 const STORAGE_KEY = 'inventexpert:reportB';
 const PHOTO_STORAGE_KEY = 'inventexpert:reportB:photos';
@@ -343,6 +344,100 @@ export default function ReportBScreen() {
       acuracidadeTerceirizada: '',
     });
     Alert.alert('Dados arquivados', 'Os dados foram arquivados e o formulário foi limpo.');
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<{ savedAt: string; report: ReportB; photosCount: number }>)
+        : [];
+      if (history.length === 0) {
+        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
+        return;
+      }
+      const headers = [
+        'savedAt',
+        'cliente',
+        'lojaNum',
+        'enderecoLoja',
+        'data',
+        'pivProgramado',
+        'pivRealizado',
+        'chegadaEquipe',
+        'inicioDeposito',
+        'terminoDeposito',
+        'inicioLoja',
+        'terminoLoja',
+        'inicioAuditoriaCliente',
+        'terminoAuditoriaCliente',
+        'inicioDivergencia',
+        'terminoDivergencia',
+        'inicioNaoContados',
+        'terminoNaoContados',
+        'qtdAlterados',
+        'qtdNaoContados',
+        'qtdEncontradosNaoContados',
+        'totalPecas',
+        'valorFinanceiro',
+        'arquivo1',
+        'arquivo2',
+        'arquivo3',
+        'avalPrepDeposito',
+        'avalPrepLoja',
+        'acuracidadeCliente',
+        'acuracidadeTerceirizada',
+        'satisfacao',
+        'responsavel',
+        'suporteSolicitado',
+        'terminoInventario',
+        'photosCount',
+      ];
+      const rows = history.map((item) => {
+        const { report: data } = item;
+        return [
+          item.savedAt,
+          data.cliente,
+          data.lojaNum,
+          data.enderecoLoja,
+          data.data,
+          data.pivProgramado,
+          data.pivRealizado,
+          data.chegadaEquipe,
+          data.inicioDeposito,
+          data.terminoDeposito,
+          data.inicioLoja,
+          data.terminoLoja,
+          data.inicioAuditoriaCliente,
+          data.terminoAuditoriaCliente,
+          data.inicioDivergencia,
+          data.terminoDivergencia,
+          data.inicioNaoContados,
+          data.terminoNaoContados,
+          data.qtdAlterados,
+          data.qtdNaoContados,
+          data.qtdEncontradosNaoContados,
+          data.totalPecas,
+          data.valorFinanceiro,
+          data.arquivo1,
+          data.arquivo2,
+          data.arquivo3,
+          data.avalPrepDeposito,
+          data.avalPrepLoja,
+          data.acuracidadeCliente,
+          data.acuracidadeTerceirizada,
+          data.satisfacao,
+          data.responsavel,
+          data.suporteSolicitado,
+          data.terminoInventario,
+          item.photosCount,
+        ];
+      });
+      const filename = `inventexpert_reportB_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível exportar o histórico.');
+    }
   };
 
   return (
@@ -701,6 +796,11 @@ export default function ReportBScreen() {
           }
           className="mt-2 items-center rounded-xl bg-slate-200 py-3">
           <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void handleExportHistory()}
+          className="mt-2 items-center rounded-xl bg-slate-900 py-3">
+          <Text className="text-base font-semibold text-white">Exportar histórico (CSV)</Text>
         </Pressable>
 
         <Modal visible={previewVisible} transparent animationType="fade">

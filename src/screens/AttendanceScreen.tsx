@@ -5,6 +5,7 @@ import { Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } f
 
 import type { AttendanceCollaborator, AttendanceData } from '@/src/types';
 import { formatAttendanceMessage, formatDateInput, parseWhatsAppScale } from '@/src/utils/parsers';
+import { shareCsvFile } from '@/src/utils/export';
 
 const STORAGE_KEY = 'inventexpert:attendance';
 const HISTORY_KEY = 'inventexpert:attendance:history';
@@ -99,6 +100,44 @@ export default function AttendanceScreen() {
     setRawText('');
     setAttendance(emptyData);
     Alert.alert('Dados arquivados', 'A escala foi arquivada e o formulário foi limpo.');
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<{ savedAt: string; attendance: AttendanceData }>)
+        : [];
+      if (history.length === 0) {
+        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
+        return;
+      }
+      const headers = [
+        'savedAt',
+        'data',
+        'loja',
+        'enderecoLoja',
+        'colaboradorNome',
+        'status',
+        'substituto',
+      ];
+      const rows = history.flatMap((item) => {
+        const base = [item.savedAt, item.attendance.data, item.attendance.loja, item.attendance.enderecoLoja];
+        if (!item.attendance.colaboradores || item.attendance.colaboradores.length === 0) {
+          return [[...base, '', '', '']];
+        }
+        return item.attendance.colaboradores.map((collaborator) => [
+          ...base,
+          collaborator.nome,
+          collaborator.status,
+          collaborator.substituto ?? '',
+        ]);
+      });
+      const filename = `inventexpert_escala_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível exportar o histórico.');
+    }
   };
 
   return (
@@ -226,6 +265,11 @@ export default function AttendanceScreen() {
         }
         className="mt-2 items-center rounded-xl bg-slate-200 py-3">
         <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => void handleExportHistory()}
+        className="mt-2 items-center rounded-xl bg-slate-900 py-3">
+        <Text className="text-base font-semibold text-white">Exportar histórico (CSV)</Text>
       </Pressable>
 
       <Modal visible={previewVisible} transparent animationType="fade">

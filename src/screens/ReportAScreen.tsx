@@ -26,6 +26,7 @@ import {
   parseFloatInput,
   parsePercentInput,
 } from '@/src/utils/parsers';
+import { shareCsvFile } from '@/src/utils/export';
 
 const STORAGE_KEY = 'inventexpert:reportA';
 const HISTORY_KEY = 'inventexpert:reportA:history';
@@ -273,6 +274,86 @@ export default function ReportAScreen() {
       percentualAuditoria: '',
     });
     Alert.alert('Dados arquivados', 'Os dados foram arquivados e o formulário foi limpo.');
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<{ savedAt: string; report: ReportA }>) : [];
+      if (history.length === 0) {
+        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
+        return;
+      }
+      const headers = [
+        'savedAt',
+        'lojaNum',
+        'lojaNome',
+        'enderecoLoja',
+        'qtdColaboradores',
+        'lider',
+        'hrChegada',
+        'inicioEstoque',
+        'terminoEstoque',
+        'inicioLoja',
+        'terminoLoja',
+        'inicioDivergencia',
+        'terminoDivergencia',
+        'terminoInventario',
+        'avanco22h',
+        'avanco00h',
+        'avanco01h',
+        'avanco03h',
+        'avanco04h',
+        'arquivo1',
+        'arquivo2',
+        'arquivo3',
+        'avalEstoque',
+        'avalLoja',
+        'acuracidade',
+        'percentualAuditoria',
+        'ph',
+        'satisfacao',
+        'contagemAntecipada',
+      ];
+      const rows = history.map((item) => {
+        const { report: data } = item;
+        return [
+          item.savedAt,
+          data.lojaNum,
+          data.lojaNome,
+          data.enderecoLoja,
+          data.qtdColaboradores,
+          data.lider,
+          data.hrChegada,
+          data.inicioEstoque,
+          data.terminoEstoque,
+          data.inicioLoja,
+          data.terminoLoja,
+          data.inicioDivergencia,
+          data.terminoDivergencia,
+          data.terminoInventario,
+          data.avanco22h,
+          data.avanco00h,
+          data.avanco01h,
+          data.avanco03h,
+          data.avanco04h,
+          data.arquivo1,
+          data.arquivo2,
+          data.arquivo3,
+          data.avalEstoque,
+          data.avalLoja,
+          data.acuracidade,
+          data.percentualAuditoria,
+          data.ph,
+          data.satisfacao,
+          data.contagemAntecipada,
+        ];
+      });
+      const filename = `inventexpert_reportA_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível exportar o histórico.');
+    }
   };
 
   const headerBadge = useMemo(() => report.contagemAntecipada, [report]);
@@ -556,6 +637,11 @@ export default function ReportAScreen() {
           }
           className="mt-2 items-center rounded-xl bg-slate-200 py-3">
           <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void handleExportHistory()}
+          className="mt-2 items-center rounded-xl bg-slate-900 py-3">
+          <Text className="text-base font-semibold text-white">Exportar histórico (CSV)</Text>
         </Pressable>
 
         <Modal visible={previewVisible} transparent animationType="fade">
