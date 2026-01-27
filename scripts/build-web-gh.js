@@ -21,6 +21,11 @@ const resolveBasePath = () => {
 };
 
 const resolvedBasePath = resolveBasePath();
+const normalizedPublicUrl = publicUrl
+  ? publicUrl.endsWith('/')
+    ? publicUrl
+    : `${publicUrl}/`
+  : '';
 
 const exportResult = spawnSync(
   'npx',
@@ -68,6 +73,9 @@ const replaceInHtml = (filePath) => {
   if (resolvedBasePath) {
     updated = updated.replace(/href="\//g, `href="${resolvedBasePath}`);
     updated = updated.replace(/src="\//g, `src="${resolvedBasePath}`);
+  }
+  if (normalizedPublicUrl) {
+    updated = updated.replace(/href="https?:\/\/[^/]+\//g, `href="${normalizedPublicUrl}`);
   }
   if (updated !== content) {
     fs.writeFileSync(filePath, updated);
