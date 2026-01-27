@@ -1,6 +1,7 @@
-import { Stack } from 'expo-router';
 import React from 'react';
 
+import App from '@/src/App';
+
 export default function Index() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <App />;
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 
-import RootTabs from '@/src/navigation/RootTabs';
+import App from '@/src/App';
 
 export default function Attendance() {
-  return <RootTabs />;
+  return <App />;
 }
