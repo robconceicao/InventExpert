@@ -28,6 +28,7 @@ import {
 } from '@/src/utils/parsers';
 
 const STORAGE_KEY = 'inventexpert:reportA';
+const HISTORY_KEY = 'inventexpert:reportA:history';
 
 const createInitialState = (): ReportA => ({
   lojaNum: '',
@@ -242,6 +243,36 @@ export default function ReportAScreen() {
       return;
     }
     setPreviewVisible(true);
+  };
+
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        report,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch {
+      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
+      return;
+    }
+
+    setReport(createInitialState());
+    setPhText('');
+    setPercentText({
+      avanco22h: '',
+      avanco00h: '',
+      avanco01h: '',
+      avanco03h: '',
+      avanco04h: '',
+      avalEstoque: '',
+      avalLoja: '',
+      acuracidade: '',
+      percentualAuditoria: '',
+    });
+    Alert.alert('Dados arquivados', 'Os dados foram arquivados e o formulário foi limpo.');
   };
 
   const headerBadge = useMemo(() => report.contagemAntecipada, [report]);
@@ -511,6 +542,20 @@ export default function ReportAScreen() {
           onPress={handleOpenPreview}
           className="mt-2 items-center rounded-xl bg-blue-600 py-3">
           <Text className="text-base font-semibold text-white">Enviar Andamento de Inventário</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              'Arquivar e limpar',
+              'Isso limpará o formulário, mas os dados ficarão arquivados para análise.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
+              ],
+            )
+          }
+          className="mt-2 items-center rounded-xl bg-slate-200 py-3">
+          <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
         </Pressable>
 
         <Modal visible={previewVisible} transparent animationType="fade">

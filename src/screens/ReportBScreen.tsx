@@ -36,6 +36,7 @@ import {
 
 const STORAGE_KEY = 'inventexpert:reportB';
 const PHOTO_STORAGE_KEY = 'inventexpert:reportB:photos';
+const HISTORY_KEY = 'inventexpert:reportB:history';
 
 const createInitialState = (): ReportB => ({
   cliente: '',
@@ -304,6 +305,44 @@ export default function ReportBScreen() {
       return;
     }
     setPreviewVisible(true);
+  };
+
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        report,
+        photosCount: photoUris.length,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch {
+      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
+      return;
+    }
+
+    for (const uri of photoUris) {
+      if (uri.startsWith('file://')) {
+        try {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    setReport(createInitialState());
+    setValorFinanceiroText('');
+    setPhotoUris([]);
+    setSuporteSelecionado(false);
+    setPercentText({
+      avalPrepDeposito: '',
+      avalPrepLoja: '',
+      acuracidadeCliente: '',
+      acuracidadeTerceirizada: '',
+    });
+    Alert.alert('Dados arquivados', 'Os dados foram arquivados e o formulário foi limpo.');
   };
 
   return (
@@ -648,6 +687,20 @@ export default function ReportBScreen() {
           onPress={handleOpenPreview}
           className="mt-2 items-center rounded-xl bg-blue-600 py-3">
           <Text className="text-base font-semibold text-white">Enviar Resumo de Inventário</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              'Arquivar e limpar',
+              'Isso limpará o formulário e excluirá as fotos do app, mas os dados ficarão arquivados para análise.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
+              ],
+            )
+          }
+          className="mt-2 items-center rounded-xl bg-slate-200 py-3">
+          <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
         </Pressable>
 
         <Modal visible={previewVisible} transparent animationType="fade">

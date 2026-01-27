@@ -7,6 +7,7 @@ import type { AttendanceCollaborator, AttendanceData } from '@/src/types';
 import { formatAttendanceMessage, formatDateInput, parseWhatsAppScale } from '@/src/utils/parsers';
 
 const STORAGE_KEY = 'inventexpert:attendance';
+const HISTORY_KEY = 'inventexpert:attendance:history';
 
 const emptyData: AttendanceData = {
   data: '',
@@ -79,6 +80,25 @@ export default function AttendanceScreen() {
     Linking.openURL(url).catch(() => {
       Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
     });
+  };
+
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        attendance,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch {
+      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
+      return;
+    }
+
+    setRawText('');
+    setAttendance(emptyData);
+    Alert.alert('Dados arquivados', 'A escala foi arquivada e o formulário foi limpo.');
   };
 
   return (
@@ -192,6 +212,20 @@ export default function AttendanceScreen() {
         onPress={handleOpenPreview}
         className="mt-4 items-center rounded-xl bg-blue-600 py-3">
         <Text className="text-base font-semibold text-white">Enviar Escala</Text>
+      </Pressable>
+      <Pressable
+        onPress={() =>
+          Alert.alert(
+            'Arquivar e limpar',
+            'Isso limpará a escala, mas os dados ficarão arquivados para análise.',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
+            ],
+          )
+        }
+        className="mt-2 items-center rounded-xl bg-slate-200 py-3">
+        <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
       </Pressable>
 
       <Modal visible={previewVisible} transparent animationType="fade">
