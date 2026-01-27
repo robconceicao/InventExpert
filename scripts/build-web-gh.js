@@ -42,6 +42,7 @@ if (exportResult.status !== 0) {
 const docsDir = path.resolve(__dirname, '..', 'docs');
 const indexPath = path.join(docsDir, 'index.html');
 const notFoundPath = path.join(docsDir, '404.html');
+const noJekyllPath = path.join(docsDir, '.nojekyll');
 const collectHtmlFiles = (dir) => {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const files = [];
@@ -76,3 +77,5 @@ if (fs.existsSync(indexPath)) {
   replaceInHtml(notFoundPath);
   console.log('404.html gerado a partir de index.html');
 }
+
+fs.writeFileSync(noJekyllPath, '');
