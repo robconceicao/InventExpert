@@ -4,7 +4,7 @@
     "slug": "InventExpert",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/android-icon-foreground.png",
     "scheme": "inventexpert",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -42,8 +42,8 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "image": "./assets/images/android-icon-background.png",
+          "imageWidth": 160,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
@@ -65,7 +65,9 @@
     "extra": {
       "eas": {
         "projectId": "e9746070-0b84-4327-adef-3de641cf1d57"
-      }
+      },
+      "supabaseUrl": "https://knxwuxxpbrbmhgdatgoe.supabase.co",
+      "supabaseAnonKey": "sb_publishable_DYOVR11_d_KccROE2JW4yg_A0TDzy0Q"
     },
     "owner": "robtadeu"
   }

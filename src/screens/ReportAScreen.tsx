@@ -27,6 +27,7 @@ import {
   parsePercentInput,
 } from '@/src/utils/parsers';
 import { shareCsvFile } from '@/src/utils/export';
+import { enqueueSyncItem, syncQueue } from '@/src/services/sync';
 
 const STORAGE_KEY = 'inventexpert:reportA';
 const HISTORY_KEY = 'inventexpert:reportA:history';
@@ -63,8 +64,7 @@ const createInitialState = (): ReportA => ({
 });
 
 const numberToInput = (value: number) => (value === 0 ? '' : `${value}`);
-const percentToInput = (value: number) =>
-  value === 0 ? '' : `${String(value).replace('.', ',')}%`;
+const percentToInput = (value: number) => (value === 0 ? '' : `${String(value).replace('.', ',')}`);
 const floatToInput = (value: number) => (value === 0 ? '' : `${value}`.replace('.', ','));
 
 type ReportAPercentKey =
@@ -171,8 +171,7 @@ export default function ReportAScreen() {
 
   const setPercentField = (key: ReportAPercentKey, text: string) => {
     const formatted = formatPercentInput(text, 0, 100, 2);
-    const withSuffix = formatted ? `${formatted}%` : '';
-    setPercentText((prev) => ({ ...prev, [key]: withSuffix }));
+    setPercentText((prev) => ({ ...prev, [key]: formatted }));
     setField(key, parsePercentInput(formatted, 0));
   };
 
@@ -255,12 +254,14 @@ export default function ReportAScreen() {
         report,
       });
       await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem('reportA', { report });
     } catch {
       Alert.alert('Erro', 'Não foi possível arquivar os dados.');
       return;
     }
 
     await handleExportHistory();
+    void syncQueue();
 
     setReport(createInitialState());
     setPhText('');
@@ -354,7 +355,10 @@ export default function ReportAScreen() {
       const filename = `inventexpert_reportA_${new Date().toISOString().slice(0, 10)}.csv`;
       await shareCsvFile(filename, headers, rows);
     } catch {
-      Alert.alert('Erro', 'Não foi possível exportar o histórico.');
+      Alert.alert(
+        'Exportação indisponível',
+        'Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.',
+      );
     }
   };
 
@@ -465,7 +469,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avanco22h}
               onChangeText={(text) => setPercentField('avanco22h', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -474,7 +478,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avanco00h}
               onChangeText={(text) => setPercentField('avanco00h', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -483,7 +487,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avanco01h}
               onChangeText={(text) => setPercentField('avanco01h', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -492,7 +496,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avanco03h}
               onChangeText={(text) => setPercentField('avanco03h', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -501,7 +505,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avanco04h}
               onChangeText={(text) => setPercentField('avanco04h', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -533,7 +537,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avalEstoque}
               onChangeText={(text) => setPercentField('avalEstoque', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -542,7 +546,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.avalLoja}
               onChangeText={(text) => setPercentField('avalLoja', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -551,7 +555,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.acuracidade}
               onChangeText={(text) => setPercentField('acuracidade', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -560,7 +564,7 @@ export default function ReportAScreen() {
             <TextInput
               value={percentText.percentualAuditoria}
               onChangeText={(text) => setPercentField('percentualAuditoria', text)}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -573,7 +577,7 @@ export default function ReportAScreen() {
                 setPhText(formatted);
                 setField('ph', parseFloatInput(formatted));
               }}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
             />
           </View>
@@ -639,11 +643,6 @@ export default function ReportAScreen() {
           }
           className="mt-2 items-center rounded-xl bg-slate-200 py-3">
           <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => void handleExportHistory()}
-          className="mt-2 items-center rounded-xl bg-slate-900 py-3">
-          <Text className="text-base font-semibold text-white">Exportar histórico (CSV)</Text>
         </Pressable>
 
         <Modal visible={previewVisible} transparent animationType="fade">

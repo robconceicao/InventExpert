@@ -1,12 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import React from 'react';
-import { Image, Platform, Text, View } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import type { Session } from "@supabase/supabase-js";
+import React, { useEffect, useState } from "react";
+import { Image, Platform, Pressable, Text, View } from "react-native";
 
-import AttendanceScreen from '@/src/screens/AttendanceScreen';
-import ReportAScreen from '@/src/screens/ReportAScreen';
-import ReportBScreen from '@/src/screens/ReportBScreen';
-import ScannerScreen from '@/src/screens/ScannerScreen';
+import AttendanceScreen from "@/src/screens/AttendanceScreen";
+import ReportAScreen from "@/src/screens/ReportAScreen";
+import ReportBScreen from "@/src/screens/ReportBScreen";
+import ScannerScreen from "@/src/screens/ScannerScreen";
+import { isSupabaseConfigured, supabase } from "@/src/services/supabase";
 
 export type RootTabParamList = {
   ReportA: undefined;
@@ -18,45 +20,90 @@ export type RootTabParamList = {
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export default function RootTabs() {
-  const showScanner = Platform.OS !== 'web';
+  const showScanner = Platform.OS !== "web";
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    if (!supabase) {
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession);
+      },
+    );
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerStyle: { backgroundColor: '#2563EB' },
-        headerTintColor: '#fff',
+        headerStyle: { backgroundColor: "#2563EB" },
+        headerTintColor: "#fff",
         headerTitle: (props) => (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Image source={require('../../assets/images/icon.png')} style={{ width: 24, height: 24 }} />
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>{props.children}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Image
+              source={require("../../assets/images/android-icon-monochrome.png")}
+              style={{ width: 24, height: 24, tintColor: "#fff" }}
+            />
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
+              {props.children}
+            </Text>
           </View>
         ),
-        tabBarActiveTintColor: '#2563EB',
-        tabBarStyle: { backgroundColor: '#fff' },
+        headerRight: () =>
+          isSupabaseConfigured && session ? (
+            <Pressable
+              onPress={() => void supabase?.auth.signOut()}
+              style={{ paddingHorizontal: 12 }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#fff" />
+            </Pressable>
+          ) : null,
+        tabBarActiveTintColor: "#2563EB",
+        tabBarStyle: { backgroundColor: "#fff" },
         tabBarIcon: ({ color, size }) => {
-          const iconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
-            ReportA: 'clipboard',
-            ReportB: 'document-text',
-            Attendance: 'people',
-            Scanner: 'scan',
+          const iconMap: Record<
+            keyof RootTabParamList,
+            keyof typeof Ionicons.glyphMap
+          > = {
+            ReportA: "clipboard",
+            ReportB: "document-text",
+            Attendance: "people",
+            Scanner: "scan",
           };
-          const iconName = iconMap[route.name as keyof RootTabParamList] ?? 'clipboard';
+          const iconName =
+            iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-      })}>
+      })}
+    >
       <Tab.Screen
         name="ReportA"
         component={ReportAScreen}
-        options={{ title: 'Andamento de Inventário' }}
+        options={{ title: "Andamento de Inventário" }}
       />
       <Tab.Screen
         name="ReportB"
         component={ReportBScreen}
-        options={{ title: 'Resumo de Inventário' }}
+        options={{ title: "Resumo de Inventário" }}
       />
-      <Tab.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Escala' }} />
+      <Tab.Screen
+        name="Attendance"
+        component={AttendanceScreen}
+        options={{ title: "Escala" }}
+      />
       {showScanner ? (
-        <Tab.Screen name="Scanner" component={ScannerScreen} options={{ title: 'Scanner' }} />
+        <Tab.Screen
+          name="Scanner"
+          component={ScannerScreen}
+          options={{ title: "Scanner" }}
+        />
       ) : null}
     </Tab.Navigator>
   );
