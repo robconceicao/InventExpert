@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
@@ -82,20 +82,16 @@ export default function ScannerScreen() {
         );
         return;
       }
-      const baseDir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-      if (!baseDir) {
-        Alert.alert(
-          "Indisponível",
-          "Diretório local indisponível para gerar o PDF.",
-        );
-        return;
-      }
-
       const imageTags = await Promise.all(
         scannedImages.map(async (uri) => {
-          const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          const encoding =
+            (FileSystem.EncodingType?.Base64 as
+              | FileSystem.EncodingType
+              | undefined) ?? "base64";
+          const base64 = await FileSystem.readAsStringAsync(uri, { encoding });
+          if (!base64) {
+            throw new Error("Não foi possível ler a imagem escaneada.");
+          }
           return `<img src="data:image/jpeg;base64,${base64}" style="width:100%;page-break-after:always;" />`;
         }),
       );
@@ -108,10 +104,16 @@ export default function ScannerScreen() {
       `;
       const printed = await Print.printToFileAsync({ html });
       const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
-      const targetUri = `${baseDir}${targetName}`;
-      if (targetUri !== printed.uri) {
-        await FileSystem.deleteAsync(targetUri, { idempotent: true });
-        await FileSystem.copyAsync({ from: printed.uri, to: targetUri });
+      let targetUri = printed.uri;
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (baseDir) {
+        const outputDir = `${baseDir}inventexpert/`;
+        await FileSystem.makeDirectoryAsync(outputDir, { intermediates: true });
+        targetUri = `${outputDir}${targetName}`;
+        if (targetUri !== printed.uri) {
+          await FileSystem.deleteAsync(targetUri, { idempotent: true });
+          await FileSystem.copyAsync({ from: printed.uri, to: targetUri });
+        }
       }
 
       await Sharing.shareAsync(targetUri, {
@@ -120,10 +122,12 @@ export default function ScannerScreen() {
         UTI: "com.adobe.pdf",
       });
       setShareVisible(false);
-    } catch {
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Falha desconhecida.";
       Alert.alert(
         "Erro",
-        "Não foi possível gerar ou compartilhar o PDF. No emulador o compartilhamento pode falhar; teste no dispositivo físico.",
+        `Não foi possível gerar ou compartilhar o PDF. Verifique se há um app compatível (ex.: WhatsApp) instalado.\n\nDetalhes: ${detail}`,
       );
     } finally {
       setIsSharing(false);

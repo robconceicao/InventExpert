@@ -151,7 +151,9 @@ export default function AttendanceScreen() {
   return (
     <ScrollView className="flex-1 bg-slate-50" contentContainerClassName="px-4 pb-8 pt-4">
       <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-        <Text className="text-base font-semibold text-slate-800">Parser de Escala (WhatsApp)</Text>
+        <Text className="text-base font-semibold text-slate-800">
+          Leitura da escala enviada no WhatsApp
+        </Text>
         <Text className="mt-2 text-sm text-slate-600">
           Cole o texto do WhatsApp e clique em processar.
         </Text>

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
@@ -315,15 +315,6 @@ export default function ReportBScreen() {
         photoPdfName.trim().replace(/[/\\?%*:|"<>]/g, "") ||
         PHOTO_PDF_DEFAULT_NAME;
       const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
-      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-      if (!baseDir) {
-        Alert.alert(
-          "Indisponível",
-          "Diretório local indisponível para gerar o PDF.",
-        );
-        return;
-      }
-
       const imageTags: string[] = [];
       for (const uri of photoUris) {
         const manipulated = await ImageManipulator.manipulateAsync(
@@ -351,20 +342,32 @@ export default function ReportBScreen() {
         "",
       )}</body></html>`;
       const file = await Print.printToFileAsync({ html });
-      const targetUri = `${baseDir}${targetName}`;
-      await FileSystem.deleteAsync(targetUri, { idempotent: true });
-      await FileSystem.copyAsync({ from: file.uri, to: targetUri });
+      let targetUri = file.uri;
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (baseDir) {
+        targetUri = `${baseDir}${targetName}`;
+        await FileSystem.deleteAsync(targetUri, { idempotent: true });
+        await FileSystem.copyAsync({ from: file.uri, to: targetUri });
+      }
       await Sharing.shareAsync(targetUri, {
         mimeType: "application/pdf",
         dialogTitle: "Enviar fotos em PDF",
         UTI: "com.adobe.pdf",
       });
-      await FileSystem.deleteAsync(file.uri, { idempotent: true });
+      if (file.uri !== targetUri) {
+        await FileSystem.deleteAsync(file.uri, { idempotent: true });
+      }
       setPhotoShareVisible(false);
-    } catch {
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Falha desconhecida.";
       for (const uri of photoUris) {
         await Sharing.shareAsync(uri);
       }
+      Alert.alert(
+        "Erro",
+        `Não foi possível compartilhar o PDF. Verifique se há um app compatível instalado.\n\nDetalhes: ${detail}`,
+      );
     } finally {
       setIsPhotoSharing(false);
     }
