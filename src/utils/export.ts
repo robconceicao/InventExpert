@@ -15,11 +15,11 @@ export const shareCsvFile = async (
       .join("\n");
     const csvContent = headerString + rowString;
 
-    // --- CORREÇÃO DE TIPAGEM ---
-    // Forçamos o TypeScript a aceitar o módulo como 'any' para ignorar os erros falsos
+    // --- CORREÇÃO DE TIPAGEM (TypeScript) ---
+    // Forçamos o 'fs' como any para ignorar os erros que aparecem no seu editor
     const fs = FileSystem as any;
 
-    // 2. Definir caminho do arquivo (Usa documentDirectory ou cacheDirectory como fallback)
+    // 2. Definir caminho (Tenta documentDirectory, se falhar usa cacheDirectory)
     const directory = fs.documentDirectory || fs.cacheDirectory;
     const fileUri = directory + filename;
 
@@ -36,9 +36,6 @@ export const shareCsvFile = async (
     }
   } catch (error) {
     console.error("Erro ao exportar CSV:", error);
-    Alert.alert(
-      "Erro",
-      "Falha ao gerar o arquivo CSV. Verifique as permissões.",
-    );
+    Alert.alert("Erro", "Falha ao gerar o arquivo CSV.");
   }
 };

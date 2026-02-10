@@ -26,7 +26,6 @@ import {
   parseWhatsAppScale,
 } from "../utils/parsers";
 
-// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:attendance";
 const HISTORY_KEY = "inventexpert:attendance:history";
@@ -44,7 +43,6 @@ export default function AttendanceScreen() {
   const [attendance, setAttendance] = useState<AttendanceData>(emptyData);
   const [previewVisible, setPreviewVisible] = useState(false);
 
-  // Remove cabeçalho duplicado
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -83,9 +81,13 @@ export default function AttendanceScreen() {
   }, [attendance]);
 
   const handleParse = () => {
+    // Parser novo importado
     const parsed = parseWhatsAppScale(rawText);
     setAttendance(parsed);
-    Alert.alert("Sucesso", "Texto processado. Verifique os campos abaixo.");
+    Alert.alert(
+      "Sucesso",
+      "Escala processada! Verifique os campos Data, Loja e Colaboradores.",
+    );
   };
 
   const togglePresence = (
@@ -117,6 +119,7 @@ export default function AttendanceScreen() {
   };
 
   const handleSendWhatsApp = () => {
+    // ENVIO DIRETO SEM COLAR (Abre com o texto preenchido)
     const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
     Linking.openURL(url).catch(() => {
       Alert.alert("Erro", "Não foi possível abrir o WhatsApp.");
@@ -145,10 +148,21 @@ export default function AttendanceScreen() {
 
     setRawText("");
     setAttendance(emptyData);
-    Alert.alert(
-      "Dados arquivados",
-      "A escala foi arquivada e o formulário foi limpo.",
-    );
+    Alert.alert("Arquivado", "Dados salvos e tela limpa.");
+  };
+
+  const handleClearOnly = () => {
+    Alert.alert("Limpar Tudo?", "Isso apagará os dados atuais sem salvar.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Limpar",
+        style: "destructive",
+        onPress: () => {
+          setRawText("");
+          setAttendance(emptyData);
+        },
+      },
+    ]);
   };
 
   const handleExportHistory = async () => {
@@ -161,7 +175,7 @@ export default function AttendanceScreen() {
           }>)
         : [];
       if (history.length === 0) {
-        Alert.alert("Sem dados", "Não há dados arquivados para exportar.");
+        // Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
         return;
       }
       const headers = [
@@ -196,10 +210,7 @@ export default function AttendanceScreen() {
       const filename = `inventexpert_escala_${new Date().toISOString().slice(0, 10)}.csv`;
       await shareCsvFile(filename, headers, rows);
     } catch {
-      Alert.alert(
-        "Exportação indisponível",
-        "Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.",
-      );
+      // Falha silenciosa ou alerta simples
     }
   };
 
@@ -220,13 +231,14 @@ export default function AttendanceScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Parser de Escala (WhatsApp)</Text>
           <Text style={styles.subtitle}>
-            Cole o texto do WhatsApp e clique em processar.
+            Cole o texto: Linha 1=Data, 2=Loja, 3=Endereço. Nomes com número na
+            frente.
           </Text>
           <TextInput
             value={rawText}
             onChangeText={setRawText}
             multiline
-            placeholder="Cole aqui o texto bruto da escala"
+            placeholder="Cole aqui o texto bruto da escala..."
             style={styles.textArea}
             textAlignVertical="top"
           />
@@ -238,7 +250,6 @@ export default function AttendanceScreen() {
         {/* DETALHES */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Detalhes da Escala</Text>
-
           <Text style={styles.label}>Data</Text>
           <TextInput
             value={attendance.data}
@@ -250,7 +261,6 @@ export default function AttendanceScreen() {
             }
             style={styles.input}
           />
-
           <Text style={styles.label}>Loja</Text>
           <TextInput
             value={attendance.loja}
@@ -259,7 +269,6 @@ export default function AttendanceScreen() {
             }
             style={styles.input}
           />
-
           <Text style={styles.label}>Endereço da Loja</Text>
           <TextInput
             value={attendance.enderecoLoja}
@@ -272,10 +281,12 @@ export default function AttendanceScreen() {
 
         {/* PRESENÇA */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Presença</Text>
+          <Text style={styles.cardTitle}>
+            Presença ({attendance.colaboradores.length})
+          </Text>
           {attendance.colaboradores.length === 0 ? (
             <Text style={styles.subtitle}>
-              Nenhum colaborador identificado ainda.
+              Nenhum colaborador identificado.
             </Text>
           ) : (
             attendance.colaboradores.map((collaborator) => (
@@ -300,7 +311,6 @@ export default function AttendanceScreen() {
                       }
                     />
                   </Pressable>
-
                   <Pressable
                     onPress={() => togglePresence(collaborator, "AUSENTE")}
                     style={[
@@ -347,24 +357,25 @@ export default function AttendanceScreen() {
           <Text style={styles.btnTextWhite}>Enviar Escala</Text>
         </Pressable>
 
-        <Pressable
-          onPress={() =>
-            Alert.alert(
-              "Arquivar e limpar",
-              "Isso limpará a escala, mas os dados ficarão arquivados para análise.",
-              [
-                { text: "Cancelar", style: "cancel" },
-                {
-                  text: "Arquivar",
-                  onPress: () => void handleArchiveAndClear(),
-                },
-              ],
-            )
-          }
-          style={styles.btnSecondary}
-        >
-          <Text style={styles.btnTextSecondary}>Arquivar e limpar</Text>
-        </Pressable>
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={handleClearOnly}
+            style={[
+              styles.btnSecondary,
+              { backgroundColor: "#FEE2E2", flex: 1, marginRight: 8 },
+            ]}
+          >
+            <Text style={[styles.btnTextSecondary, { color: "#DC2626" }]}>
+              Limpar
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void handleArchiveAndClear()}
+            style={[styles.btnSecondary, { flex: 1, marginLeft: 8 }]}
+          >
+            <Text style={styles.btnTextSecondary}>Arquivar e Limpar</Text>
+          </Pressable>
+        </View>
 
         <Modal visible={previewVisible} transparent animationType="fade">
           <View style={styles.modalOverlay}>
@@ -480,7 +491,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   btnSecondary: {
-    marginTop: 8,
     alignItems: "center",
     borderRadius: 12,
     backgroundColor: "#E2E8F0",
@@ -524,5 +534,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#2563EB",
     paddingVertical: 10,
+  },
+  actionRow: {
+    flexDirection: "row",
+    marginTop: 8,
+    justifyContent: "space-between",
   },
 });

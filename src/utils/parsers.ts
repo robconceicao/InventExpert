@@ -5,6 +5,9 @@ import type {
   ReportB,
 } from "../types";
 
+// ==========================
+// FORMATAÇÃO GERAL
+// ==========================
 const fmtTime = (val: string) => (!val ? "" : `*${val.replace(":", "h")}*`);
 const fmtIntBr = (val: number | "") =>
   val === "" ? "" : `*${val.toLocaleString("pt-BR")}*`;
@@ -21,30 +24,48 @@ const fmtVal = (val: any) => (!val ? "" : `*${val}*`);
 const fmtBool = (val: boolean | null) =>
   val === true ? "*Sim*" : val === false ? "*Não*" : "*N/A*";
 
+// ==========================
+// PARSER DE ESCALA (NOVA LÓGICA RÍGIDA)
+// ==========================
 export const parseWhatsAppScale = (text: string): AttendanceData => {
+  // Remove linhas vazias e espaços extras
   const lines = text
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l);
-  let dataFound = "";
-  let lojaFound = "";
-  const nomes: AttendanceCollaborator[] = [];
-  const dateRegex = /(\d{2}\/\d{2}(\/\d{2,4})?)/;
+    .filter((l) => l.length > 0);
 
-  lines.forEach((line) => {
-    if (line.toLowerCase().includes("data")) {
-      const match = line.match(dateRegex);
-      if (match) dataFound = match[0];
-    } else if (!dataFound && dateRegex.test(line)) {
-      dataFound = line.match(dateRegex)?.[0] || "";
-    }
-    if (line.toLowerCase().includes("loja")) {
-      lojaFound = line.replace(/loja\s*:?/i, "").trim();
-    } else if (!line.toLowerCase().includes("data") && line.length > 3) {
-      if (!line.includes("ESCALA") && !line.includes("RELATÓRIO")) {
+  // Regra Estrita:
+  // Linha 0 -> Data
+  // Linha 1 -> Loja
+  // Linha 2 -> Endereço
+  const dataRaw = lines[0] || "";
+  const lojaRaw = lines[1] || "";
+  const enderecoRaw = lines[2] || "";
+
+  const nomes: AttendanceCollaborator[] = [];
+
+  // Regex para identificar linhas que começam com número (ex: "1 GABRIEL...")
+  // ^\d+ -> Começa com digitos
+  // [\s.-]* -> Pode ter espaço, ponto ou traço depois do numero
+  // (.*) -> Captura o resto como nome
+  const collaboratorRegex = /^\d+[\s.-]*(.*)/;
+
+  // Começa a procurar colaboradores da linha 3 em diante (índice 3 é a 4ª linha)
+  // Mas vamos varrer tudo para garantir, caso a formatação varie um pouco,
+  // priorizando a regra de "começar com número".
+  lines.forEach((line, index) => {
+    // Ignora as 3 primeiras linhas que já usamos para cabeçalho
+    if (index < 3) return;
+
+    const match = line.match(collaboratorRegex);
+    if (match && match[1]) {
+      // match[1] é o nome limpo (sem o número da frente)
+      const cleanName = match[1].trim();
+      if (cleanName.length > 2) {
+        // Ignora lixo muito curto
         nomes.push({
           id: Date.now().toString() + Math.random().toString(),
-          nome: line.replace(/^-/, "").trim(),
+          nome: cleanName,
           status: "NAO_DEFINIDO",
           substituto: "",
         });
@@ -53,9 +74,9 @@ export const parseWhatsAppScale = (text: string): AttendanceData => {
   });
 
   return {
-    data: dataFound || new Date().toLocaleDateString("pt-BR"),
-    loja: lojaFound,
-    enderecoLoja: "",
+    data: dataRaw,
+    loja: lojaRaw,
+    enderecoLoja: enderecoRaw,
     colaboradores: nomes,
   };
 };
@@ -68,6 +89,7 @@ export const formatDateInput = (text: string) => {
   return v;
 };
 
+// ... (Mantenha as funções formatAttendanceMessage, formatReportA e formatReportB iguais)
 export const formatAttendanceMessage = (data: AttendanceData): string => {
   const presentes = data.colaboradores.filter((c) => c.status === "PRESENTE");
   const ausentes = data.colaboradores.filter((c) => c.status === "AUSENTE");

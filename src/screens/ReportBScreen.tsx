@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing"; // Import necessário
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   Alert,
@@ -23,7 +23,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReportA, ReportB } from "../types";
 import { formatReportB } from "../utils/parsers";
 
-// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const REPORT_A_KEY = "inventexpert:reportA";
 const REPORT_B_KEY = "inventexpert:reportB";
@@ -69,7 +68,6 @@ export default function ReportBScreen() {
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
 
-  // Remove cabeçalho duplicado
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -153,19 +151,33 @@ export default function ReportBScreen() {
       setPhotoUris((prev) => [...prev, ...res.assets.map((a) => a.uri)]);
   };
 
-  const handleSend = async () => {
+  const handleSendText = () => {
     const msg = formatReportB(report);
-    await Clipboard.setStringAsync(msg);
-    Alert.alert(
-      "Copiado!",
-      "Texto copiado! No WhatsApp:\n1. Cole o texto.\n2. Anexe as fotos manualmente.",
-      [
-        {
-          text: "Abrir WhatsApp",
-          onPress: () => Linking.openURL("whatsapp://send"),
-        },
-      ],
+    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(
+      () => {
+        Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
+      },
     );
+  };
+
+  const handleShareImages = async () => {
+    if (photoUris.length === 0) {
+      Alert.alert("Atenção", "Nenhuma foto selecionada.");
+      return;
+    }
+
+    // O expo-sharing geralmente compartilha um arquivo por vez de forma confiável em todas as versões.
+    // Vamos tentar compartilhar a última foto ou iterar (o comportamento varia por versão do Android).
+    // Para garantir funcionalidade, vamos compartilhar a primeira/última ou abrir o share sheet.
+
+    // Tenta compartilhar a última foto adicionada (geralmente a do relatório assinado)
+    const lastPhoto = photoUris[photoUris.length - 1];
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(lastPhoto);
+    } else {
+      Alert.alert("Erro", "Compartilhamento não suportado.");
+    }
   };
 
   return (
@@ -185,6 +197,7 @@ export default function ReportBScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* ... MANTENHA TODOS OS CAMPOS DO FORMULÁRIO IGUAIS (Seções 1 a 6) ... */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>1. Identificação</Text>
             <Text style={styles.label}>Cliente</Text>
@@ -451,7 +464,7 @@ export default function ReportBScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Fotos</Text>
             <Text style={styles.helpText}>
-              Selecione para conferência. Você precisará anexar no WhatsApp.
+              Selecione as fotos (Documento Assinado, etc)
             </Text>
             <Pressable style={styles.buttonPhoto} onPress={pickImages}>
               <Ionicons name="images-outline" size={24} color="#2563EB" />
@@ -479,7 +492,7 @@ export default function ReportBScreen() {
             onPress={() => setPreviewVisible(true)}
           >
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.btnText}>Visualizar e Enviar</Text>
+            <Text style={styles.btnText}>Continuar para Envio</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -487,10 +500,16 @@ export default function ReportBScreen() {
       <Modal visible={previewVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.sectionTitle}>Pré-visualização</Text>
+            <Text style={styles.sectionTitle}>Pré-visualização e Envio</Text>
+            <Text style={styles.helpText}>1. Clique para enviar o Texto.</Text>
+            <Text style={styles.helpText}>
+              2. Volte e clique para enviar as Fotos.
+            </Text>
+
             <ScrollView style={styles.previewBox}>
               <Text>{formatReportB(report)}</Text>
             </ScrollView>
+
             <View style={styles.row}>
               <Pressable
                 style={styles.btnBack}
@@ -498,21 +517,39 @@ export default function ReportBScreen() {
               >
                 <Text>Voltar</Text>
               </Pressable>
-              <Pressable style={styles.buttonPrimary} onPress={handleSend}>
-                <Text style={styles.btnText}>Copiar e Enviar</Text>
-              </Pressable>
             </View>
-            <Text
-              style={{
-                textAlign: "center",
-                marginTop: 15,
-                fontSize: 13,
-                color: "#DC2626",
-                fontWeight: "bold",
-              }}
+
+            <Pressable
+              style={[
+                styles.buttonPrimary,
+                { marginTop: 10, backgroundColor: "#25D366" },
+              ]}
+              onPress={handleSendText}
             >
-              Lembre-se: Cole o texto e anexe as fotos no WhatsApp!
-            </Text>
+              <Ionicons
+                name="logo-whatsapp"
+                size={20}
+                color="#fff"
+                style={{ marginRight: 10 }}
+              />
+              <Text style={styles.btnText}>1º Enviar Texto (WhatsApp)</Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.buttonPrimary,
+                { marginTop: 10, backgroundColor: "#0284C7" },
+              ]}
+              onPress={handleShareImages}
+            >
+              <Ionicons
+                name="images"
+                size={20}
+                color="#fff"
+                style={{ marginRight: 10 }}
+              />
+              <Text style={styles.btnText}>2º Enviar Fotos</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -594,17 +631,6 @@ const styles = StyleSheet.create({
   },
   btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
   btnTextSecondary: { color: "#2563EB", fontWeight: "bold" },
-  radioBtn: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  radioBtnSelected: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
-  radioTxt: { color: "#64748B", fontWeight: "bold" },
-  radioTxtSelected: { color: "#2563EB" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -615,7 +641,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 20,
-    maxHeight: "80%",
+    maxHeight: "90%",
   },
   previewBox: {
     backgroundColor: "#F1F5F9",
