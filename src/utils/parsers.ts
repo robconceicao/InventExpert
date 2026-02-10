@@ -25,47 +25,40 @@ const fmtBool = (val: boolean | null) =>
   val === true ? "*Sim*" : val === false ? "*Não*" : "*N/A*";
 
 // ==========================
-// PARSER DE ESCALA (NOVA LÓGICA RÍGIDA)
+// PARSER DE ESCALA (ENTRADA)
 // ==========================
 export const parseWhatsAppScale = (text: string): AttendanceData => {
-  // Remove linhas vazias e espaços extras
   const lines = text
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  // Regra Estrita:
-  // Linha 0 -> Data
-  // Linha 1 -> Loja
-  // Linha 2 -> Endereço
+  // Regra: Linha 1=Data, 2=Loja, 3=Endereço
   const dataRaw = lines[0] || "";
   const lojaRaw = lines[1] || "";
   const enderecoRaw = lines[2] || "";
 
   const nomes: AttendanceCollaborator[] = [];
 
-  // Regex para identificar linhas que começam com número (ex: "1 GABRIEL...")
-  // ^\d+ -> Começa com digitos
-  // [\s.-]* -> Pode ter espaço, ponto ou traço depois do numero
-  // (.*) -> Captura o resto como nome
-  const collaboratorRegex = /^\d+[\s.-]*(.*)/;
+  // Regex: Pega linhas começando com número OU "BKP"
+  const collaboratorRegex = /^(\d+|BKP)[\s.-]*(.*)/i;
 
-  // Começa a procurar colaboradores da linha 3 em diante (índice 3 é a 4ª linha)
-  // Mas vamos varrer tudo para garantir, caso a formatação varie um pouco,
-  // priorizando a regra de "começar com número".
   lines.forEach((line, index) => {
-    // Ignora as 3 primeiras linhas que já usamos para cabeçalho
+    // Pula as 3 primeiras linhas de cabeçalho
     if (index < 3) return;
 
     const match = line.match(collaboratorRegex);
-    if (match && match[1]) {
-      // match[1] é o nome limpo (sem o número da frente)
-      const cleanName = match[1].trim();
-      if (cleanName.length > 2) {
-        // Ignora lixo muito curto
+    if (match && match[2]) {
+      const prefix = match[1].toUpperCase();
+      const cleanName = match[2].trim();
+
+      if (cleanName.length > 1) {
+        // Se for BKP, incluímos "BKP" no nome para exibir na lista
+        const nomeFinal = prefix === "BKP" ? `BKP ${cleanName}` : cleanName;
+
         nomes.push({
           id: Date.now().toString() + Math.random().toString(),
-          nome: cleanName,
+          nome: nomeFinal,
           status: "NAO_DEFINIDO",
           substituto: "",
         });
@@ -89,38 +82,33 @@ export const formatDateInput = (text: string) => {
   return v;
 };
 
-// ... (Mantenha as funções formatAttendanceMessage, formatReportA e formatReportB iguais)
+// ==========================
+// SAÍDA PARA WHATSAPP (FORMATO LIMPO)
+// ==========================
 export const formatAttendanceMessage = (data: AttendanceData): string => {
-  const presentes = data.colaboradores.filter((c) => c.status === "PRESENTE");
-  const ausentes = data.colaboradores.filter((c) => c.status === "AUSENTE");
-  const listaPresentes = presentes.map((c) =>
-    c.substituto ? `${c.nome} (Subst: ${c.substituto})` : c.nome,
-  );
-  return `*RELATÓRIO DE ESCALA*
+  // Cabeçalho simples
+  let msg = `${data.data}\n${data.loja}\n${data.enderecoLoja}\n\n`;
 
-📅 Data: *${data.data}*
-🏢 Loja: *${data.loja || "N/A"}*
-📍 Endereço: *${data.enderecoLoja || "N/A"}*
+  // Lista simples numerada
+  data.colaboradores.forEach((c, index) => {
+    // Ícone apenas se estiver PRESENTE
+    const statusIcon = c.status === "PRESENTE" ? "✅" : "";
 
-👥 *Resumo da Equipe*
-Total: ${data.colaboradores.length} | Presentes: ${presentes.length} | Ausentes: ${ausentes.length}
+    // Numeração: Se o nome já começa com BKP, não põe número. Senão, põe contador.
+    const prefix = c.nome.startsWith("BKP") ? "" : `${index + 1} `;
 
-✅ *Presentes:*
-${listaPresentes.length > 0 ? listaPresentes.join("\n") : "- Ninguém"}
+    // Nome + Substituto se houver
+    const nomeFinal = c.substituto
+      ? `${c.nome} (Subst: ${c.substituto})`
+      : c.nome;
 
-❌ *Ausentes:*
-${ausentes.length > 0 ? ausentes.map((c) => c.nome).join("\n") : "- Ninguém"}
+    msg += `${prefix}${nomeFinal} ${statusIcon}\n`;
+  });
 
-📋 *Status Completo:*
-${data.colaboradores
-  .map((c) => {
-    const icon =
-      c.status === "PRESENTE" ? "✅" : c.status === "AUSENTE" ? "❌" : "❓";
-    return `${icon} ${c.nome}`;
-  })
-  .join("\n")}`;
+  return msg.trim();
 };
 
+// ... Funções formatReportA e formatReportB continuam iguais ...
 export const formatReportA = (r: ReportA): string => {
   let blocoAvancos = `Avanço 22h00: ${fmtPct(r.avanco22h)}
 Avanço 00h00: ${fmtPct(r.avanco00h)}
