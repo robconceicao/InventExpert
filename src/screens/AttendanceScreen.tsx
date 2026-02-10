@@ -1,307 +1,398 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Clipboard from "expo-clipboard";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { AttendanceCollaborator, AttendanceData } from "../types";
 
-import type { AttendanceCollaborator, AttendanceData } from '@/src/types';
-import { formatAttendanceMessage, formatDateInput, parseWhatsAppScale } from '@/src/utils/parsers';
-import { shareCsvFile } from '@/src/utils/export';
-import { enqueueSyncItem, syncQueue } from '@/src/services/sync';
+const HeaderIcon = require("../../assets/images/splash-icon.png");
+const STORAGE_KEY = "inventexpert:attendance";
 
-const STORAGE_KEY = 'inventexpert:attendance';
-const HISTORY_KEY = 'inventexpert:attendance:history';
-
-const emptyData: AttendanceData = {
-  data: '',
-  loja: '',
-  enderecoLoja: '',
+const initialData: AttendanceData = {
+  data: new Date().toLocaleDateString("pt-BR"),
+  loja: "",
+  enderecoLoja: "",
   colaboradores: [],
 };
 
 export default function AttendanceScreen() {
-  const [rawText, setRawText] = useState('');
-  const [attendance, setAttendance] = useState<AttendanceData>(emptyData);
+  const [data, setData] = useState<AttendanceData>(initialData);
+  const [newName, setNewName] = useState("");
   const [previewVisible, setPreviewVisible] = useState(false);
 
   useEffect(() => {
-    const loadData = async () => {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as AttendanceData;
-        setAttendance({
-          data: parsed.data ?? '',
-          loja: parsed.loja ?? '',
-          enderecoLoja: parsed.enderecoLoja ?? '',
-          colaboradores: (parsed.colaboradores ?? []).map((item) => {
-            const legacy = item as AttendanceCollaborator & { presente?: boolean };
-            return {
-              ...item,
-              status: legacy.status ?? (legacy.presente ? 'PRESENTE' : 'NAO_DEFINIDO'),
-              substituto: legacy.substituto ?? '',
-            };
-          }),
-        });
-      }
-    };
-    void loadData();
+    AsyncStorage.getItem(STORAGE_KEY).then((res) => {
+      if (res) setData(JSON.parse(res));
+    });
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(attendance)).catch(() => null);
-  }, [attendance]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => null);
+  }, [data]);
 
-  const handleParse = () => {
-    const parsed = parseWhatsAppScale(rawText);
-    setAttendance(parsed);
+  const addCollaborator = () => {
+    if (!newName.trim()) return;
+    const newColab: AttendanceCollaborator = {
+      id: Date.now().toString(),
+      nome: newName.trim(),
+      status: "NAO_DEFINIDO",
+    };
+    setData((prev) => ({
+      ...prev,
+      colaboradores: [...prev.colaboradores, newColab],
+    }));
+    setNewName("");
   };
 
-  const togglePresence = (
-    collaborator: AttendanceCollaborator,
-    status: AttendanceCollaborator['status'],
+  const updateStatus = (
+    id: string,
+    status: AttendanceCollaborator["status"],
   ) => {
-    setAttendance((prev) => ({
+    setData((prev) => ({
       ...prev,
-      colaboradores: prev.colaboradores.map((item) =>
-        item.id === collaborator.id ? { ...item, status } : item,
+      colaboradores: prev.colaboradores.map((c) =>
+        c.id === id ? { ...c, status } : c,
       ),
     }));
   };
 
-  const previewMessage = useMemo(() => formatAttendanceMessage(attendance), [attendance]);
-
-  const handleOpenPreview = () => {
-    if (!attendance.data.trim() || !attendance.loja.trim()) {
-      Alert.alert('Campos obrigatórios', 'Preencha Data e Loja antes de enviar.');
-      return;
-    }
-    setPreviewVisible(true);
+  const removeCollaborator = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      colaboradores: prev.colaboradores.filter((c) => c.id !== id),
+    }));
   };
 
-  const handleSendWhatsApp = () => {
-    const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
-    });
+  const formatMessage = () => {
+    const presentes = data.colaboradores
+      .filter((c) => c.status === "PRESENTE")
+      .map((c) => c.nome);
+    const ausentes = data.colaboradores
+      .filter((c) => c.status === "AUSENTE")
+      .map((c) => c.nome);
+
+    return `*RELATÓRIO DE ESCALA*
+
+📅 Data: *${data.data}*
+🏢 Loja: *${data.loja || "N/A"}*
+📍 Endereço: *${data.enderecoLoja || "N/A"}*
+
+👥 *Resumo da Equipe*
+Total: ${data.colaboradores.length} | Presentes: ${presentes.length} | Ausentes: ${ausentes.length}
+
+✅ *Presentes:*
+${presentes.length > 0 ? presentes.join("\n") : "- Ninguém"}
+
+❌ *Ausentes:*
+${ausentes.length > 0 ? ausentes.join("\n") : "- Ninguém"}
+
+📋 *Status Completo:*
+${data.colaboradores
+  .map((c) => {
+    const icon =
+      c.status === "PRESENTE" ? "✅" : c.status === "AUSENTE" ? "❌" : "❓";
+    return `${icon} ${c.nome}`;
+  })
+  .join("\n")}`;
   };
 
-  const handleArchiveAndClear = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
-      history.push({
-        savedAt: new Date().toISOString(),
-        attendance,
-      });
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-      await enqueueSyncItem('attendance', { attendance });
-    } catch {
-      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
-      return;
-    }
-
-    await handleExportHistory();
-    void syncQueue();
-
-    setRawText('');
-    setAttendance(emptyData);
-    Alert.alert('Dados arquivados', 'A escala foi arquivada e o formulário foi limpo.');
-  };
-
-  const handleExportHistory = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = storedHistory
-        ? (JSON.parse(storedHistory) as Array<{ savedAt: string; attendance: AttendanceData }>)
-        : [];
-      if (history.length === 0) {
-        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
-        return;
-      }
-      const headers = [
-        'savedAt',
-        'data',
-        'loja',
-        'enderecoLoja',
-        'colaboradorNome',
-        'status',
-        'substituto',
-      ];
-      const rows = history.flatMap((item) => {
-        const base = [item.savedAt, item.attendance.data, item.attendance.loja, item.attendance.enderecoLoja];
-        if (!item.attendance.colaboradores || item.attendance.colaboradores.length === 0) {
-          return [[...base, '', '', '']];
-        }
-        return item.attendance.colaboradores.map((collaborator) => [
-          ...base,
-          collaborator.nome,
-          collaborator.status,
-          collaborator.substituto ?? '',
-        ]);
-      });
-      const filename = `inventexpert_escala_${new Date().toISOString().slice(0, 10)}.csv`;
-      await shareCsvFile(filename, headers, rows);
-    } catch {
-      Alert.alert(
-        'Exportação indisponível',
-        'Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.',
-      );
-    }
+  const handleSend = async () => {
+    const msg = formatMessage();
+    await Clipboard.setStringAsync(msg);
+    Alert.alert("Copiado!", "Cole no WhatsApp.", [
+      {
+        text: "Abrir WhatsApp",
+        onPress: () => Linking.openURL("whatsapp://send"),
+      },
+    ]);
   };
 
   return (
-    <ScrollView className="flex-1 bg-slate-50" contentContainerClassName="px-4 pb-8 pt-4">
-      <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-        <Text className="text-base font-semibold text-slate-800">
-          Leitura da escala enviada no WhatsApp
-        </Text>
-        <Text className="mt-2 text-sm text-slate-600">
-          Cole o texto do WhatsApp e clique em processar.
-        </Text>
-        <TextInput
-          value={rawText}
-          onChangeText={setRawText}
-          multiline
-          placeholder="Cole aqui o texto bruto da escala"
-          className="mt-3 min-h-[140px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          textAlignVertical="top"
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      <View style={styles.header}>
+        <Image
+          source={HeaderIcon}
+          style={styles.headerLogo}
+          resizeMode="contain"
         />
-        <Pressable
-          onPress={handleParse}
-          className="mt-3 items-center rounded-lg bg-blue-600 py-2">
-          <Text className="text-sm font-semibold text-white">Processar escala</Text>
-        </Pressable>
+        <Text style={styles.headerTitle}>Controle de Escala</Text>
       </View>
 
-      <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-        <Text className="text-base font-semibold text-slate-800">Detalhes da Escala</Text>
-        <View className="mt-3">
-          <Text className="text-sm font-semibold text-slate-700">Data</Text>
-          <TextInput
-            value={attendance.data}
-            onChangeText={(text) =>
-              setAttendance((prev) => ({ ...prev, data: formatDateInput(text) }))
-            }
-            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          />
-        </View>
-        <View className="mt-3">
-          <Text className="text-sm font-semibold text-slate-700">Loja</Text>
-          <TextInput
-            value={attendance.loja}
-            onChangeText={(text) => setAttendance((prev) => ({ ...prev, loja: text }))}
-            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          />
-        </View>
-        <View className="mt-3">
-          <Text className="text-sm font-semibold text-slate-700">Endereço da Loja</Text>
-          <TextInput
-            value={attendance.enderecoLoja}
-            onChangeText={(text) => setAttendance((prev) => ({ ...prev, enderecoLoja: text }))}
-            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          />
-        </View>
-      </View>
-
-      <View className="rounded-xl bg-white p-4 shadow-sm">
-        <Text className="text-base font-semibold text-slate-800">Presença</Text>
-        {attendance.colaboradores.length === 0 ? (
-          <Text className="mt-3 text-sm text-slate-500">
-            Nenhum colaborador identificado ainda.
-          </Text>
-        ) : (
-          attendance.colaboradores.map((collaborator) => (
-            <View key={collaborator.id} className="mt-3 rounded-lg border border-slate-200 px-3 py-2">
-              <Text className="text-sm font-medium text-slate-800">{collaborator.nome}</Text>
-              <View className="mt-2 flex-row gap-3">
-                <Pressable
-                  onPress={() => togglePresence(collaborator, 'PRESENTE')}
-                  className={`h-9 w-9 items-center justify-center rounded-full ${
-                    collaborator.status === 'PRESENTE' ? 'bg-emerald-600' : 'bg-slate-200'
-                  }`}>
-                  <Ionicons
-                    name="checkmark"
-                    size={18}
-                    color={collaborator.status === 'PRESENTE' ? '#fff' : '#0F172A'}
-                  />
-                </Pressable>
-                <Pressable
-                  onPress={() => togglePresence(collaborator, 'AUSENTE')}
-                  className={`h-9 w-9 items-center justify-center rounded-full ${
-                    collaborator.status === 'AUSENTE' ? 'bg-rose-600' : 'bg-slate-200'
-                  }`}>
-                  <Ionicons
-                    name="close"
-                    size={18}
-                    color={collaborator.status === 'AUSENTE' ? '#fff' : '#0F172A'}
-                  />
-                </Pressable>
-              </View>
-              <View className="mt-3">
-                <Text className="text-xs font-semibold text-slate-600">Substituição (se houver)</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Identificação</Text>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>Data</Text>
                 <TextInput
-                  value={collaborator.substituto ?? ''}
-                  onChangeText={(text) =>
-                    setAttendance((prev) => ({
-                      ...prev,
-                      colaboradores: prev.colaboradores.map((item) =>
-                        item.id === collaborator.id ? { ...item, substituto: text } : item,
-                      ),
-                    }))
+                  style={styles.input}
+                  value={data.data}
+                  onChangeText={(t) =>
+                    setData((prev) => ({ ...prev, data: t }))
                   }
-                  placeholder="Nome do substituto"
-                  className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>Loja</Text>
+                <TextInput
+                  style={styles.input}
+                  value={data.loja}
+                  onChangeText={(t) =>
+                    setData((prev) => ({ ...prev, loja: t }))
+                  }
                 />
               </View>
             </View>
-          ))
-        )}
-      </View>
+            <Text style={styles.label}>Endereço da Loja</Text>
+            <TextInput
+              style={styles.input}
+              value={data.enderecoLoja}
+              onChangeText={(t) =>
+                setData((prev) => ({ ...prev, enderecoLoja: t }))
+              }
+              placeholder="Rua, Número, Bairro..."
+            />
+          </View>
 
-      <Pressable
-        onPress={handleOpenPreview}
-        className="mt-4 items-center rounded-xl bg-blue-600 py-3">
-        <Text className="text-base font-semibold text-white">Enviar Escala</Text>
-      </Pressable>
-      <Pressable
-        onPress={() =>
-          Alert.alert(
-            'Arquivar e limpar',
-            'Isso limpará a escala, mas os dados ficarão arquivados para análise.',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
-            ],
-          )
-        }
-        className="mt-2 items-center rounded-xl bg-slate-200 py-3">
-        <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
-      </Pressable>
-
-      <Modal visible={previewVisible} transparent animationType="fade">
-        <View className="flex-1 items-center justify-center bg-black/50 px-4">
-          <View className="w-full max-w-md rounded-xl bg-white p-4">
-            <Text className="text-base font-semibold text-slate-800">Pré-visualização</Text>
-            <ScrollView className="mt-3 max-h-96 rounded-lg border border-slate-200 p-3">
-              <Text className="text-sm text-slate-700">{previewMessage}</Text>
-            </ScrollView>
-            <View className="mt-4 flex-row gap-2">
-              <Pressable
-                onPress={() => setPreviewVisible(false)}
-                className="flex-1 items-center rounded-lg bg-slate-200 py-2">
-                <Text className="text-sm font-semibold text-slate-700">Voltar</Text>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Adicionar Colaborador</Text>
+            <View style={styles.addRow}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginTop: 0 }]}
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="Nome"
+                onSubmitEditing={addCollaborator}
+              />
+              <Pressable style={styles.btnAdd} onPress={addCollaborator}>
+                <Ionicons name="add" size={24} color="#fff" />
               </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.listContainer}>
+            {data.colaboradores.map((colab) => (
+              <View key={colab.id} style={styles.colabItem}>
+                <View style={styles.colabInfo}>
+                  <Text style={styles.colabName}>{colab.nome}</Text>
+                  <Pressable onPress={() => removeCollaborator(colab.id)}>
+                    <Text style={styles.removeText}>Remover</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.statusButtons}>
+                  <Pressable
+                    style={[
+                      styles.statusBtn,
+                      colab.status === "PRESENTE" && styles.presentBtn,
+                    ]}
+                    onPress={() => updateStatus(colab.id, "PRESENTE")}
+                  >
+                    <Text
+                      style={[
+                        styles.statusTxt,
+                        colab.status === "PRESENTE" && { color: "#fff" },
+                      ]}
+                    >
+                      P
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.statusBtn,
+                      colab.status === "AUSENTE" && styles.absentBtn,
+                    ]}
+                    onPress={() => updateStatus(colab.id, "AUSENTE")}
+                  >
+                    <Text
+                      style={[
+                        styles.statusTxt,
+                        colab.status === "AUSENTE" && { color: "#fff" },
+                      ]}
+                    >
+                      F
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+            {data.colaboradores.length === 0 && (
+              <Text style={styles.emptyText}>Lista vazia.</Text>
+            )}
+          </View>
+
+          <Pressable
+            style={styles.buttonPrimary}
+            onPress={() => setPreviewVisible(true)}
+          >
+            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+            <Text style={styles.btnText}>Gerar Relatório</Text>
+          </Pressable>
+          <Pressable
+            style={styles.buttonClear}
+            onPress={() => setData(initialData)}
+          >
+            <Text style={styles.btnTextDanger}>Limpar Lista</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal visible={previewVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.cardTitle}>Pré-visualização</Text>
+            <ScrollView style={styles.previewBox}>
+              <Text style={styles.previewText}>{formatMessage()}</Text>
+            </ScrollView>
+            <View style={styles.row}>
               <Pressable
-                onPress={() => {
-                  setPreviewVisible(false);
-                  handleSendWhatsApp();
-                }}
-                className="flex-1 items-center rounded-lg bg-blue-600 py-2">
-                <Text className="text-sm font-semibold text-white">Enviar WhatsApp</Text>
+                style={styles.btnBack}
+                onPress={() => setPreviewVisible(false)}
+              >
+                <Text>Voltar</Text>
+              </Pressable>
+              <Pressable style={styles.buttonPrimary} onPress={handleSend}>
+                <Text style={styles.btnText}>Copiar e Enviar</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+    padding: 16,
+  },
+  headerLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 6 },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  scrollContent: { padding: 16 },
+  card: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1E40AF",
+    marginBottom: 12,
+    textTransform: "uppercase",
+  },
+  label: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    fontSize: 16,
+    color: "#1E293B",
+  },
+  row: { flexDirection: "row", gap: 10 },
+  half: { flex: 1 },
+  addRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  btnAdd: {
+    backgroundColor: "#2563EB",
+    padding: 10,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 8,
+    elevation: 2,
+    marginBottom: 16,
+  },
+  colabItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  colabInfo: { flex: 1 },
+  colabName: { fontSize: 16, fontWeight: "600", color: "#1E293B" },
+  removeText: { fontSize: 12, color: "#DC2626", marginTop: 4 },
+  statusButtons: { flexDirection: "row", gap: 8 },
+  statusBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  presentBtn: { backgroundColor: "#16A34A" },
+  absentBtn: { backgroundColor: "#DC2626" },
+  statusTxt: { fontWeight: "bold", color: "#64748B" },
+  emptyText: { textAlign: "center", color: "#94A3B8", padding: 20 },
+  buttonPrimary: {
+    backgroundColor: "#2563EB",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  buttonClear: { marginTop: 12, padding: 14, alignItems: "center" },
+  btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: "80%",
+  },
+  previewBox: {
+    backgroundColor: "#F1F5F9",
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  previewText: { fontSize: 14, color: "#334155" },
+  btnBack: {
+    flex: 1,
+    padding: 14,
+    alignItems: "center",
+    backgroundColor: "#E2E8F0",
+    borderRadius: 12,
+  },
+});

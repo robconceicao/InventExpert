@@ -1,19 +1,24 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import {
-    Alert,
-    Image,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import DocumentScanner from "react-native-document-scanner-plugin";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ScannerScreen() {
   const [scannedImages, setScannedImages] = useState<string[]>([]);
@@ -35,14 +40,15 @@ export default function ScannerScreen() {
       const result = await DocumentScanner.scanDocument({
         maxNumDocuments: 10,
       });
-      if (result?.scannedImages?.length) {
-        setScannedImages((prev) =>
-          append ? [...prev, ...result.scannedImages] : result.scannedImages,
-        );
-      } else {
-        Alert.alert("Aviso", "Nenhuma imagem foi capturada.");
+
+      // Correção TypeScript: Verifica se existem imagens antes de atualizar o estado
+      if (result && result.scannedImages && result.scannedImages.length > 0) {
+        const newImages = result.scannedImages;
+        setScannedImages((prev) => {
+          return append ? [...prev, ...newImages] : [...newImages];
+        });
       }
-    } catch {
+    } catch (error) {
       Alert.alert("Erro", "Não foi possível abrir o scanner.");
     } finally {
       setIsScanning(false);
@@ -74,181 +80,229 @@ export default function ScannerScreen() {
     }
     try {
       setIsSharing(true);
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert(
-          "Indisponível",
-          "Compartilhamento não disponível neste dispositivo.",
-        );
-        return;
-      }
       const imageTags = await Promise.all(
         scannedImages.map(async (uri) => {
-          const encoding =
-            (FileSystem.EncodingType?.Base64 as
-              | FileSystem.EncodingType
-              | undefined) ?? "base64";
-          const base64 = await FileSystem.readAsStringAsync(uri, { encoding });
-          if (!base64) {
-            throw new Error("Não foi possível ler a imagem escaneada.");
-          }
+          const base64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
           return `<img src="data:image/jpeg;base64,${base64}" style="width:100%;page-break-after:always;" />`;
         }),
       );
-      const html = `
-        <html>
-          <body style="margin:0;padding:0;">
-            ${imageTags.join("")}
-          </body>
-        </html>
-      `;
-      const printed = await Print.printToFileAsync({ html });
-      const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
-      let targetUri = printed.uri;
-      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-      if (baseDir) {
-        const outputDir = `${baseDir}inventexpert/`;
-        await FileSystem.makeDirectoryAsync(outputDir, { intermediates: true });
-        targetUri = `${outputDir}${targetName}`;
-        if (targetUri !== printed.uri) {
-          await FileSystem.deleteAsync(targetUri, { idempotent: true });
-          await FileSystem.copyAsync({ from: printed.uri, to: targetUri });
-        }
-      }
 
-      await Sharing.shareAsync(targetUri, {
+      const html = `<html><body style="margin:0;padding:0;">${imageTags.join("")}</body></html>`;
+      const printed = await Print.printToFileAsync({ html });
+
+      const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
+      const outputUri = `${FileSystem.cacheDirectory}${targetName}`;
+
+      await FileSystem.moveAsync({ from: printed.uri, to: outputUri });
+
+      await Sharing.shareAsync(outputUri, {
         mimeType: "application/pdf",
         dialogTitle: "Enviar PDF escaneado",
-        UTI: "com.adobe.pdf",
       });
       setShareVisible(false);
     } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "Falha desconhecida.";
-      Alert.alert(
-        "Erro",
-        `Não foi possível gerar ou compartilhar o PDF. Verifique se há um app compatível (ex.: WhatsApp) instalado.\n\nDetalhes: ${detail}`,
-      );
+      Alert.alert("Erro", "Falha ao gerar o PDF.");
     } finally {
       setIsSharing(false);
     }
   };
 
   return (
-    <ScrollView
-      className="flex-1 bg-slate-50"
-      contentContainerClassName="px-4 pb-8 pt-4"
-    >
-      <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-        <Text className="text-base font-semibold text-slate-800">
-          Scanner de Documentos
-        </Text>
-        <Text className="mt-2 text-sm text-slate-600">
-          O scanner detecta automaticamente a folha, recorta o documento e
-          aplica ajuste de perspectiva.
-        </Text>
-        <Pressable
-          onPress={() => void handleScan(false)}
-          className="mt-3 items-center rounded-lg bg-blue-600 py-2"
-          disabled={isScanning}
-        >
-          <Text className="text-sm font-semibold text-white">
-            {isScanning ? "Abrindo scanner..." : "Escanear documentos"}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Scanner de Documentos</Text>
+          <Text style={styles.subtitle}>
+            Capture relatórios físicos e envie como PDF via WhatsApp.
           </Text>
-        </Pressable>
-        <View className="mt-2 flex-row gap-2">
+
           <Pressable
-            onPress={() => void handleScan(true)}
-            className="flex-1 items-center rounded-lg bg-slate-200 py-2"
+            style={[styles.buttonPrimary, isScanning && styles.buttonDisabled]}
+            onPress={() => void handleScan(false)}
             disabled={isScanning}
           >
-            <Text className="text-sm font-semibold text-slate-700">
-              Adicionar páginas
+            <Ionicons name="scan-outline" size={24} color="#fff" />
+            <Text style={styles.buttonText}>
+              {isScanning ? "Scanner Aberto..." : "Escanear Documento"}
             </Text>
           </Pressable>
-          <Pressable
-            onPress={handleClear}
-            className="flex-1 items-center rounded-lg bg-rose-600 py-2"
-            disabled={isScanning}
-          >
-            <Text className="text-sm font-semibold text-white">Limpar</Text>
-          </Pressable>
-        </View>
-        <Text className="mt-2 text-xs text-slate-500">
-          Captura sequencial: o scanner abre e fecha a câmera por página.
-        </Text>
-      </View>
 
-      <View className="rounded-xl bg-white p-4 shadow-sm">
-        <Text className="text-base font-semibold text-slate-800">
-          Pré-visualização
-        </Text>
-        {scannedImages.length === 0 ? (
-          <Text className="mt-3 text-sm text-slate-500">
-            Nenhuma imagem capturada.
+          <View style={styles.row}>
+            <Pressable
+              style={styles.buttonSecondary}
+              onPress={() => void handleScan(true)}
+              disabled={isScanning}
+            >
+              <Text style={styles.buttonTextSecondary}>
+                + Adicionar Páginas
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.buttonDanger}
+              onPress={handleClear}
+              disabled={isScanning}
+            >
+              <Text style={styles.buttonText}>Limpar</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            Páginas Escaneadas ({scannedImages.length})
           </Text>
-        ) : (
-          <View className="mt-3 flex-col gap-3">
-            {scannedImages.map((uri, index) => (
-              <View
-                key={`${uri}-${index}`}
-                className="rounded-lg border border-slate-200 p-2"
-              >
-                <Text className="text-xs font-semibold text-slate-500">
-                  Página {index + 1}
-                </Text>
+          {scannedImages.length === 0 ? (
+            <Text style={styles.emptyText}>Nenhuma página capturada.</Text>
+          ) : (
+            scannedImages.map((uri, index) => (
+              <View key={index} style={styles.imagePreview}>
+                <Text style={styles.pageLabel}>Página {index + 1}</Text>
                 <Image
                   source={{ uri }}
-                  className="mt-2 h-80 w-full rounded-lg"
+                  style={styles.image}
                   resizeMode="contain"
                 />
               </View>
-            ))}
-          </View>
-        )}
-      </View>
+            ))
+          )}
+        </View>
 
-      <Pressable
-        onPress={openShareModal}
-        className="mt-4 items-center rounded-xl bg-blue-600 py-3"
-        disabled={isSharing}
-      >
-        <Text className="text-base font-semibold text-white">
-          {isSharing ? "Gerando PDF..." : "Enviar PDF escaneado"}
-        </Text>
-      </Pressable>
+        <Pressable
+          style={[
+            styles.buttonSend,
+            scannedImages.length === 0 && styles.buttonDisabled,
+          ]}
+          onPress={openShareModal}
+          disabled={scannedImages.length === 0 || isSharing}
+        >
+          {isSharing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Gerar e Compartilhar PDF</Text>
+          )}
+        </Pressable>
+      </ScrollView>
 
       <Modal visible={shareVisible} transparent animationType="fade">
-        <View className="flex-1 items-center justify-center bg-black/50 px-4">
-          <View className="w-full max-w-md rounded-xl bg-white p-4">
-            <Text className="text-base font-semibold text-slate-800">
-              Nome do arquivo
-            </Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.cardTitle}>Nome do PDF</Text>
             <TextInput
               value={pdfName}
               onChangeText={setPdfName}
-              placeholder="relatorio_scaneado"
-              className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+              placeholder="Ex: relatorio_inventario"
+              style={styles.input}
             />
-            <View className="mt-4 flex-row gap-2">
+            <View style={styles.row}>
               <Pressable
+                style={styles.btnModalBack}
                 onPress={() => setShareVisible(false)}
-                className="flex-1 items-center rounded-lg bg-slate-200 py-2"
               >
-                <Text className="text-sm font-semibold text-slate-700">
-                  Cancelar
-                </Text>
+                <Text style={styles.btnModalBackText}>Cancelar</Text>
               </Pressable>
               <Pressable
+                style={styles.btnModalSend}
                 onPress={() => void handleSharePdf()}
-                className="flex-1 items-center rounded-lg bg-blue-600 py-2"
               >
-                <Text className="text-sm font-semibold text-white">Enviar</Text>
+                <Text style={styles.buttonText}>Enviar</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#F5F7FA" },
+  scrollContent: { padding: 16, paddingBottom: 40 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1E40AF",
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  subtitle: { fontSize: 13, color: "#64748B", marginBottom: 16 },
+  row: { flexDirection: "row", gap: 10, marginTop: 10 },
+  buttonPrimary: {
+    backgroundColor: "#2563EB",
+    flexDirection: "row",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  buttonSecondary: {
+    flex: 2,
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  buttonDanger: {
+    flex: 1,
+    backgroundColor: "#DC2626",
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  buttonSend: {
+    backgroundColor: "#16A34A",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  buttonTextSecondary: { color: "#2563EB", fontWeight: "bold" },
+  imagePreview: {
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  pageLabel: { fontSize: 12, color: "#94A3B8", marginBottom: 5 },
+  image: { width: "100%", height: 350, borderRadius: 8 },
+  emptyText: { textAlign: "center", color: "#94A3B8", marginVertical: 20 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: { backgroundColor: "#fff", borderRadius: 20, padding: 24 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 20,
+    fontSize: 16,
+  },
+  btnModalBack: { flex: 1, padding: 14, alignItems: "center" },
+  btnModalBackText: { color: "#64748B", fontWeight: "bold" },
+  btnModalSend: {
+    flex: 2,
+    backgroundColor: "#2563EB",
+    padding: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+});

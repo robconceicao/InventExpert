@@ -1,60 +1,54 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
-
-import { isSupabaseConfigured, supabase } from '@/src/services/supabase';
+import React, { useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { isSupabaseConfigured, supabase } from "../services/supabase";
 
 export default function AuthScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const trimmedEmail = useMemo(() => email.trim(), [email]);
 
   const translateAuthError = (message: string) => {
-    if (message.includes('Email not confirmed')) {
-      return 'E-mail ainda não confirmado. Verifique sua caixa de entrada e spam.';
-    }
-    if (message.includes('Invalid login credentials')) {
-      return 'E-mail ou senha inválidos.';
-    }
-    if (message.includes('User already registered')) {
-      return 'E-mail já cadastrado. Use Entrar ou Reenviar confirmação.';
-    }
+    if (message.includes("Email not confirmed"))
+      return "E-mail não confirmado. Verifique seu spam.";
+    if (message.includes("Invalid login credentials"))
+      return "E-mail ou senha inválidos.";
+    if (message.includes("User already registered"))
+      return "E-mail já cadastrado.";
     return message;
   };
 
   const handleSignIn = async () => {
-    if (!supabase) {
-      Alert.alert('Configuração ausente', 'Informe as chaves do Supabase no app.json.');
-      return;
-    }
-    if (!trimmedEmail || !password) {
-      Alert.alert('Campos obrigatórios', 'Informe e-mail e senha.');
-      return;
-    }
+    if (!supabase) return Alert.alert("Erro", "Supabase não configurado.");
+    if (!trimmedEmail || !password)
+      return Alert.alert("Aviso", "Preencha todos os campos.");
+
     try {
       setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password,
       });
-      if (error) {
-        Alert.alert('Erro', translateAuthError(error.message));
-      }
+      if (error) Alert.alert("Erro", translateAuthError(error.message));
     } finally {
       setLoading(false);
     }
   };
 
   const handleSignUp = async () => {
-    if (!supabase) {
-      Alert.alert('Configuração ausente', 'Informe as chaves do Supabase no app.json.');
-      return;
-    }
-    if (!trimmedEmail || !password) {
-      Alert.alert('Campos obrigatórios', 'Informe e-mail e senha.');
-      return;
-    }
+    if (!supabase) return;
     try {
       setLoading(true);
       const { data, error } = await supabase.auth.signUp({
@@ -62,115 +56,146 @@ export default function AuthScreen() {
         password,
       });
       if (error) {
-        Alert.alert('Erro', translateAuthError(error.message));
-        return;
+        Alert.alert("Erro", translateAuthError(error.message));
+      } else {
+        Alert.alert("Sucesso", "Verifique seu e-mail para ativar a conta.");
       }
-      if (data.session) {
-        Alert.alert('Conta criada', 'Login efetuado com sucesso.');
-        return;
-      }
-      if (data.user?.identities?.length === 0) {
-        Alert.alert('Conta já existe', 'Use Entrar ou Reenviar confirmação.');
-        return;
-      }
-      Alert.alert(
-        'Conta criada',
-        'Confirme o e-mail para ativar sua conta e depois faça login.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendConfirmation = async () => {
-    if (!supabase) {
-      Alert.alert('Configuração ausente', 'Informe as chaves do Supabase no app.json.');
-      return;
-    }
-    if (!trimmedEmail) {
-      Alert.alert('E-mail obrigatório', 'Digite o e-mail para reenviar a confirmação.');
-      return;
-    }
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: trimmedEmail,
-      });
-      if (error) {
-        Alert.alert('Erro', translateAuthError(error.message));
-        return;
-      }
-      Alert.alert('Confirmação enviada', 'Confira seu e-mail e a caixa de spam.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View className="flex-1 items-center justify-center bg-slate-50 px-6">
-      <View className="w-full max-w-md rounded-xl bg-white p-6 shadow-sm">
-        <Text className="text-lg font-semibold text-slate-800">InventExpert</Text>
-        <Text className="mt-2 text-sm text-slate-600">
-          Crie sua conta com e-mail e senha. Se a confirmação estiver ativa no Supabase, confirme
-          no e-mail e depois faça login.
-        </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <View style={styles.header}>
+            <Image
+              source={require("../../assets/images/icon.png")}
+              style={styles.logo}
+            />
+            <Text style={styles.title}>InventExpert</Text>
+            <Text style={styles.subtitle}>
+              Gestão de Inventário para Líderes
+            </Text>
+          </View>
 
-        {!isSupabaseConfigured ? (
-          <Text className="mt-4 text-sm text-rose-600">
-            Configure as chaves do Supabase no `app.json` para continuar.
-          </Text>
-        ) : null}
+          {!isSupabaseConfigured && (
+            <Text style={styles.errorText}>
+              Atenção: Supabase não configurado no app.json
+            </Text>
+          )}
 
-        <View className="mt-4">
-          <Text className="text-sm font-semibold text-slate-700">E-mail</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            autoComplete="email"
-            placeholder="seu@email.com"
-            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholder="exemplo@email.com"
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Senha</Text>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholder="••••••••"
+              style={styles.input}
+            />
+          </View>
+
+          <Pressable
+            onPress={handleSignIn}
+            style={[styles.buttonPrimary, loading && styles.buttonDisabled]}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonTextPrimary}>Entrar</Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={handleSignUp}
+            style={styles.buttonSecondary}
+            disabled={loading}
+          >
+            <Text style={styles.buttonTextSecondary}>Criar nova conta</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() =>
+              Alert.alert("Recuperação", "Funcionalidade em desenvolvimento.")
+            }
+            style={styles.buttonGhost}
+          >
+            <Text style={styles.buttonTextGhost}>Esqueci minha senha</Text>
+          </Pressable>
         </View>
-
-        <View className="mt-3">
-          <Text className="text-sm font-semibold text-slate-700">Senha</Text>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="password"
-            placeholder="••••••••"
-            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          />
-        </View>
-
-        <Pressable
-          onPress={handleSignIn}
-          className="mt-5 items-center rounded-lg bg-blue-600 py-2"
-          disabled={loading}>
-          <Text className="text-sm font-semibold text-white">
-            {loading ? 'Entrando...' : 'Entrar'}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={handleSignUp}
-          className="mt-2 items-center rounded-lg bg-slate-200 py-2"
-          disabled={loading}>
-          <Text className="text-sm font-semibold text-slate-700">Criar conta</Text>
-        </Pressable>
-        <Pressable
-          onPress={handleResendConfirmation}
-          className="mt-2 items-center rounded-lg border border-slate-200 py-2"
-          disabled={loading}>
-          <Text className="text-sm font-semibold text-slate-700">
-            Reenviar confirmação
-          </Text>
-        </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#F5F7FA" },
+  container: { flex: 1, justifyContent: "center", padding: 24 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  header: { alignItems: "center", marginBottom: 32 },
+  logo: { width: 64, height: 64, borderRadius: 12, marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: "bold", color: "#1E40AF" },
+  subtitle: { fontSize: 14, color: "#64748B", marginTop: 4 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: "600", color: "#475569", marginBottom: 6 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    color: "#1E293B",
+    backgroundColor: "#F8FAFC",
+  },
+  buttonPrimary: {
+    backgroundColor: "#2563EB",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  buttonDisabled: { backgroundColor: "#93C5FD" },
+  buttonTextPrimary: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  buttonSecondary: {
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    padding: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  buttonTextSecondary: { color: "#2563EB", fontWeight: "600" },
+  buttonGhost: { marginTop: 16, alignItems: "center" },
+  buttonTextGhost: { color: "#64748B", fontSize: 13 },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+});

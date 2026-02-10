@@ -1,676 +1,585 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
-import React, { useEffect, useMemo, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useState } from "react";
 import {
-  Alert,
+  Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { Linking } from 'react-native';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { ReportA } from "../types";
+import { formatReportA } from "../utils/parsers";
 
-import TimeInput from '@/src/components/TimeInput';
-import type { ReportA } from '@/src/types';
-import {
-  formatFloatInput,
-  formatPercentInput,
-  formatReportA,
-  isValidTime,
-  parseFloatInput,
-  parsePercentInput,
-} from '@/src/utils/parsers';
-import { shareCsvFile } from '@/src/utils/export';
-import { enqueueSyncItem, syncQueue } from '@/src/services/sync';
+const HeaderIcon = require("../../assets/images/splash-icon.png");
+const STORAGE_KEY = "inventexpert:reportA";
 
-const STORAGE_KEY = 'inventexpert:reportA';
-const HISTORY_KEY = 'inventexpert:reportA:history';
-
-const createInitialState = (): ReportA => ({
-  lojaNum: '',
-  lojaNome: '',
-  enderecoLoja: '',
-  qtdColaboradores: 0,
-  lider: '',
-  hrChegada: '',
-  inicioEstoque: '',
-  terminoEstoque: '',
-  inicioLoja: '',
-  terminoLoja: '',
-  inicioDivergencia: '',
-  terminoDivergencia: '',
-  terminoInventario: '',
-  avanco22h: 0,
-  avanco00h: 0,
-  avanco01h: 0,
-  avanco03h: 0,
-  avanco04h: 0,
-  arquivo1: '',
-  arquivo2: '',
-  arquivo3: '',
-  avalEstoque: 0,
-  avalLoja: 0,
-  acuracidade: 0,
-  percentualAuditoria: 0,
-  ph: 0,
-  satisfacao: 1,
-  contagemAntecipada: 'N/A',
-});
-
-const numberToInput = (value: number) => (value === 0 ? '' : `${value}`);
-const percentToInput = (value: number) => (value === 0 ? '' : `${String(value).replace('.', ',')}`);
-const floatToInput = (value: number) => (value === 0 ? '' : `${value}`.replace('.', ','));
-
-type ReportAPercentKey =
-  | 'avanco22h'
-  | 'avanco00h'
-  | 'avanco01h'
-  | 'avanco03h'
-  | 'avanco04h'
-  | 'avalEstoque'
-  | 'avalLoja'
-  | 'acuracidade'
-  | 'percentualAuditoria';
+const initialState: ReportA = {
+  lojaNum: "",
+  lojaNome: "",
+  qtdColaboradores: "",
+  lider: "",
+  hrChegada: "",
+  inicioContagemEstoque: "",
+  terminoContagemEstoque: "",
+  inicioContagemLoja: "",
+  terminoContagemLoja: "",
+  inicioDivergencia: "",
+  terminoDivergencia: "",
+  terminoInventario: "",
+  avanco22h: "",
+  avanco00h: "",
+  avanco01h: "",
+  avanco03h: "",
+  avanco04h: "",
+  // Novos campos para a lógica
+  usarAvancoExtra: false,
+  avancoExtraHora: "",
+  avancoExtraValor: "",
+  envioArquivo1: "",
+  envioArquivo2: "",
+  envioArquivo3: "",
+  avalEstoque: "",
+  avalLoja: "",
+  acuracidade: "",
+  percentualAuditoria: "",
+  ph: "",
+  satisfacao: "",
+  contagemAntecipada: null,
+};
 
 export default function ReportAScreen() {
-  const [report, setReport] = useState<ReportA>(createInitialState);
+  const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [phText, setPhText] = useState('');
-  const [percentText, setPercentText] = useState<Record<ReportAPercentKey, string>>({
-    avanco22h: '',
-    avanco00h: '',
-    avanco01h: '',
-    avanco03h: '',
-    avanco04h: '',
-    avalEstoque: '',
-    avalLoja: '',
-    acuracidade: '',
-    percentualAuditoria: '',
-  });
 
   useEffect(() => {
-    const loadData = async () => {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as ReportA;
-        setReport(parsed);
-        setPhText(floatToInput(parsed.ph));
-        setPercentText({
-          avanco22h: percentToInput(parsed.avanco22h),
-          avanco00h: percentToInput(parsed.avanco00h),
-          avanco01h: percentToInput(parsed.avanco01h),
-          avanco03h: percentToInput(parsed.avanco03h),
-          avanco04h: percentToInput(parsed.avanco04h),
-          avalEstoque: percentToInput(parsed.avalEstoque),
-          avalLoja: percentToInput(parsed.avalLoja),
-          acuracidade: percentToInput(parsed.acuracidade),
-          percentualAuditoria: percentToInput(parsed.percentualAuditoria),
-        });
-      }
-    };
-    void loadData();
+    AsyncStorage.getItem(STORAGE_KEY).then((res) => {
+      if (res) setReport(JSON.parse(res));
+    });
   }, []);
 
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
   }, [report]);
 
-  useEffect(() => {
-    const scheduleAdvanceAlerts = async () => {
-      if (Constants.appOwnership === 'expo') {
-        return;
-      }
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        return;
-      }
-
-      await Notifications.cancelAllScheduledNotificationsAsync();
-
-      const scheduleFor = async (label: string, hours: number, minutes: number) => {
-        const now = new Date();
-        const target = new Date();
-        target.setHours(hours, minutes, 0, 0);
-        target.setMinutes(target.getMinutes() - 5);
-        if (target.getTime() <= now.getTime()) {
-          target.setDate(target.getDate() + 1);
-        }
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Inventário - Avanço',
-            body: `Prepare-se para lançar o avanço das ${label}.`,
-            sound: true,
-          },
-          trigger: {
-            hour: target.getHours(),
-            minute: target.getMinutes(),
-            repeats: true,
-          },
-        });
-      };
-
-      await scheduleFor('22:00', 22, 0);
-      await scheduleFor('00:00', 0, 0);
-      await scheduleFor('01:00', 1, 0);
-      await scheduleFor('03:00', 3, 0);
-      await scheduleFor('04:00', 4, 0);
-    };
-
-    void scheduleAdvanceAlerts();
-  }, []);
-
   const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
     setReport((prev) => ({ ...prev, [key]: value }));
   };
 
-  const setPercentField = (key: ReportAPercentKey, text: string) => {
-    const formatted = formatPercentInput(text, 0, 100, 2);
-    setPercentText((prev) => ({ ...prev, [key]: formatted }));
-    setField(key, parsePercentInput(formatted, 0));
-  };
-
-  const validateRequired = () => {
-    const missing: string[] = [];
-    if (!report.lojaNum.trim()) missing.push('Nº da loja');
-    if (!report.lojaNome.trim()) missing.push('Nome da Loja');
-    if (!report.qtdColaboradores) missing.push('Qtd. de colaboradores');
-    if (!report.lider.trim()) missing.push('Líder do Inventário');
-    if (!report.hrChegada.trim()) missing.push('Horário de chegada em loja');
-
-    if (missing.length > 0) {
-      Alert.alert(
-        'Campos obrigatórios',
-        `Preencha os campos: ${missing.join(', ')}.`,
-      );
-      return false;
-    }
-
-    const invalidTimes: string[] = [];
-    const timeFields: Array<[string, string]> = [
-      ['Horário de chegada em loja', report.hrChegada],
-      ['Início da contagem de estoque', report.inicioEstoque],
-      ['Término da contagem de estoque', report.terminoEstoque],
-      ['Início da contagem da loja', report.inicioLoja],
-      ['Término da contagem da loja', report.terminoLoja],
-      ['Início da divergência', report.inicioDivergencia],
-      ['Término da divergência', report.terminoDivergencia],
-      ['Término do inventário', report.terminoInventario],
-      ['Envio do 1º arquivo', report.arquivo1],
-      ['Envio do 2º arquivo', report.arquivo2],
-      ['Envio do 3º arquivo', report.arquivo3],
-    ];
-
-    timeFields.forEach(([label, value]) => {
-      if (value.trim().length > 0 && !isValidTime(value)) {
-        invalidTimes.push(label);
-      }
+  const setTimeNow = (key: keyof ReportA) => {
+    const now = new Date();
+    const time = now.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
-
-    if (invalidTimes.length > 0) {
-      Alert.alert(
-        'Horários inválidos',
-        `Verifique os campos: ${invalidTimes.join(', ')}.`,
-      );
-      return false;
-    }
-
-    if (report.satisfacao < 1 || report.satisfacao > 5) {
-      Alert.alert('Satisfação inválida', 'Informe um valor entre 1 e 5.');
-      return false;
-    }
-    return true;
+    setField(key, time);
   };
 
-  const handleSendWhatsApp = () => {
-    if (!validateRequired()) {
-      return;
-    }
-    const message = formatReportA(report);
-    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
-    });
+  const renderTimeField = (label: string, field: keyof ReportA) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.timeRow}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          value={String(report[field])}
+          onChangeText={(t) => setField(field, t)}
+          placeholder="00:00"
+          keyboardType="numbers-and-punctuation"
+        />
+        <Pressable onPress={() => setTimeNow(field)} style={styles.nowBtn}>
+          <Ionicons name="time-outline" size={20} color="#2563EB" />
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const handleSend = () => {
+    const msg = formatReportA(report);
+    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
   };
-
-  const handleOpenPreview = () => {
-    if (!validateRequired()) {
-      return;
-    }
-    setPreviewVisible(true);
-  };
-
-  const handleArchiveAndClear = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
-      history.push({
-        savedAt: new Date().toISOString(),
-        report,
-      });
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-      await enqueueSyncItem('reportA', { report });
-    } catch {
-      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
-      return;
-    }
-
-    await handleExportHistory();
-    void syncQueue();
-
-    setReport(createInitialState());
-    setPhText('');
-    setPercentText({
-      avanco22h: '',
-      avanco00h: '',
-      avanco01h: '',
-      avanco03h: '',
-      avanco04h: '',
-      avalEstoque: '',
-      avalLoja: '',
-      acuracidade: '',
-      percentualAuditoria: '',
-    });
-    Alert.alert('Dados arquivados', 'Os dados foram arquivados e o formulário foi limpo.');
-  };
-
-  const handleExportHistory = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = storedHistory ? (JSON.parse(storedHistory) as Array<{ savedAt: string; report: ReportA }>) : [];
-      if (history.length === 0) {
-        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
-        return;
-      }
-      const headers = [
-        'savedAt',
-        'lojaNum',
-        'lojaNome',
-        'enderecoLoja',
-        'qtdColaboradores',
-        'lider',
-        'hrChegada',
-        'inicioEstoque',
-        'terminoEstoque',
-        'inicioLoja',
-        'terminoLoja',
-        'inicioDivergencia',
-        'terminoDivergencia',
-        'terminoInventario',
-        'avanco22h',
-        'avanco00h',
-        'avanco01h',
-        'avanco03h',
-        'avanco04h',
-        'arquivo1',
-        'arquivo2',
-        'arquivo3',
-        'avalEstoque',
-        'avalLoja',
-        'acuracidade',
-        'percentualAuditoria',
-        'ph',
-        'satisfacao',
-        'contagemAntecipada',
-      ];
-      const rows = history.map((item) => {
-        const { report: data } = item;
-        return [
-          item.savedAt,
-          data.lojaNum,
-          data.lojaNome,
-          data.enderecoLoja,
-          data.qtdColaboradores,
-          data.lider,
-          data.hrChegada,
-          data.inicioEstoque,
-          data.terminoEstoque,
-          data.inicioLoja,
-          data.terminoLoja,
-          data.inicioDivergencia,
-          data.terminoDivergencia,
-          data.terminoInventario,
-          data.avanco22h,
-          data.avanco00h,
-          data.avanco01h,
-          data.avanco03h,
-          data.avanco04h,
-          data.arquivo1,
-          data.arquivo2,
-          data.arquivo3,
-          data.avalEstoque,
-          data.avalLoja,
-          data.acuracidade,
-          data.percentualAuditoria,
-          data.ph,
-          data.satisfacao,
-          data.contagemAntecipada,
-        ];
-      });
-      const filename = `inventexpert_reportA_${new Date().toISOString().slice(0, 10)}.csv`;
-      await shareCsvFile(filename, headers, rows);
-    } catch {
-      Alert.alert(
-        'Exportação indisponível',
-        'Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.',
-      );
-    }
-  };
-
-  const headerBadge = useMemo(() => report.contagemAntecipada, [report]);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.select({ ios: 'padding', android: undefined })}
-      className="flex-1 bg-slate-50">
-      <ScrollView contentContainerClassName="px-4 pb-8 pt-4">
-        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-          <Text className="text-base font-semibold text-slate-800">Identificação</Text>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Nº da loja</Text>
-            <TextInput
-              value={report.lojaNum}
-              onChangeText={(text) => setField('lojaNum', text)}
-              placeholder="Ex: 005"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Nome da Loja</Text>
-            <TextInput
-              value={report.lojaNome}
-              onChangeText={(text) => setField('lojaNome', text)}
-              placeholder="Ex: Loja Exemplo"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Endereço da Loja</Text>
-            <TextInput
-              value={report.enderecoLoja}
-              onChangeText={(text) => setField('enderecoLoja', text)}
-              placeholder="Ex: Rua, número, bairro"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Qtd. de colaboradores</Text>
-            <TextInput
-              value={numberToInput(report.qtdColaboradores)}
-              onChangeText={(text) => setField('qtdColaboradores', Number(text) || 0)}
-              keyboardType="numeric"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Líder do Inventário</Text>
-            <TextInput
-              value={report.lider}
-              onChangeText={(text) => setField('lider', text)}
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-        </View>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      <View style={styles.header}>
+        <Image
+          source={HeaderIcon}
+          style={styles.headerLogo}
+          resizeMode="contain"
+        />
+        <Text style={styles.headerTitle}>Acompanhamento</Text>
+      </View>
 
-        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-          <Text className="text-base font-semibold text-slate-800">Cronograma</Text>
-          <TimeInput
-            label="Horário de chegada em loja"
-            value={report.hrChegada}
-            onChange={(value) => setField('hrChegada', value)}
-            required
-          />
-          <TimeInput
-            label="Início da contagem de estoque"
-            value={report.inicioEstoque}
-            onChange={(value) => setField('inicioEstoque', value)}
-          />
-          <TimeInput
-            label="Término da contagem de estoque"
-            value={report.terminoEstoque}
-            onChange={(value) => setField('terminoEstoque', value)}
-          />
-          <TimeInput
-            label="Início da contagem da loja"
-            value={report.inicioLoja}
-            onChange={(value) => setField('inicioLoja', value)}
-          />
-          <TimeInput
-            label="Término da contagem da loja"
-            value={report.terminoLoja}
-            onChange={(value) => setField('terminoLoja', value)}
-          />
-          <TimeInput
-            label="Início da divergência"
-            value={report.inicioDivergencia}
-            onChange={(value) => setField('inicioDivergencia', value)}
-          />
-          <TimeInput
-            label="Término da divergência"
-            value={report.terminoDivergencia}
-            onChange={(value) => setField('terminoDivergencia', value)}
-          />
-          <TimeInput
-            label="Término do inventário"
-            value={report.terminoInventario}
-            onChange={(value) => setField('terminoInventario', value)}
-          />
-        </View>
-
-        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-          <Text className="text-base font-semibold text-slate-800">Avanço (%)</Text>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avanço 22:00</Text>
-            <TextInput
-              value={percentText.avanco22h}
-              onChangeText={(text) => setPercentField('avanco22h', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avanço 00:00</Text>
-            <TextInput
-              value={percentText.avanco00h}
-              onChangeText={(text) => setPercentField('avanco00h', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avanço 01:00</Text>
-            <TextInput
-              value={percentText.avanco01h}
-              onChangeText={(text) => setPercentField('avanco01h', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avanço 03:00</Text>
-            <TextInput
-              value={percentText.avanco03h}
-              onChangeText={(text) => setPercentField('avanco03h', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avanço 04:00</Text>
-            <TextInput
-              value={percentText.avanco04h}
-              onChangeText={(text) => setPercentField('avanco04h', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-        </View>
-
-        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-          <Text className="text-base font-semibold text-slate-800">Gestão de Arquivos</Text>
-          <TimeInput
-            label="Envio do 1º arquivo"
-            value={report.arquivo1}
-            onChange={(value) => setField('arquivo1', value)}
-          />
-          <TimeInput
-            label="Envio do 2º arquivo"
-            value={report.arquivo2}
-            onChange={(value) => setField('arquivo2', value)}
-          />
-          <TimeInput
-            label="Envio do 3º arquivo"
-            value={report.arquivo3}
-            onChange={(value) => setField('arquivo3', value)}
-          />
-        </View>
-
-        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-          <Text className="text-base font-semibold text-slate-800">Indicadores</Text>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avaliação do estoque (%)</Text>
-            <TextInput
-              value={percentText.avalEstoque}
-              onChangeText={(text) => setPercentField('avalEstoque', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Avaliação da loja (%)</Text>
-            <TextInput
-              value={percentText.avalLoja}
-              onChangeText={(text) => setPercentField('avalLoja', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Acuracidade (%)</Text>
-            <TextInput
-              value={percentText.acuracidade}
-              onChangeText={(text) => setPercentField('acuracidade', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Percentual de auditoria (%)</Text>
-            <TextInput
-              value={percentText.percentualAuditoria}
-              onChangeText={(text) => setPercentField('percentualAuditoria', text)}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">PH (Produtividade/Hora)</Text>
-            <TextInput
-              value={phText}
-              onChangeText={(text) => {
-                const formatted = formatFloatInput(text);
-                setPhText(formatted);
-                setField('ph', parseFloatInput(formatted));
-              }}
-              keyboardType="decimal-pad"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Satisfação (1 a 5)</Text>
-            <TextInput
-              value={numberToInput(report.satisfacao)}
-              onChangeText={(text) => {
-                const digits = text.replace(/\D/g, '').slice(0, 1);
-                if (!digits) {
-                  setField('satisfacao', 0);
-                  return;
-                }
-                const asNumber = Math.min(5, Math.max(1, Number(digits)));
-                setField('satisfacao', asNumber);
-              }}
-              keyboardType="numeric"
-              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-            />
-          </View>
-        </View>
-
-        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-          <Text className="text-base font-semibold text-slate-800">Gerenciamento</Text>
-          <View className="mt-3">
-            <Text className="text-sm font-semibold text-slate-700">Contagem antecipada</Text>
-            <Text className="text-xs text-slate-500">Selecionado: {headerBadge}</Text>
-            <View className="mt-3 flex-row gap-2">
-              {(['Sim', 'Não', 'N/A'] as const).map((option) => (
-                <Pressable
-                  key={option}
-                  onPress={() => setField('contagemAntecipada', option)}
-                  className={`rounded-lg px-4 py-2 ${
-                    report.contagemAntecipada === option ? 'bg-blue-600' : 'bg-slate-200'
-                  }`}>
-                  <Text
-                    className={`text-sm font-semibold ${
-                      report.contagemAntecipada === option ? 'text-white' : 'text-slate-700'
-                    }`}>
-                    {option}
-                  </Text>
-                </Pressable>
-              ))}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>1. Identificação</Text>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>Nº Loja</Text>
+                <TextInput
+                  style={styles.input}
+                  value={report.lojaNum}
+                  onChangeText={(t) => setField("lojaNum", t)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>Colaboradores</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.qtdColaboradores)}
+                  onChangeText={(t) =>
+                    setField("qtdColaboradores", Number(t) || "")
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
+            <Text style={styles.label}>Nome da Loja</Text>
+            <TextInput
+              style={styles.input}
+              value={report.lojaNome}
+              onChangeText={(t) => setField("lojaNome", t)}
+            />
+            <Text style={styles.label}>Líder do Inventário</Text>
+            <TextInput
+              style={styles.input}
+              value={report.lider}
+              onChangeText={(t) => setField("lider", t)}
+            />
           </View>
-        </View>
 
-        <Pressable
-          onPress={handleOpenPreview}
-          className="mt-2 items-center rounded-xl bg-blue-600 py-3">
-          <Text className="text-base font-semibold text-white">Enviar Andamento de Inventário</Text>
-        </Pressable>
-        <Pressable
-          onPress={() =>
-            Alert.alert(
-              'Arquivar e limpar',
-              'Isso limpará o formulário, mas os dados ficarão arquivados para análise.',
-              [
-                { text: 'Cancelar', style: 'cancel' },
-                { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
-              ],
-            )
-          }
-          className="mt-2 items-center rounded-xl bg-slate-200 py-3">
-          <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
-        </Pressable>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>2. Cronograma</Text>
+            {renderTimeField("Chegada", "hrChegada")}
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Ini. Estoque", "inicioContagemEstoque")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Estoque", "terminoContagemEstoque")}
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Ini. Loja", "inicioContagemLoja")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Loja", "terminoContagemLoja")}
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Ini. Diverg.", "inicioDivergencia")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Diverg.", "terminoDivergencia")}
+              </View>
+            </View>
+            {renderTimeField("Término Inventário", "terminoInventario")}
+          </View>
 
-        <Modal visible={previewVisible} transparent animationType="fade">
-          <View className="flex-1 items-center justify-center bg-black/50 px-4">
-            <View className="w-full max-w-md rounded-xl bg-white p-4">
-              <Text className="text-base font-semibold text-slate-800">Pré-visualização</Text>
-              <ScrollView className="mt-3 max-h-96 rounded-lg border border-slate-200 p-3">
-                <Text className="text-sm text-slate-700">{formatReportA(report)}</Text>
-              </ScrollView>
-              <View className="mt-4 flex-row gap-2">
+          {/* Seção de Avanço com Switch */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>3. Avanço (%)</Text>
+
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>22:00</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avanco22h)}
+                  onChangeText={(t) => setField("avanco22h", Number(t) || "")}
+                  keyboardType="numeric"
+                  placeholder="%"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>00:00</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avanco00h)}
+                  onChangeText={(t) => setField("avanco00h", Number(t) || "")}
+                  keyboardType="numeric"
+                  placeholder="%"
+                />
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>01:00</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avanco01h)}
+                  onChangeText={(t) => setField("avanco01h", Number(t) || "")}
+                  keyboardType="numeric"
+                  placeholder="%"
+                />
+              </View>
+
+              <View style={[styles.half, { justifyContent: "flex-end" }]}>
                 <Pressable
-                  onPress={() => setPreviewVisible(false)}
-                  className="flex-1 items-center rounded-lg bg-slate-200 py-2">
-                  <Text className="text-sm font-semibold text-slate-700">Voltar</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setPreviewVisible(false);
-                    handleSendWhatsApp();
-                  }}
-                  className="flex-1 items-center rounded-lg bg-blue-600 py-2">
-                  <Text className="text-sm font-semibold text-white">Enviar WhatsApp</Text>
+                  style={[
+                    styles.toggleBtn,
+                    report.usarAvancoExtra && styles.toggleBtnActive,
+                  ]}
+                  onPress={() =>
+                    setField("usarAvancoExtra", !report.usarAvancoExtra)
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.toggleTxt,
+                      report.usarAvancoExtra && { color: "#fff" },
+                    ]}
+                  >
+                    {report.usarAvancoExtra ? "Encerrado Antes" : "Até 04h00"}
+                  </Text>
                 </Pressable>
               </View>
             </View>
+
+            {!report.usarAvancoExtra ? (
+              <View style={styles.row}>
+                <View style={styles.half}>
+                  <Text style={styles.label}>03:00</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={String(report.avanco03h)}
+                    onChangeText={(t) => setField("avanco03h", Number(t) || "")}
+                    keyboardType="numeric"
+                    placeholder="%"
+                  />
+                </View>
+                <View style={styles.half}>
+                  <Text style={styles.label}>04:00</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={String(report.avanco04h)}
+                    onChangeText={(t) => setField("avanco04h", Number(t) || "")}
+                    keyboardType="numeric"
+                    placeholder="%"
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.customTimeBox}>
+                <Text style={styles.customTimeTitle}>
+                  Horário de Encerramento Real
+                </Text>
+                <View style={styles.row}>
+                  <View style={styles.half}>
+                    {renderTimeField("Hora", "avancoExtraHora")}
+                  </View>
+                  <View style={styles.half}>
+                    <Text style={styles.label}>Avanço Final (%)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={String(report.avancoExtraValor)}
+                      onChangeText={(t) =>
+                        setField("avancoExtraValor", Number(t) || "")
+                      }
+                      keyboardType="numeric"
+                      placeholder="Ex: 100"
+                    />
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
-        </Modal>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>4. Gestão</Text>
+            {renderTimeField("Envio 1º Arq", "envioArquivo1")}
+            {renderTimeField("Envio 2º Arq", "envioArquivo2")}
+            {renderTimeField("Envio 3º Arq", "envioArquivo3")}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>5. Indicadores</Text>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>Aval. Estoque (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avalEstoque)}
+                  onChangeText={(t) => setField("avalEstoque", Number(t) || "")}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>Aval. Loja (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avalLoja)}
+                  onChangeText={(t) => setField("avalLoja", Number(t) || "")}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>Acuracidade (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.acuracidade)}
+                  onChangeText={(t) => setField("acuracidade", Number(t) || "")}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>% Auditoria</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.percentualAuditoria)}
+                  onChangeText={(t) =>
+                    setField("percentualAuditoria", Number(t) || "")
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>PH</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.ph)}
+                  onChangeText={(t) => setField("ph", Number(t) || "")}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>Satisfação (1-5)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.satisfacao)}
+                  onChangeText={(t) => setField("satisfacao", Number(t) || "")}
+                  keyboardType="numeric"
+                  maxLength={1}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>6. Status</Text>
+            <Text style={styles.label}>Contagem Antecipada?</Text>
+            <View style={styles.row}>
+              <Pressable
+                onPress={() => setField("contagemAntecipada", true)}
+                style={[
+                  styles.radioBtn,
+                  report.contagemAntecipada === true && styles.radioBtnSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.radioTxt,
+                    report.contagemAntecipada === true &&
+                      styles.radioTxtSelected,
+                  ]}
+                >
+                  Sim
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setField("contagemAntecipada", false)}
+                style={[
+                  styles.radioBtn,
+                  report.contagemAntecipada === false &&
+                    styles.radioBtnSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.radioTxt,
+                    report.contagemAntecipada === false &&
+                      styles.radioTxtSelected,
+                  ]}
+                >
+                  Não
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <Pressable
+            style={styles.buttonPrimary}
+            onPress={() => setPreviewVisible(true)}
+          >
+            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+            <Text style={styles.btnText}>Gerar Relatório</Text>
+          </Pressable>
+          <View style={styles.row}>
+            <Pressable
+              style={styles.buttonClear}
+              onPress={() => setReport(initialState)}
+            >
+              <Text style={styles.btnTextDanger}>Limpar Tudo</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal visible={previewVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.sectionTitle}>Pré-visualização</Text>
+            <ScrollView style={styles.previewBox}>
+              <Text>{formatReportA(report)}</Text>
+            </ScrollView>
+            <View style={styles.row}>
+              <Pressable
+                style={styles.btnBack}
+                onPress={() => setPreviewVisible(false)}
+              >
+                <Text>Voltar</Text>
+              </Pressable>
+              <Pressable style={styles.buttonPrimary} onPress={handleSend}>
+                <Text style={styles.btnText}>Enviar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+    padding: 16,
+  },
+  headerLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 6 },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  scrollContent: { padding: 16 },
+  section: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1E40AF",
+    marginBottom: 12,
+    textTransform: "uppercase",
+  },
+  label: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    fontSize: 16,
+    color: "#1E293B",
+  },
+  row: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 },
+  half: { flex: 1 },
+  inputGroup: { marginBottom: 8 },
+  timeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  nowBtn: {
+    padding: 10,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  buttonPrimary: {
+    backgroundColor: "#2563EB",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+  buttonClear: {
+    flex: 1,
+    backgroundColor: "#FEE2E2",
+    padding: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
+  radioBtn: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  radioBtnSelected: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
+  radioTxt: { color: "#64748B", fontWeight: "bold" },
+  radioTxtSelected: { color: "#2563EB" },
+  toggleBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: "#E2E8F0",
+    marginTop: 24,
+  },
+  toggleBtnActive: { backgroundColor: "#16A34A" },
+  toggleTxt: { fontSize: 12, fontWeight: "bold", color: "#64748B" },
+  customTimeBox: {
+    backgroundColor: "#F0FDF4",
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  customTimeTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#166534",
+    marginBottom: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: "80%",
+  },
+  previewBox: {
+    backgroundColor: "#F1F5F9",
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  btnBack: {
+    flex: 1,
+    padding: 14,
+    alignItems: "center",
+    backgroundColor: "#E2E8F0",
+    borderRadius: 12,
+  },
+});

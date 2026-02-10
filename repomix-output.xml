@@ -1,0 +1,4406 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: docs/**, node_modules/**, .expo/**, package-lock.json
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+app.json
+App.tsx
+app/_layout.tsx
+app/Attendance.tsx
+app/index.tsx
+app/ReportA.tsx
+app/ReportB.tsx
+assets/images/android-icon-background.png
+assets/images/android-icon-foreground.png
+assets/images/android-icon-monochrome.png
+assets/images/favicon.png
+assets/images/icon.png
+assets/images/partial-react-logo.png
+assets/images/react-logo.png
+assets/images/react-logo@2x.png
+assets/images/react-logo@3x.png
+assets/images/splash-icon.png
+babel.config.js
+components/external-link.tsx
+components/haptic-tab.tsx
+components/hello-wave.tsx
+components/parallax-scroll-view.tsx
+components/themed-text.tsx
+components/themed-view.tsx
+components/ui/collapsible.tsx
+components/ui/icon-symbol.ios.tsx
+components/ui/icon-symbol.tsx
+constants/theme.ts
+eas.json
+eslint.config.js
+hooks/use-color-scheme.ts
+hooks/use-color-scheme.web.ts
+hooks/use-theme-color.ts
+package.json
+README.md
+scripts/build-web-gh.js
+scripts/reset-project.js
+src/App.tsx
+src/components/TimeInput.tsx
+src/navigation/RootTabs.tsx
+src/screens/AttendanceScreen.tsx
+src/screens/AuthScreen.tsx
+src/screens/ReportAScreen.tsx
+src/screens/ReportBScreen.tsx
+src/screens/ScannerScreen.tsx
+src/services/supabase.ts
+src/services/sync.ts
+src/types/index.ts
+src/utils/export.ts
+src/utils/parsers.ts
+tailwind.config.js
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".gitignore">
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+# generated native folders
+/ios
+/android
+</file>
+
+<file path="App.tsx">
+import 'react-native-gesture-handler';
+
+import App from '@/src/App';
+
+export default App;
+</file>
+
+<file path="babel.config.js">
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: ['nativewind/babel', 'react-native-reanimated/plugin'],
+  };
+};
+</file>
+
+<file path="components/external-link.tsx">
+import { Href, Link } from 'expo-router';
+import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
+import { type ComponentProps } from 'react';
+
+type Props = Omit<ComponentProps<typeof Link>, 'href'> & { href: Href & string };
+
+export function ExternalLink({ href, ...rest }: Props) {
+  return (
+    <Link
+      target="_blank"
+      {...rest}
+      href={href}
+      onPress={async (event) => {
+        if (process.env.EXPO_OS !== 'web') {
+          // Prevent the default behavior of linking to the default browser on native.
+          event.preventDefault();
+          // Open the link in an in-app browser.
+          await openBrowserAsync(href, {
+            presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
+          });
+        }
+      }}
+    />
+  );
+}
+</file>
+
+<file path="components/haptic-tab.tsx">
+import { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { PlatformPressable } from '@react-navigation/elements';
+import * as Haptics from 'expo-haptics';
+
+export function HapticTab(props: BottomTabBarButtonProps) {
+  return (
+    <PlatformPressable
+      {...props}
+      onPressIn={(ev) => {
+        if (process.env.EXPO_OS === 'ios') {
+          // Add a soft haptic feedback when pressing down on the tabs.
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        props.onPressIn?.(ev);
+      }}
+    />
+  );
+}
+</file>
+
+<file path="components/hello-wave.tsx">
+import Animated from 'react-native-reanimated';
+
+export function HelloWave() {
+  return (
+    <Animated.Text
+      style={{
+        fontSize: 28,
+        lineHeight: 32,
+        marginTop: -6,
+        animationName: {
+          '50%': { transform: [{ rotate: '25deg' }] },
+        },
+        animationIterationCount: 4,
+        animationDuration: '300ms',
+      }}>
+      👋
+    </Animated.Text>
+  );
+}
+</file>
+
+<file path="components/parallax-scroll-view.tsx">
+import type { PropsWithChildren, ReactElement } from 'react';
+import { StyleSheet } from 'react-native';
+import Animated, {
+  interpolate,
+  useAnimatedRef,
+  useAnimatedStyle,
+  useScrollOffset,
+} from 'react-native-reanimated';
+
+import { ThemedView } from '@/components/themed-view';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
+
+const HEADER_HEIGHT = 250;
+
+type Props = PropsWithChildren<{
+  headerImage: ReactElement;
+  headerBackgroundColor: { dark: string; light: string };
+}>;
+
+export default function ParallaxScrollView({
+  children,
+  headerImage,
+  headerBackgroundColor,
+}: Props) {
+  const backgroundColor = useThemeColor({}, 'background');
+  const colorScheme = useColorScheme() ?? 'light';
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollOffset = useScrollOffset(scrollRef);
+  const headerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateY: interpolate(
+            scrollOffset.value,
+            [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
+            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
+          ),
+        },
+        {
+          scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
+        },
+      ],
+    };
+  });
+
+  return (
+    <Animated.ScrollView
+      ref={scrollRef}
+      style={{ backgroundColor, flex: 1 }}
+      scrollEventThrottle={16}>
+      <Animated.View
+        style={[
+          styles.header,
+          { backgroundColor: headerBackgroundColor[colorScheme] },
+          headerAnimatedStyle,
+        ]}>
+        {headerImage}
+      </Animated.View>
+      <ThemedView style={styles.content}>{children}</ThemedView>
+    </Animated.ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    height: HEADER_HEIGHT,
+    overflow: 'hidden',
+  },
+  content: {
+    flex: 1,
+    padding: 32,
+    gap: 16,
+    overflow: 'hidden',
+  },
+});
+</file>
+
+<file path="components/themed-text.tsx">
+import { StyleSheet, Text, type TextProps } from 'react-native';
+
+import { useThemeColor } from '@/hooks/use-theme-color';
+
+export type ThemedTextProps = TextProps & {
+  lightColor?: string;
+  darkColor?: string;
+  type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link';
+};
+
+export function ThemedText({
+  style,
+  lightColor,
+  darkColor,
+  type = 'default',
+  ...rest
+}: ThemedTextProps) {
+  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+
+  return (
+    <Text
+      style={[
+        { color },
+        type === 'default' ? styles.default : undefined,
+        type === 'title' ? styles.title : undefined,
+        type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
+        type === 'subtitle' ? styles.subtitle : undefined,
+        type === 'link' ? styles.link : undefined,
+        style,
+      ]}
+      {...rest}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  default: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  defaultSemiBold: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    lineHeight: 32,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  link: {
+    lineHeight: 30,
+    fontSize: 16,
+    color: '#0a7ea4',
+  },
+});
+</file>
+
+<file path="components/themed-view.tsx">
+import { View, type ViewProps } from 'react-native';
+
+import { useThemeColor } from '@/hooks/use-theme-color';
+
+export type ThemedViewProps = ViewProps & {
+  lightColor?: string;
+  darkColor?: string;
+};
+
+export function ThemedView({ style, lightColor, darkColor, ...otherProps }: ThemedViewProps) {
+  const backgroundColor = useThemeColor({ light: lightColor, dark: darkColor }, 'background');
+
+  return <View style={[{ backgroundColor }, style]} {...otherProps} />;
+}
+</file>
+
+<file path="components/ui/collapsible.tsx">
+import { PropsWithChildren, useState } from 'react';
+import { StyleSheet, TouchableOpacity } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+export function Collapsible({ children, title }: PropsWithChildren & { title: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const theme = useColorScheme() ?? 'light';
+
+  return (
+    <ThemedView>
+      <TouchableOpacity
+        style={styles.heading}
+        onPress={() => setIsOpen((value) => !value)}
+        activeOpacity={0.8}>
+        <IconSymbol
+          name="chevron.right"
+          size={18}
+          weight="medium"
+          color={theme === 'light' ? Colors.light.icon : Colors.dark.icon}
+          style={{ transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }}
+        />
+
+        <ThemedText type="defaultSemiBold">{title}</ThemedText>
+      </TouchableOpacity>
+      {isOpen && <ThemedView style={styles.content}>{children}</ThemedView>}
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  heading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  content: {
+    marginTop: 6,
+    marginLeft: 24,
+  },
+});
+</file>
+
+<file path="components/ui/icon-symbol.ios.tsx">
+import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
+import { StyleProp, ViewStyle } from 'react-native';
+
+export function IconSymbol({
+  name,
+  size = 24,
+  color,
+  style,
+  weight = 'regular',
+}: {
+  name: SymbolViewProps['name'];
+  size?: number;
+  color: string;
+  style?: StyleProp<ViewStyle>;
+  weight?: SymbolWeight;
+}) {
+  return (
+    <SymbolView
+      weight={weight}
+      tintColor={color}
+      resizeMode="scaleAspectFit"
+      name={name}
+      style={[
+        {
+          width: size,
+          height: size,
+        },
+        style,
+      ]}
+    />
+  );
+}
+</file>
+
+<file path="components/ui/icon-symbol.tsx">
+// Fallback for using MaterialIcons on Android and web.
+
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
+import { ComponentProps } from 'react';
+import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+
+type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+type IconSymbolName = keyof typeof MAPPING;
+
+/**
+ * Add your SF Symbols to Material Icons mappings here.
+ * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
+ * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
+ */
+const MAPPING = {
+  'house.fill': 'home',
+  'paperplane.fill': 'send',
+  'chevron.left.forwardslash.chevron.right': 'code',
+  'chevron.right': 'chevron-right',
+} as IconMapping;
+
+/**
+ * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
+ * This ensures a consistent look across platforms, and optimal resource usage.
+ * Icon `name`s are based on SF Symbols and require manual mapping to Material Icons.
+ */
+export function IconSymbol({
+  name,
+  size = 24,
+  color,
+  style,
+}: {
+  name: IconSymbolName;
+  size?: number;
+  color: string | OpaqueColorValue;
+  style?: StyleProp<TextStyle>;
+  weight?: SymbolWeight;
+}) {
+  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+}
+</file>
+
+<file path="constants/theme.ts">
+/**
+ * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
+ * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ */
+
+import { Platform } from 'react-native';
+
+const tintColorLight = '#0a7ea4';
+const tintColorDark = '#fff';
+
+export const Colors = {
+  light: {
+    text: '#11181C',
+    background: '#fff',
+    tint: tintColorLight,
+    icon: '#687076',
+    tabIconDefault: '#687076',
+    tabIconSelected: tintColorLight,
+  },
+  dark: {
+    text: '#ECEDEE',
+    background: '#151718',
+    tint: tintColorDark,
+    icon: '#9BA1A6',
+    tabIconDefault: '#9BA1A6',
+    tabIconSelected: tintColorDark,
+  },
+};
+
+export const Fonts = Platform.select({
+  ios: {
+    /** iOS `UIFontDescriptorSystemDesignDefault` */
+    sans: 'system-ui',
+    /** iOS `UIFontDescriptorSystemDesignSerif` */
+    serif: 'ui-serif',
+    /** iOS `UIFontDescriptorSystemDesignRounded` */
+    rounded: 'ui-rounded',
+    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
+    mono: 'ui-monospace',
+  },
+  default: {
+    sans: 'normal',
+    serif: 'serif',
+    rounded: 'normal',
+    mono: 'monospace',
+  },
+  web: {
+    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    serif: "Georgia, 'Times New Roman', serif",
+    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
+    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  },
+});
+</file>
+
+<file path="eslint.config.js">
+// https://docs.expo.dev/guides/using-eslint/
+const { defineConfig } = require('eslint/config');
+const expoConfig = require('eslint-config-expo/flat');
+
+module.exports = defineConfig([
+  expoConfig,
+  {
+    ignores: ['dist/*'],
+  },
+]);
+</file>
+
+<file path="hooks/use-color-scheme.ts">
+export { useColorScheme } from 'react-native';
+</file>
+
+<file path="hooks/use-color-scheme.web.ts">
+import { useEffect, useState } from 'react';
+import { useColorScheme as useRNColorScheme } from 'react-native';
+
+/**
+ * To support static rendering, this value needs to be re-calculated on the client side for web
+ */
+export function useColorScheme() {
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
+
+  const colorScheme = useRNColorScheme();
+
+  if (hasHydrated) {
+    return colorScheme;
+  }
+
+  return 'light';
+}
+</file>
+
+<file path="hooks/use-theme-color.ts">
+/**
+ * Learn more about light and dark modes:
+ * https://docs.expo.dev/guides/color-schemes/
+ */
+
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+export function useThemeColor(
+  props: { light?: string; dark?: string },
+  colorName: keyof typeof Colors.light & keyof typeof Colors.dark
+) {
+  const theme = useColorScheme() ?? 'light';
+  const colorFromProps = props[theme];
+
+  if (colorFromProps) {
+    return colorFromProps;
+  } else {
+    return Colors[theme][colorName];
+  }
+}
+</file>
+
+<file path="README.md">
+# Welcome to your Expo app 👋
+
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+
+## Get started
+
+1. Install dependencies
+
+   ```bash
+   npm install
+   ```
+
+2. Start the app
+
+   ```bash
+   npx expo start
+   ```
+
+In the output, you'll find options to open the app in a
+
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+
+You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+
+## Get a fresh project
+
+When you're ready, run:
+
+```bash
+npm run reset-project
+```
+
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+
+## Learn more
+
+To learn more about developing your project with Expo, look at the following resources:
+
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+
+## Join the community
+
+Join our community of developers creating universal apps.
+
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+</file>
+
+<file path="scripts/reset-project.js">
+#!/usr/bin/env node
+
+/**
+ * This script is used to reset the project to a blank state.
+ * It deletes or moves the /app, /components, /hooks, /scripts, and /constants directories to /app-example based on user input and creates a new /app directory with an index.tsx and _layout.tsx file.
+ * You can remove the `reset-project` script from package.json and safely delete this file after running it.
+ */
+
+const fs = require("fs");
+const path = require("path");
+const readline = require("readline");
+
+const root = process.cwd();
+const oldDirs = ["app", "components", "hooks", "constants", "scripts"];
+const exampleDir = "app-example";
+const newAppDir = "app";
+const exampleDirPath = path.join(root, exampleDir);
+
+const indexContent = `import { Text, View } from "react-native";
+
+export default function Index() {
+  return (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Text>Edit app/index.tsx to edit this screen.</Text>
+    </View>
+  );
+}
+`;
+
+const layoutContent = `import { Stack } from "expo-router";
+
+export default function RootLayout() {
+  return <Stack />;
+}
+`;
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+const moveDirectories = async (userInput) => {
+  try {
+    if (userInput === "y") {
+      // Create the app-example directory
+      await fs.promises.mkdir(exampleDirPath, { recursive: true });
+      console.log(`📁 /${exampleDir} directory created.`);
+    }
+
+    // Move old directories to new app-example directory or delete them
+    for (const dir of oldDirs) {
+      const oldDirPath = path.join(root, dir);
+      if (fs.existsSync(oldDirPath)) {
+        if (userInput === "y") {
+          const newDirPath = path.join(root, exampleDir, dir);
+          await fs.promises.rename(oldDirPath, newDirPath);
+          console.log(`➡️ /${dir} moved to /${exampleDir}/${dir}.`);
+        } else {
+          await fs.promises.rm(oldDirPath, { recursive: true, force: true });
+          console.log(`❌ /${dir} deleted.`);
+        }
+      } else {
+        console.log(`➡️ /${dir} does not exist, skipping.`);
+      }
+    }
+
+    // Create new /app directory
+    const newAppDirPath = path.join(root, newAppDir);
+    await fs.promises.mkdir(newAppDirPath, { recursive: true });
+    console.log("\n📁 New /app directory created.");
+
+    // Create index.tsx
+    const indexPath = path.join(newAppDirPath, "index.tsx");
+    await fs.promises.writeFile(indexPath, indexContent);
+    console.log("📄 app/index.tsx created.");
+
+    // Create _layout.tsx
+    const layoutPath = path.join(newAppDirPath, "_layout.tsx");
+    await fs.promises.writeFile(layoutPath, layoutContent);
+    console.log("📄 app/_layout.tsx created.");
+
+    console.log("\n✅ Project reset complete. Next steps:");
+    console.log(
+      `1. Run \`npx expo start\` to start a development server.\n2. Edit app/index.tsx to edit the main screen.${
+        userInput === "y"
+          ? `\n3. Delete the /${exampleDir} directory when you're done referencing it.`
+          : ""
+      }`
+    );
+  } catch (error) {
+    console.error(`❌ Error during script execution: ${error.message}`);
+  }
+};
+
+rl.question(
+  "Do you want to move existing files to /app-example instead of deleting them? (Y/n): ",
+  (answer) => {
+    const userInput = answer.trim().toLowerCase() || "y";
+    if (userInput === "y" || userInput === "n") {
+      moveDirectories(userInput).finally(() => rl.close());
+    } else {
+      console.log("❌ Invalid input. Please enter 'Y' or 'N'.");
+      rl.close();
+    }
+  }
+);
+</file>
+
+<file path="src/components/TimeInput.tsx">
+import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { Pressable, Text, TextInput, View } from 'react-native';
+
+import { formatTimeInput, formatTimeNow } from '@/src/utils/parsers';
+
+interface TimeInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}
+
+export default function TimeInput({ label, value, onChange, required }: TimeInputProps) {
+  const handleNow = () => {
+    onChange(formatTimeNow());
+  };
+
+  const handleChange = (text: string) => {
+    onChange(formatTimeInput(text));
+  };
+
+  return (
+    <View className="mb-3">
+      <Text className="text-sm font-semibold text-slate-700">
+        {label}
+        {required ? ' *' : ''}
+      </Text>
+      <View className="mt-2 flex-row items-center gap-2">
+        <TextInput
+          value={value}
+          onChangeText={handleChange}
+          placeholder="HH:mm"
+          keyboardType="numeric"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          style={{ maxWidth: 120, minWidth: 110 }}
+        />
+        <Pressable
+          onPress={handleNow}
+          className="h-10 w-10 items-center justify-center rounded-lg bg-blue-600">
+          <Ionicons name="time" size={18} color="#fff" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+</file>
+
+<file path="src/screens/AuthScreen.tsx">
+import React, { useMemo, useState } from 'react';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+
+import { isSupabaseConfigured, supabase } from '@/src/services/supabase';
+
+export default function AuthScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const trimmedEmail = useMemo(() => email.trim(), [email]);
+
+  const translateAuthError = (message: string) => {
+    if (message.includes('Email not confirmed')) {
+      return 'E-mail ainda não confirmado. Verifique sua caixa de entrada e spam.';
+    }
+    if (message.includes('Invalid login credentials')) {
+      return 'E-mail ou senha inválidos.';
+    }
+    if (message.includes('User already registered')) {
+      return 'E-mail já cadastrado. Use Entrar ou Reenviar confirmação.';
+    }
+    return message;
+  };
+
+  const handleSignIn = async () => {
+    if (!supabase) {
+      Alert.alert('Configuração ausente', 'Informe as chaves do Supabase no app.json.');
+      return;
+    }
+    if (!trimmedEmail || !password) {
+      Alert.alert('Campos obrigatórios', 'Informe e-mail e senha.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      });
+      if (error) {
+        Alert.alert('Erro', translateAuthError(error.message));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!supabase) {
+      Alert.alert('Configuração ausente', 'Informe as chaves do Supabase no app.json.');
+      return;
+    }
+    if (!trimmedEmail || !password) {
+      Alert.alert('Campos obrigatórios', 'Informe e-mail e senha.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+      });
+      if (error) {
+        Alert.alert('Erro', translateAuthError(error.message));
+        return;
+      }
+      if (data.session) {
+        Alert.alert('Conta criada', 'Login efetuado com sucesso.');
+        return;
+      }
+      if (data.user?.identities?.length === 0) {
+        Alert.alert('Conta já existe', 'Use Entrar ou Reenviar confirmação.');
+        return;
+      }
+      Alert.alert(
+        'Conta criada',
+        'Confirme o e-mail para ativar sua conta e depois faça login.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!supabase) {
+      Alert.alert('Configuração ausente', 'Informe as chaves do Supabase no app.json.');
+      return;
+    }
+    if (!trimmedEmail) {
+      Alert.alert('E-mail obrigatório', 'Digite o e-mail para reenviar a confirmação.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmedEmail,
+      });
+      if (error) {
+        Alert.alert('Erro', translateAuthError(error.message));
+        return;
+      }
+      Alert.alert('Confirmação enviada', 'Confira seu e-mail e a caixa de spam.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View className="flex-1 items-center justify-center bg-slate-50 px-6">
+      <View className="w-full max-w-md rounded-xl bg-white p-6 shadow-sm">
+        <Text className="text-lg font-semibold text-slate-800">InventExpert</Text>
+        <Text className="mt-2 text-sm text-slate-600">
+          Crie sua conta com e-mail e senha. Se a confirmação estiver ativa no Supabase, confirme
+          no e-mail e depois faça login.
+        </Text>
+
+        {!isSupabaseConfigured ? (
+          <Text className="mt-4 text-sm text-rose-600">
+            Configure as chaves do Supabase no `app.json` para continuar.
+          </Text>
+        ) : null}
+
+        <View className="mt-4">
+          <Text className="text-sm font-semibold text-slate-700">E-mail</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            autoComplete="email"
+            placeholder="seu@email.com"
+            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          />
+        </View>
+
+        <View className="mt-3">
+          <Text className="text-sm font-semibold text-slate-700">Senha</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoComplete="password"
+            placeholder="••••••••"
+            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          />
+        </View>
+
+        <Pressable
+          onPress={handleSignIn}
+          className="mt-5 items-center rounded-lg bg-blue-600 py-2"
+          disabled={loading}>
+          <Text className="text-sm font-semibold text-white">
+            {loading ? 'Entrando...' : 'Entrar'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={handleSignUp}
+          className="mt-2 items-center rounded-lg bg-slate-200 py-2"
+          disabled={loading}>
+          <Text className="text-sm font-semibold text-slate-700">Criar conta</Text>
+        </Pressable>
+        <Pressable
+          onPress={handleResendConfirmation}
+          className="mt-2 items-center rounded-lg border border-slate-200 py-2"
+          disabled={loading}>
+          <Text className="text-sm font-semibold text-slate-700">
+            Reenviar confirmação
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+</file>
+
+<file path="src/services/supabase.ts">
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { createClient } from '@supabase/supabase-js';
+
+const extra = Constants.expoConfig?.extra ?? {};
+const supabaseUrl =
+  extra.supabaseUrl ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnonKey =
+  extra.supabaseAnonKey ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        storage: AsyncStorage,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
+</file>
+
+<file path="src/services/sync.ts">
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { isSupabaseConfigured, supabase } from '@/src/services/supabase';
+
+const QUEUE_KEY = 'inventexpert:sync:queue';
+
+type SyncType = 'reportA' | 'reportB' | 'attendance';
+
+type SyncItem = {
+  id: string;
+  type: SyncType;
+  payload: Record<string, unknown>;
+  userId: string | null;
+  createdAt: string;
+};
+
+const tableForType: Record<SyncType, string> = {
+  reportA: 'report_a',
+  reportB: 'report_b',
+  attendance: 'attendance',
+};
+
+const readQueue = async (): Promise<SyncItem[]> => {
+  const stored = await AsyncStorage.getItem(QUEUE_KEY);
+  if (!stored) {
+    return [];
+  }
+  try {
+    return JSON.parse(stored) as SyncItem[];
+  } catch {
+    return [];
+  }
+};
+
+const writeQueue = async (queue: SyncItem[]) => {
+  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+};
+
+export const enqueueSyncItem = async (type: SyncType, payload: Record<string, unknown>) => {
+  let userId: string | null = null;
+  if (supabase) {
+    const { data } = await supabase.auth.getUser();
+    userId = data.user?.id ?? null;
+  }
+  const queue = await readQueue();
+  const item: SyncItem = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type,
+    payload,
+    userId,
+    createdAt: new Date().toISOString(),
+  };
+  queue.push(item);
+  await writeQueue(queue);
+};
+
+export const syncQueue = async () => {
+  if (!isSupabaseConfigured || !supabase) {
+    return { status: 'skipped' as const };
+  }
+  const queue = await readQueue();
+  if (queue.length === 0) {
+    return { status: 'empty' as const };
+  }
+
+  const remaining: SyncItem[] = [];
+  for (const item of queue) {
+    if (!item.userId) {
+      remaining.push(item);
+      continue;
+    }
+    const table = tableForType[item.type];
+    const { error } = await supabase.from(table).insert({
+      payload: item.payload,
+      user_id: item.userId,
+      created_at: item.createdAt,
+    });
+    if (error) {
+      remaining.push(item);
+    }
+  }
+
+  await writeQueue(remaining);
+  return { status: remaining.length === 0 ? 'synced' : 'partial', remaining: remaining.length };
+};
+</file>
+
+<file path="src/types/index.ts">
+export interface ReportA {
+  lojaNum: string;
+  lojaNome: string;
+  enderecoLoja: string;
+  qtdColaboradores: number;
+  lider: string;
+  hrChegada: string;
+  inicioEstoque: string;
+  terminoEstoque: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  terminoInventario: string;
+  avanco22h: number;
+  avanco00h: number;
+  avanco01h: number;
+  avanco03h: number;
+  avanco04h: number;
+  arquivo1: string;
+  arquivo2: string;
+  arquivo3: string;
+  avalEstoque: number;
+  avalLoja: number;
+  acuracidade: number;
+  percentualAuditoria: number;
+  ph: number;
+  satisfacao: number;
+  contagemAntecipada: 'Sim' | 'Não' | '';
+}
+
+export interface ReportB {
+  cliente: string;
+  lojaNum: string;
+  enderecoLoja: string;
+  data: string;
+  pivProgramado: number;
+  pivRealizado: number;
+  chegadaEquipe: string;
+  inicioDeposito: string;
+  terminoDeposito: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioAuditoriaCliente: string;
+  terminoAuditoriaCliente: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  inicioNaoContados: string;
+  terminoNaoContados: string;
+  qtdAlterados: number;
+  qtdNaoContados: number;
+  qtdEncontradosNaoContados: number;
+  totalPecas: number;
+  valorFinanceiro: number;
+  arquivo1: string;
+  arquivo2: string;
+  arquivo3: string;
+  avalPrepDeposito: number;
+  avalPrepLoja: number;
+  acuracidadeCliente: number;
+  acuracidadeTerceirizada: number;
+  satisfacao: number;
+  ph: number;
+  responsavel: string;
+  suporteSolicitado: 'Sim' | 'Não' | '';
+  terminoInventario: string;
+}
+
+export interface AttendanceCollaborator {
+  id: string;
+  nome: string;
+  status: 'PRESENTE' | 'AUSENTE' | 'NAO_DEFINIDO';
+  substituto?: string;
+}
+
+export interface AttendanceData {
+  data: string;
+  loja: string;
+  enderecoLoja: string;
+  colaboradores: AttendanceCollaborator[];
+}
+</file>
+
+<file path="src/utils/export.ts">
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+
+const escapeCsvValue = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const text = String(value);
+  if (text.includes('"') || text.includes(',') || text.includes('\n') || text.includes('\r')) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+};
+
+export const buildCsv = (headers: string[], rows: Array<Array<unknown>>) => {
+  const lines = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(','));
+  return lines.join('\n');
+};
+
+export const shareCsvFile = async (
+  filename: string,
+  headers: string[],
+  rows: Array<Array<unknown>>,
+) => {
+  if (!FileSystem.documentDirectory) {
+    throw new Error('Diretório local indisponível.');
+  }
+  const csv = buildCsv(headers, rows);
+  const uri = `${FileSystem.documentDirectory}${filename}`;
+  await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+  const canShare = await Sharing.isAvailableAsync();
+  if (!canShare) {
+    throw new Error('Compartilhamento não disponível neste dispositivo.');
+  }
+  await Sharing.shareAsync(uri, {
+    mimeType: 'text/csv',
+    dialogTitle: 'Enviar para OneDrive',
+    UTI: 'public.comma-separated-values-text',
+  });
+};
+</file>
+
+<file path="tailwind.config.js">
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./App.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+};
+</file>
+
+<file path="app/_layout.tsx">
+import { Stack } from 'expo-router';
+import React from 'react';
+
+export default function RootLayout() {
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
+</file>
+
+<file path="app/Attendance.tsx">
+import React from 'react';
+
+import App from '@/src/App';
+
+export default function Attendance() {
+  return <App />;
+}
+</file>
+
+<file path="app/ReportA.tsx">
+import React from 'react';
+
+import App from '@/src/App';
+
+export default function ReportA() {
+  return <App />;
+}
+</file>
+
+<file path="app/ReportB.tsx">
+import React from 'react';
+
+import App from '@/src/App';
+
+export default function ReportB() {
+  return <App />;
+}
+</file>
+
+<file path="eas.json">
+{
+  "cli": {
+    "version": "16.31.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}
+</file>
+
+<file path="app.json">
+{
+  "expo": {
+    "name": "InventExpert",
+    "slug": "InventExpert",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "inventexpert",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.inventexpert.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Permita o acesso à câmera para digitalizar relatórios.",
+        "NSPhotoLibraryUsageDescription": "Permita o acesso às fotos para selecionar relatórios.",
+        "NSPhotoLibraryAddUsageDescription": "Permita salvar imagens processadas.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.inventexpert.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permita o acesso à câmera para digitalizar relatórios."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e9746070-0b84-4327-adef-3de641cf1d57"
+      },
+      "supabaseUrl": "https://knxwuxxpbrbmhgdatgoe.supabase.co",
+      "supabaseAnonKey": "sb_publishable_DYOVR11_d_KccROE2JW4yg_A0TDzy0Q"
+    },
+    "owner": "robtadeu"
+  }
+}
+</file>
+
+<file path="app/index.tsx">
+import React from 'react';
+
+import App from '@/src/App';
+
+export default function Index() {
+  return <App />;
+}
+</file>
+
+<file path="src/navigation/RootTabs.tsx">
+import { Ionicons } from "@expo/vector-icons";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import type { Session } from "@supabase/supabase-js";
+import React, { useEffect, useState } from "react";
+import { Image, Platform, Pressable, Text, View } from "react-native";
+
+import AttendanceScreen from "@/src/screens/AttendanceScreen";
+import ReportAScreen from "@/src/screens/ReportAScreen";
+import ReportBScreen from "@/src/screens/ReportBScreen";
+import ScannerScreen from "@/src/screens/ScannerScreen";
+import { isSupabaseConfigured, supabase } from "@/src/services/supabase";
+
+export type RootTabParamList = {
+  ReportA: undefined;
+  ReportB: undefined;
+  Attendance: undefined;
+  Scanner: undefined;
+};
+
+const Tab = createBottomTabNavigator<RootTabParamList>();
+
+export default function RootTabs() {
+  const showScanner = Platform.OS !== "web";
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    if (!supabase) {
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession);
+      },
+    );
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerStyle: { backgroundColor: "#2563EB" },
+        headerTintColor: "#fff",
+        headerTitle: (props) => (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Image
+              source={require("../../assets/images/icon.png")}
+              style={{ width: 24, height: 24, tintColor: "#fff" }}
+            />
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
+              {props.children}
+            </Text>
+          </View>
+        ),
+        headerRight: () =>
+          isSupabaseConfigured && session ? (
+            <Pressable
+              onPress={() => void supabase?.auth.signOut()}
+              style={{ paddingHorizontal: 12 }}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#fff" />
+            </Pressable>
+          ) : null,
+        tabBarActiveTintColor: "#2563EB",
+        tabBarStyle: { backgroundColor: "#fff" },
+        tabBarIcon: ({ color, size }) => {
+          const iconMap: Record<
+            keyof RootTabParamList,
+            keyof typeof Ionicons.glyphMap
+          > = {
+            ReportA: "clipboard",
+            ReportB: "document-text",
+            Attendance: "people",
+            Scanner: "scan",
+          };
+          const iconName =
+            iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen
+        name="ReportA"
+        component={ReportAScreen}
+        options={{ title: "Andamento de Inventário" }}
+      />
+      <Tab.Screen
+        name="ReportB"
+        component={ReportBScreen}
+        options={{ title: "Resumo de Inventário" }}
+      />
+      <Tab.Screen
+        name="Attendance"
+        component={AttendanceScreen}
+        options={{ title: "Escala" }}
+      />
+      {showScanner ? (
+        <Tab.Screen
+          name="Scanner"
+          component={ScannerScreen}
+          options={{ title: "Scanner" }}
+        />
+      ) : null}
+    </Tab.Navigator>
+  );
+}
+</file>
+
+<file path="src/utils/parsers.ts">
+import type {
+    AttendanceCollaborator,
+    AttendanceData,
+    ReportA,
+    ReportB,
+} from "@/src/types";
+
+export function formatTimeNow(date = new Date()): string {
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+export function formatDateNow(date = new Date()): string {
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+export function formatTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  const hours = digits.slice(0, 2);
+  const minutes = digits.slice(2, 4);
+  if (digits.length <= 2) {
+    return hours;
+  }
+  return `${hours}:${minutes}`;
+}
+
+export function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  if (digits.length <= 2) {
+    return day;
+  }
+  if (digits.length <= 4) {
+    return `${day}/${month}`;
+  }
+  return `${day}/${month}/${year}`;
+}
+
+export function formatCurrencyInput(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+  const asNumber = Number(digits) / 100;
+  return asNumber.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+export function parseCurrencyInput(value: string): number {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return 0;
+  }
+  return Number(digits) / 100;
+}
+
+export function formatIntegerInput(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+  const asNumber = Number(digits);
+  if (Number.isNaN(asNumber)) {
+    return "";
+  }
+  return asNumber.toLocaleString("pt-BR");
+}
+
+export function parseIntegerInput(value: string): number {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return 0;
+  }
+  const asNumber = Number(digits);
+  return Number.isNaN(asNumber) ? 0 : asNumber;
+}
+
+export function formatFloatInput(value: string, maxDecimals = 2): string {
+  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
+  const parts = normalized.split(".");
+  const intPart = parts[0] ?? "";
+  const decPart = parts[1]?.slice(0, maxDecimals) ?? "";
+  if (!intPart && !decPart) {
+    return "";
+  }
+  return decPart ? `${intPart}.${decPart}`.replace(".", ",") : intPart;
+}
+
+export function parseFloatInput(value: string): number {
+  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
+  if (!normalized) {
+    return 0;
+  }
+  const parsed = Number.parseFloat(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function formatPercentInput(
+  value: string,
+  min = 0,
+  max = 100,
+  maxDecimals = 2,
+): string {
+  const cleaned = value.replace("%", "").trim();
+  const normalized = cleaned.replace(",", ".").replace(/[^0-9.]/g, "");
+  if (!normalized) {
+    return "";
+  }
+  const [intRaw, decRaw] = normalized.split(".");
+  const intPart = (intRaw ?? "").slice(0, 3);
+  const decPart = (decRaw ?? "").slice(0, maxDecimals);
+
+  if (normalized.endsWith(".") && decPart.length === 0) {
+    return `${intPart},`;
+  }
+
+  const numeric = Number.parseFloat(
+    decPart ? `${intPart || "0"}.${decPart}` : intPart || "0",
+  );
+  if (Number.isNaN(numeric)) {
+    return "";
+  }
+  const clamped = Math.min(max, Math.max(min, numeric));
+  const formatted =
+    decPart.length > 0 ? clamped.toFixed(decPart.length) : `${clamped}`;
+  return formatted.replace(".", ",");
+}
+
+export function parsePercentInput(value: string, min = 0, max = 100): number {
+  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
+  if (!normalized) {
+    return 0;
+  }
+  const parsed = Number.parseFloat(normalized);
+  if (Number.isNaN(parsed)) {
+    return 0;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+export function isValidTime(value: string): boolean {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) {
+    return false;
+  }
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+export function isValidDate(value: string): boolean {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) {
+    return false;
+  }
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+export function parseWhatsAppScale(text: string): AttendanceData {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const data = lines[0] ?? "";
+  const loja = lines[1] ?? "";
+  const enderecoLoja = lines[2] ?? "";
+  const colaboradores: AttendanceCollaborator[] = [];
+
+  lines.slice(3).forEach((line) => {
+    const match = line.match(/^(\d+)\s+(.+)$/);
+    if (match) {
+      colaboradores.push({
+        id: match[1],
+        nome: match[2].trim(),
+        status: "NAO_DEFINIDO",
+        substituto: "",
+      });
+    }
+  });
+
+  return { data, loja, enderecoLoja, colaboradores };
+}
+
+export function formatReportA(report: ReportA): string {
+  return [
+    "*ACOMPANHAMENTO DE INVENTÁRIO*",
+    ` Nº da loja: ${report.lojaNum}`,
+    ` Nome da Loja: ${report.lojaNome}`,
+    ` Qtd. de colaboradores: ${report.qtdColaboradores}`,
+    ` Líder do Inventário: ${report.lider}`,
+    ` Horário de chegada em loja: ${report.hrChegada}`,
+    ` Início da contagem de estoque: ${report.inicioEstoque}`,
+    ` Término da contagem de estoque: ${report.terminoEstoque}`,
+    ` Início da contagem da loja: ${report.inicioLoja}`,
+    ` Término da contagem da loja: ${report.terminoLoja}`,
+    ` Avanço do inventário (22:00): ${report.avanco22h}%`,
+    ` Avanço do inventário (00:00): ${report.avanco00h}%`,
+    ` Avanço do inventário (01:00): ${report.avanco01h}%`,
+    ` Avanço do inventário (03:00): ${report.avanco03h}%`,
+    ` Avanço do inventário (04:00): ${report.avanco04h}%`,
+    ` Início da divergência: ${report.inicioDivergencia}`,
+    ` Término da divergência: ${report.terminoDivergencia}`,
+    ` Avaliação do estoque (%): ${report.avalEstoque}`,
+    ` Avaliação da loja (%): ${report.avalLoja}`,
+    ` Envio do 1º arquivo (hora): ${report.arquivo1}`,
+    ` Envio do 2º arquivo (hora): ${report.arquivo2}`,
+    ` Envio do 3º arquivo (hora): ${report.arquivo3}`,
+    ` Término do inventário: ${report.terminoInventario}`,
+    ` PH: ${report.ph}`,
+    ` Contagem antecipada (Sim/Não): ${report.contagemAntecipada}`,
+    ` Satisfação (1 a 5): ${report.satisfacao}`,
+    ` Acuracidade (%): ${report.acuracidade}`,
+    ` Percentual de auditoria: ${report.percentualAuditoria}`,
+    ` Produtividade (PH): ${report.ph}`,
+  ].join("\n");
+}
+
+export function formatReportB(report: ReportB): string {
+  return [
+    "*RESUMO FINAL DO INVENTÁRIO*",
+    ` Número da Loja: ${report.lojaNum}`,
+    ` Nome da Loja: ${report.cliente}`,
+    ` Data do Inventário: ${report.data}`,
+    ` PIV Programado: ${report.pivProgramado}`,
+    ` PIV Realizado: ${report.pivRealizado}`,
+    ` HR de chegada da equipe: ${report.chegadaEquipe}`,
+    ` Início da contagem do Deposito: ${report.inicioDeposito}`,
+    ` Término da contagem do Deposito: ${report.terminoDeposito}`,
+    ` Início da contagem da Loja: ${report.inicioLoja}`,
+    ` Término da contagem da Loja: ${report.terminoLoja}`,
+    ` Início da divergência dos controlados: ${report.inicioAuditoriaCliente}`,
+    ` Início da divergência: ${report.inicioDivergencia}`,
+    ` Término da divergência: ${report.terminoDivergencia}`,
+    ` Qtd. de itens alterados na divergência: ${report.qtdAlterados}`,
+    ` Qtd. de itens “não contados”: ${report.qtdNaoContados}`,
+    ` Qtd. de itens encontrados no “não contados”: ${report.qtdEncontradosNaoContados}`,
+    ` Horário do Envio do 1 Arquivo: ${report.arquivo1}`,
+    ` Horário do Envio do 2 Arquivo: ${report.arquivo2}`,
+    ` Horário do Envio do 3 Arquivo: ${report.arquivo3}`,
+    ` Término do Inventario: ${report.terminoInventario}`,
+    ` Total de Peças na Loja: ${report.totalPecas.toLocaleString("pt-BR")}`,
+    ` PH: ${report.ph.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`,
+    ` Valor Financeiro total dos Itens: ${report.valorFinanceiro.toLocaleString(
+      "pt-BR",
+      {
+        style: "currency",
+        currency: "BRL",
+      },
+    )}`,
+    ` Avaliação de Preparação Deposito: ${report.avalPrepDeposito}`,
+    ` Avaliação de Preparação da Loja: ${report.avalPrepLoja}`,
+    ` Satisfação: ${report.satisfacao}`,
+    ` Responsável pelo Inventário: ${report.responsavel}`,
+    ` Acuracidade Cliente: ${report.acuracidadeCliente}`,
+    ` Acuracidade terceirizada: ${report.acuracidadeTerceirizada}`,
+    ` Houve solicitação de suporte: ${report.suporteSolicitado}`,
+  ].join("\n");
+}
+
+export function formatAttendanceMessage(data: AttendanceData): string {
+  let nextSubstitutionIndex =
+    data.colaboradores.reduce((max, item) => {
+      const num = Number(item.id);
+      return Number.isNaN(num) ? max : Math.max(max, num);
+    }, 0) + 1;
+
+  const linhas = data.colaboradores.flatMap((item) => {
+    const icon =
+      item.status === "PRESENTE" ? "✅" : item.status === "AUSENTE" ? "❌" : "";
+    const baseLine = icon
+      ? `${item.id} ${item.nome}${icon}`
+      : `${item.id} ${item.nome}`;
+    if (item.status === "AUSENTE" && item.substituto) {
+      const subLine = `${nextSubstitutionIndex} ${item.substituto}✅(SUBSTITUIÇÃO)`;
+      nextSubstitutionIndex += 1;
+      return [baseLine, subLine];
+    }
+    return [baseLine];
+  });
+
+  return [data.data, data.loja, data.enderecoLoja, "", ...linhas].join("\n");
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "inventexpert",
+  "main": "node_modules/expo/AppEntry.js",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "reset-project": "node ./scripts/reset-project.js",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "build:web:gh": "node ./scripts/build-web-gh.js",
+    "lint": "expo lint"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/bottom-tabs": "^7.4.0",
+    "@react-navigation/elements": "^2.6.3",
+    "@react-navigation/native": "^7.1.8",
+    "expo": "~54.0.32",
+    "expo-camera": "^17.0.10",
+    "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.20",
+    "expo-file-system": "~19.0.21",
+    "expo-font": "~14.0.11",
+    "expo-haptics": "~15.0.8",
+    "expo-image": "~3.0.11",
+    "expo-image-manipulator": "^14.0.8",
+    "expo-image-picker": "^17.0.10",
+    "expo-linking": "~8.0.11",
+    "expo-notifications": "^0.32.16",
+    "expo-print": "~15.0.3",
+    "expo-router": "~6.0.22",
+    "expo-sharing": "^14.0.8",
+    "expo-splash-screen": "~31.0.13",
+    "expo-status-bar": "~3.0.9",
+    "expo-symbols": "~1.0.8",
+    "expo-system-ui": "~6.0.9",
+    "expo-web-browser": "~15.0.10",
+    "nativewind": "^2.0.11",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-canvas": "^0.1.40",
+    "react-native-document-scanner-plugin": "^2.0.4",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-web": "~0.21.0",
+    "react-native-webview": "13.15.0",
+    "react-native-worklets": "0.5.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "tailwindcss": "3.3.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "eslint": "^9.25.0",
+    "eslint-config-expo": "~10.0.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
+</file>
+
+<file path="scripts/build-web-gh.js">
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const publicUrl = process.env.PUBLIC_URL;
+const basePath = process.env.BASE_PATH;
+
+const resolveBasePath = () => {
+  if (basePath) {
+    return basePath;
+  }
+  if (!publicUrl) {
+    return '';
+  }
+  try {
+    const url = new URL(publicUrl);
+    return url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;
+  } catch {
+    return '';
+  }
+};
+
+const resolvedBasePath = resolveBasePath();
+const normalizedPublicUrl = publicUrl
+  ? publicUrl.endsWith('/')
+    ? publicUrl
+    : `${publicUrl}/`
+  : '';
+
+const exportResult = spawnSync(
+  'npx',
+  [
+    'expo',
+    'export',
+    '--platform',
+    'web',
+    '--output-dir',
+    'docs',
+  ],
+  { stdio: 'inherit', shell: true }
+);
+
+if (exportResult.status !== 0) {
+  process.exit(exportResult.status ?? 1);
+}
+
+const docsDir = path.resolve(__dirname, '..', 'docs');
+const indexPath = path.join(docsDir, 'index.html');
+const notFoundPath = path.join(docsDir, '404.html');
+const noJekyllPath = path.join(docsDir, '.nojekyll');
+const collectHtmlFiles = (dir) => {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+  entries.forEach((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectHtmlFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith('.html')) {
+      files.push(fullPath);
+    }
+  });
+  return files;
+};
+
+const htmlFiles = collectHtmlFiles(docsDir);
+
+const replaceInHtml = (filePath) => {
+  const content = fs.readFileSync(filePath, 'utf8');
+  let updated = content
+    .replace(/href="\/favicon\.ico"/g, 'href="./favicon.ico"')
+    .replace(/src="\/_expo\//g, 'src="./_expo/')
+    .replace(/href="\/_expo\//g, 'href="./_expo/');
+  if (resolvedBasePath) {
+    updated = updated.replace(/href="\//g, `href="${resolvedBasePath}`);
+    updated = updated.replace(/src="\//g, `src="${resolvedBasePath}`);
+  }
+  if (normalizedPublicUrl) {
+    updated = updated.replace(/href="https?:\/\/[^/]+\//g, `href="${normalizedPublicUrl}`);
+  }
+  if (updated !== content) {
+    fs.writeFileSync(filePath, updated);
+  }
+};
+
+htmlFiles.forEach(replaceInHtml);
+
+if (fs.existsSync(indexPath)) {
+  fs.copyFileSync(indexPath, notFoundPath);
+  replaceInHtml(notFoundPath);
+  console.log('404.html gerado a partir de index.html');
+}
+
+fs.writeFileSync(noJekyllPath, '');
+</file>
+
+<file path="src/screens/ScannerScreen.tsx">
+import * as FileSystem from "expo-file-system/legacy";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import React, { useState } from "react";
+import {
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import DocumentScanner from "react-native-document-scanner-plugin";
+
+export default function ScannerScreen() {
+  const [scannedImages, setScannedImages] = useState<string[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
+  const [pdfName, setPdfName] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleScan = async (append = false) => {
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Indisponível",
+        "O scanner automático não está disponível na versão web.",
+      );
+      return;
+    }
+    try {
+      setIsScanning(true);
+      const result = await DocumentScanner.scanDocument({
+        maxNumDocuments: 10,
+      });
+      if (result?.scannedImages?.length) {
+        setScannedImages((prev) =>
+          append ? [...prev, ...result.scannedImages] : result.scannedImages,
+        );
+      } else {
+        Alert.alert("Aviso", "Nenhuma imagem foi capturada.");
+      }
+    } catch {
+      Alert.alert("Erro", "Não foi possível abrir o scanner.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleClear = () => {
+    setScannedImages([]);
+  };
+
+  const openShareModal = () => {
+    if (scannedImages.length === 0) {
+      Alert.alert(
+        "Sem imagens",
+        "Escaneie ao menos uma página antes de enviar.",
+      );
+      return;
+    }
+    const fallbackName = `relatorio_scaneado_${new Date().toISOString().slice(0, 10)}`;
+    setPdfName((prev) => (prev.trim().length > 0 ? prev : fallbackName));
+    setShareVisible(true);
+  };
+
+  const handleSharePdf = async () => {
+    const trimmed = pdfName.trim().replace(/[/\\?%*:|"<>]/g, "");
+    if (!trimmed) {
+      Alert.alert("Nome inválido", "Informe um nome para o arquivo.");
+      return;
+    }
+    try {
+      setIsSharing(true);
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert(
+          "Indisponível",
+          "Compartilhamento não disponível neste dispositivo.",
+        );
+        return;
+      }
+      const imageTags = await Promise.all(
+        scannedImages.map(async (uri) => {
+          const encoding =
+            (FileSystem.EncodingType?.Base64 as
+              | FileSystem.EncodingType
+              | undefined) ?? "base64";
+          const base64 = await FileSystem.readAsStringAsync(uri, { encoding });
+          if (!base64) {
+            throw new Error("Não foi possível ler a imagem escaneada.");
+          }
+          return `<img src="data:image/jpeg;base64,${base64}" style="width:100%;page-break-after:always;" />`;
+        }),
+      );
+      const html = `
+        <html>
+          <body style="margin:0;padding:0;">
+            ${imageTags.join("")}
+          </body>
+        </html>
+      `;
+      const printed = await Print.printToFileAsync({ html });
+      const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
+      let targetUri = printed.uri;
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (baseDir) {
+        const outputDir = `${baseDir}inventexpert/`;
+        await FileSystem.makeDirectoryAsync(outputDir, { intermediates: true });
+        targetUri = `${outputDir}${targetName}`;
+        if (targetUri !== printed.uri) {
+          await FileSystem.deleteAsync(targetUri, { idempotent: true });
+          await FileSystem.copyAsync({ from: printed.uri, to: targetUri });
+        }
+      }
+
+      await Sharing.shareAsync(targetUri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Enviar PDF escaneado",
+        UTI: "com.adobe.pdf",
+      });
+      setShareVisible(false);
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Falha desconhecida.";
+      Alert.alert(
+        "Erro",
+        `Não foi possível gerar ou compartilhar o PDF. Verifique se há um app compatível (ex.: WhatsApp) instalado.\n\nDetalhes: ${detail}`,
+      );
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  return (
+    <ScrollView
+      className="flex-1 bg-slate-50"
+      contentContainerClassName="px-4 pb-8 pt-4"
+    >
+      <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+        <Text className="text-base font-semibold text-slate-800">
+          Scanner de Documentos
+        </Text>
+        <Text className="mt-2 text-sm text-slate-600">
+          O scanner detecta automaticamente a folha, recorta o documento e
+          aplica ajuste de perspectiva.
+        </Text>
+        <Pressable
+          onPress={() => void handleScan(false)}
+          className="mt-3 items-center rounded-lg bg-blue-600 py-2"
+          disabled={isScanning}
+        >
+          <Text className="text-sm font-semibold text-white">
+            {isScanning ? "Abrindo scanner..." : "Escanear documentos"}
+          </Text>
+        </Pressable>
+        <View className="mt-2 flex-row gap-2">
+          <Pressable
+            onPress={() => void handleScan(true)}
+            className="flex-1 items-center rounded-lg bg-slate-200 py-2"
+            disabled={isScanning}
+          >
+            <Text className="text-sm font-semibold text-slate-700">
+              Adicionar páginas
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleClear}
+            className="flex-1 items-center rounded-lg bg-rose-600 py-2"
+            disabled={isScanning}
+          >
+            <Text className="text-sm font-semibold text-white">Limpar</Text>
+          </Pressable>
+        </View>
+        <Text className="mt-2 text-xs text-slate-500">
+          Captura sequencial: o scanner abre e fecha a câmera por página.
+        </Text>
+      </View>
+
+      <View className="rounded-xl bg-white p-4 shadow-sm">
+        <Text className="text-base font-semibold text-slate-800">
+          Pré-visualização
+        </Text>
+        {scannedImages.length === 0 ? (
+          <Text className="mt-3 text-sm text-slate-500">
+            Nenhuma imagem capturada.
+          </Text>
+        ) : (
+          <View className="mt-3 flex-col gap-3">
+            {scannedImages.map((uri, index) => (
+              <View
+                key={`${uri}-${index}`}
+                className="rounded-lg border border-slate-200 p-2"
+              >
+                <Text className="text-xs font-semibold text-slate-500">
+                  Página {index + 1}
+                </Text>
+                <Image
+                  source={{ uri }}
+                  className="mt-2 h-80 w-full rounded-lg"
+                  resizeMode="contain"
+                />
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <Pressable
+        onPress={openShareModal}
+        className="mt-4 items-center rounded-xl bg-blue-600 py-3"
+        disabled={isSharing}
+      >
+        <Text className="text-base font-semibold text-white">
+          {isSharing ? "Gerando PDF..." : "Enviar PDF escaneado"}
+        </Text>
+      </Pressable>
+
+      <Modal visible={shareVisible} transparent animationType="fade">
+        <View className="flex-1 items-center justify-center bg-black/50 px-4">
+          <View className="w-full max-w-md rounded-xl bg-white p-4">
+            <Text className="text-base font-semibold text-slate-800">
+              Nome do arquivo
+            </Text>
+            <TextInput
+              value={pdfName}
+              onChangeText={setPdfName}
+              placeholder="relatorio_scaneado"
+              className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+            <View className="mt-4 flex-row gap-2">
+              <Pressable
+                onPress={() => setShareVisible(false)}
+                className="flex-1 items-center rounded-lg bg-slate-200 py-2"
+              >
+                <Text className="text-sm font-semibold text-slate-700">
+                  Cancelar
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleSharePdf()}
+                className="flex-1 items-center rounded-lg bg-blue-600 py-2"
+              >
+                <Text className="text-sm font-semibold text-white">Enviar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="src/App.tsx">
+import {
+  NavigationContainer,
+  getPathFromState,
+  type LinkingOptions,
+} from '@react-navigation/native';
+import React from 'react';
+import { Platform } from 'react-native';
+
+import RootTabs, { type RootTabParamList } from '@/src/navigation/RootTabs';
+
+export default function App() {
+  const basePath = 'InventExpert';
+  const linking: LinkingOptions<RootTabParamList> | undefined =
+    Platform.OS === 'web'
+      ? {
+          prefixes: ['https://robconceicao.github.io', '/'],
+          config: {
+            screens: {
+              ReportA: '',
+              ReportB: 'ReportB',
+              Attendance: 'Attendance',
+              Scanner: 'Scanner',
+            },
+          },
+          getPathFromState: (state, options) => {
+            const path = getPathFromState(state, options);
+            return path ? `${basePath}/${path}` : basePath;
+          },
+        }
+      : undefined;
+
+  return (
+    <NavigationContainer linking={linking}>
+      <RootTabs />
+    </NavigationContainer>
+  );
+}
+</file>
+
+<file path="src/screens/AttendanceScreen.tsx">
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+
+import type { AttendanceCollaborator, AttendanceData } from '@/src/types';
+import { formatAttendanceMessage, formatDateInput, parseWhatsAppScale } from '@/src/utils/parsers';
+import { shareCsvFile } from '@/src/utils/export';
+import { enqueueSyncItem, syncQueue } from '@/src/services/sync';
+
+const STORAGE_KEY = 'inventexpert:attendance';
+const HISTORY_KEY = 'inventexpert:attendance:history';
+
+const emptyData: AttendanceData = {
+  data: '',
+  loja: '',
+  enderecoLoja: '',
+  colaboradores: [],
+};
+
+export default function AttendanceScreen() {
+  const [rawText, setRawText] = useState('');
+  const [attendance, setAttendance] = useState<AttendanceData>(emptyData);
+  const [previewVisible, setPreviewVisible] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as AttendanceData;
+        setAttendance({
+          data: parsed.data ?? '',
+          loja: parsed.loja ?? '',
+          enderecoLoja: parsed.enderecoLoja ?? '',
+          colaboradores: (parsed.colaboradores ?? []).map((item) => {
+            const legacy = item as AttendanceCollaborator & { presente?: boolean };
+            return {
+              ...item,
+              status: legacy.status ?? (legacy.presente ? 'PRESENTE' : 'NAO_DEFINIDO'),
+              substituto: legacy.substituto ?? '',
+            };
+          }),
+        });
+      }
+    };
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(attendance)).catch(() => null);
+  }, [attendance]);
+
+  const handleParse = () => {
+    const parsed = parseWhatsAppScale(rawText);
+    setAttendance(parsed);
+  };
+
+  const togglePresence = (
+    collaborator: AttendanceCollaborator,
+    status: AttendanceCollaborator['status'],
+  ) => {
+    setAttendance((prev) => ({
+      ...prev,
+      colaboradores: prev.colaboradores.map((item) =>
+        item.id === collaborator.id ? { ...item, status } : item,
+      ),
+    }));
+  };
+
+  const previewMessage = useMemo(() => formatAttendanceMessage(attendance), [attendance]);
+
+  const handleOpenPreview = () => {
+    if (!attendance.data.trim() || !attendance.loja.trim()) {
+      Alert.alert('Campos obrigatórios', 'Preencha Data e Loja antes de enviar.');
+      return;
+    }
+    setPreviewVisible(true);
+  };
+
+  const handleSendWhatsApp = () => {
+    const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
+    });
+  };
+
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        attendance,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem('attendance', { attendance });
+    } catch {
+      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
+      return;
+    }
+
+    await handleExportHistory();
+    void syncQueue();
+
+    setRawText('');
+    setAttendance(emptyData);
+    Alert.alert('Dados arquivados', 'A escala foi arquivada e o formulário foi limpo.');
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<{ savedAt: string; attendance: AttendanceData }>)
+        : [];
+      if (history.length === 0) {
+        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
+        return;
+      }
+      const headers = [
+        'savedAt',
+        'data',
+        'loja',
+        'enderecoLoja',
+        'colaboradorNome',
+        'status',
+        'substituto',
+      ];
+      const rows = history.flatMap((item) => {
+        const base = [item.savedAt, item.attendance.data, item.attendance.loja, item.attendance.enderecoLoja];
+        if (!item.attendance.colaboradores || item.attendance.colaboradores.length === 0) {
+          return [[...base, '', '', '']];
+        }
+        return item.attendance.colaboradores.map((collaborator) => [
+          ...base,
+          collaborator.nome,
+          collaborator.status,
+          collaborator.substituto ?? '',
+        ]);
+      });
+      const filename = `inventexpert_escala_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert(
+        'Exportação indisponível',
+        'Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.',
+      );
+    }
+  };
+
+  return (
+    <ScrollView className="flex-1 bg-slate-50" contentContainerClassName="px-4 pb-8 pt-4">
+      <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+        <Text className="text-base font-semibold text-slate-800">
+          Leitura da escala enviada no WhatsApp
+        </Text>
+        <Text className="mt-2 text-sm text-slate-600">
+          Cole o texto do WhatsApp e clique em processar.
+        </Text>
+        <TextInput
+          value={rawText}
+          onChangeText={setRawText}
+          multiline
+          placeholder="Cole aqui o texto bruto da escala"
+          className="mt-3 min-h-[140px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          textAlignVertical="top"
+        />
+        <Pressable
+          onPress={handleParse}
+          className="mt-3 items-center rounded-lg bg-blue-600 py-2">
+          <Text className="text-sm font-semibold text-white">Processar escala</Text>
+        </Pressable>
+      </View>
+
+      <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+        <Text className="text-base font-semibold text-slate-800">Detalhes da Escala</Text>
+        <View className="mt-3">
+          <Text className="text-sm font-semibold text-slate-700">Data</Text>
+          <TextInput
+            value={attendance.data}
+            onChangeText={(text) =>
+              setAttendance((prev) => ({ ...prev, data: formatDateInput(text) }))
+            }
+            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          />
+        </View>
+        <View className="mt-3">
+          <Text className="text-sm font-semibold text-slate-700">Loja</Text>
+          <TextInput
+            value={attendance.loja}
+            onChangeText={(text) => setAttendance((prev) => ({ ...prev, loja: text }))}
+            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          />
+        </View>
+        <View className="mt-3">
+          <Text className="text-sm font-semibold text-slate-700">Endereço da Loja</Text>
+          <TextInput
+            value={attendance.enderecoLoja}
+            onChangeText={(text) => setAttendance((prev) => ({ ...prev, enderecoLoja: text }))}
+            className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+          />
+        </View>
+      </View>
+
+      <View className="rounded-xl bg-white p-4 shadow-sm">
+        <Text className="text-base font-semibold text-slate-800">Presença</Text>
+        {attendance.colaboradores.length === 0 ? (
+          <Text className="mt-3 text-sm text-slate-500">
+            Nenhum colaborador identificado ainda.
+          </Text>
+        ) : (
+          attendance.colaboradores.map((collaborator) => (
+            <View key={collaborator.id} className="mt-3 rounded-lg border border-slate-200 px-3 py-2">
+              <Text className="text-sm font-medium text-slate-800">{collaborator.nome}</Text>
+              <View className="mt-2 flex-row gap-3">
+                <Pressable
+                  onPress={() => togglePresence(collaborator, 'PRESENTE')}
+                  className={`h-9 w-9 items-center justify-center rounded-full ${
+                    collaborator.status === 'PRESENTE' ? 'bg-emerald-600' : 'bg-slate-200'
+                  }`}>
+                  <Ionicons
+                    name="checkmark"
+                    size={18}
+                    color={collaborator.status === 'PRESENTE' ? '#fff' : '#0F172A'}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => togglePresence(collaborator, 'AUSENTE')}
+                  className={`h-9 w-9 items-center justify-center rounded-full ${
+                    collaborator.status === 'AUSENTE' ? 'bg-rose-600' : 'bg-slate-200'
+                  }`}>
+                  <Ionicons
+                    name="close"
+                    size={18}
+                    color={collaborator.status === 'AUSENTE' ? '#fff' : '#0F172A'}
+                  />
+                </Pressable>
+              </View>
+              <View className="mt-3">
+                <Text className="text-xs font-semibold text-slate-600">Substituição (se houver)</Text>
+                <TextInput
+                  value={collaborator.substituto ?? ''}
+                  onChangeText={(text) =>
+                    setAttendance((prev) => ({
+                      ...prev,
+                      colaboradores: prev.colaboradores.map((item) =>
+                        item.id === collaborator.id ? { ...item, substituto: text } : item,
+                      ),
+                    }))
+                  }
+                  placeholder="Nome do substituto"
+                  className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+                />
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Pressable
+        onPress={handleOpenPreview}
+        className="mt-4 items-center rounded-xl bg-blue-600 py-3">
+        <Text className="text-base font-semibold text-white">Enviar Escala</Text>
+      </Pressable>
+      <Pressable
+        onPress={() =>
+          Alert.alert(
+            'Arquivar e limpar',
+            'Isso limpará a escala, mas os dados ficarão arquivados para análise.',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
+            ],
+          )
+        }
+        className="mt-2 items-center rounded-xl bg-slate-200 py-3">
+        <Text className="text-base font-semibold text-slate-700">Arquivar e limpar</Text>
+      </Pressable>
+
+      <Modal visible={previewVisible} transparent animationType="fade">
+        <View className="flex-1 items-center justify-center bg-black/50 px-4">
+          <View className="w-full max-w-md rounded-xl bg-white p-4">
+            <Text className="text-base font-semibold text-slate-800">Pré-visualização</Text>
+            <ScrollView className="mt-3 max-h-96 rounded-lg border border-slate-200 p-3">
+              <Text className="text-sm text-slate-700">{previewMessage}</Text>
+            </ScrollView>
+            <View className="mt-4 flex-row gap-2">
+              <Pressable
+                onPress={() => setPreviewVisible(false)}
+                className="flex-1 items-center rounded-lg bg-slate-200 py-2">
+                <Text className="text-sm font-semibold text-slate-700">Voltar</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setPreviewVisible(false);
+                  handleSendWhatsApp();
+                }}
+                className="flex-1 items-center rounded-lg bg-blue-600 py-2">
+                <Text className="text-sm font-semibold text-white">Enviar WhatsApp</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
+  );
+}
+</file>
+
+<file path="src/screens/ReportAScreen.tsx">
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Linking } from 'react-native';
+
+import TimeInput from '@/src/components/TimeInput';
+import type { ReportA } from '@/src/types';
+import {
+  formatFloatInput,
+  formatPercentInput,
+  formatReportA,
+  isValidTime,
+  parseFloatInput,
+  parsePercentInput,
+} from '@/src/utils/parsers';
+import { shareCsvFile } from '@/src/utils/export';
+import { enqueueSyncItem, syncQueue } from '@/src/services/sync';
+
+const STORAGE_KEY = 'inventexpert:reportA';
+const HISTORY_KEY = 'inventexpert:reportA:history';
+
+const createInitialState = (): ReportA => ({
+  lojaNum: '',
+  lojaNome: '',
+  enderecoLoja: '',
+  qtdColaboradores: 0,
+  lider: '',
+  hrChegada: '',
+  inicioEstoque: '',
+  terminoEstoque: '',
+  inicioLoja: '',
+  terminoLoja: '',
+  inicioDivergencia: '',
+  terminoDivergencia: '',
+  terminoInventario: '',
+  avanco22h: 0,
+  avanco00h: 0,
+  avanco01h: 0,
+  avanco03h: 0,
+  avanco04h: 0,
+  arquivo1: '',
+  arquivo2: '',
+  arquivo3: '',
+  avalEstoque: 0,
+  avalLoja: 0,
+  acuracidade: 0,
+  percentualAuditoria: 0,
+  ph: 0,
+  satisfacao: 0,
+  contagemAntecipada: '',
+});
+
+const numberToInput = (value: number) => (value === 0 ? '' : `${value}`);
+const percentToInput = (value: number) => (value === 0 ? '' : `${String(value).replace('.', ',')}`);
+const floatToInput = (value: number) => (value === 0 ? '' : `${value}`.replace('.', ','));
+
+type ReportAPercentKey =
+  | 'avanco22h'
+  | 'avanco00h'
+  | 'avanco01h'
+  | 'avanco03h'
+  | 'avanco04h'
+  | 'avalEstoque'
+  | 'avalLoja'
+  | 'acuracidade'
+  | 'percentualAuditoria';
+
+export default function ReportAScreen() {
+  const [report, setReport] = useState<ReportA>(createInitialState);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [phText, setPhText] = useState('');
+  const [percentText, setPercentText] = useState<Record<ReportAPercentKey, string>>({
+    avanco22h: '',
+    avanco00h: '',
+    avanco01h: '',
+    avanco03h: '',
+    avanco04h: '',
+    avalEstoque: '',
+    avalLoja: '',
+    acuracidade: '',
+    percentualAuditoria: '',
+  });
+
+  useEffect(() => {
+    const loadData = async () => {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as ReportA;
+        setReport(parsed);
+        setPhText(floatToInput(parsed.ph));
+        setPercentText({
+          avanco22h: percentToInput(parsed.avanco22h),
+          avanco00h: percentToInput(parsed.avanco00h),
+          avanco01h: percentToInput(parsed.avanco01h),
+          avanco03h: percentToInput(parsed.avanco03h),
+          avanco04h: percentToInput(parsed.avanco04h),
+          avalEstoque: percentToInput(parsed.avalEstoque),
+          avalLoja: percentToInput(parsed.avalLoja),
+          acuracidade: percentToInput(parsed.acuracidade),
+          percentualAuditoria: percentToInput(parsed.percentualAuditoria),
+        });
+      }
+    };
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
+  }, [report]);
+
+  useEffect(() => {
+    const scheduleAdvanceAlerts = async () => {
+      if (Constants.appOwnership === 'expo') {
+        return;
+      }
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+
+      await Notifications.cancelAllScheduledNotificationsAsync();
+
+      const scheduleFor = async (label: string, hours: number, minutes: number) => {
+        const now = new Date();
+        const target = new Date();
+        target.setHours(hours, minutes, 0, 0);
+        target.setMinutes(target.getMinutes() - 5);
+        if (target.getTime() <= now.getTime()) {
+          target.setDate(target.getDate() + 1);
+        }
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Inventário - Avanço',
+            body: `Prepare-se para lançar o avanço das ${label}.`,
+            sound: true,
+          },
+          trigger: {
+            hour: target.getHours(),
+            minute: target.getMinutes(),
+            repeats: true,
+          },
+        });
+      };
+
+      await scheduleFor('22:00', 22, 0);
+      await scheduleFor('00:00', 0, 0);
+      await scheduleFor('01:00', 1, 0);
+      await scheduleFor('03:00', 3, 0);
+      await scheduleFor('04:00', 4, 0);
+    };
+
+    void scheduleAdvanceAlerts();
+  }, []);
+
+  const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
+    setReport((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setPercentField = (key: ReportAPercentKey, text: string) => {
+    const formatted = formatPercentInput(text, 0, 100, 2);
+    setPercentText((prev) => ({ ...prev, [key]: formatted }));
+    setField(key, parsePercentInput(formatted, 0));
+  };
+
+  const validateRequired = () => {
+    const missing: string[] = [];
+    if (!report.lojaNum.trim()) missing.push('Nº da loja');
+    if (!report.lojaNome.trim()) missing.push('Nome da Loja');
+    if (!report.qtdColaboradores) missing.push('Qtd. de colaboradores');
+    if (!report.lider.trim()) missing.push('Líder do Inventário');
+    if (!report.hrChegada.trim()) missing.push('Horário de chegada em loja');
+
+    if (missing.length > 0) {
+      Alert.alert(
+        'Campos obrigatórios',
+        `Preencha os campos: ${missing.join(', ')}.`,
+      );
+      return false;
+    }
+
+    const invalidTimes: string[] = [];
+    const timeFields: Array<[string, string]> = [
+      ['Horário de chegada em loja', report.hrChegada],
+      ['Início da contagem de estoque', report.inicioEstoque],
+      ['Término da contagem de estoque', report.terminoEstoque],
+      ['Início da contagem da loja', report.inicioLoja],
+      ['Término da contagem da loja', report.terminoLoja],
+      ['Início da divergência', report.inicioDivergencia],
+      ['Término da divergência', report.terminoDivergencia],
+      ['Término do inventário', report.terminoInventario],
+      ['Envio do 1º arquivo', report.arquivo1],
+      ['Envio do 2º arquivo', report.arquivo2],
+      ['Envio do 3º arquivo', report.arquivo3],
+    ];
+
+    timeFields.forEach(([label, value]) => {
+      if (value.trim().length > 0 && !isValidTime(value)) {
+        invalidTimes.push(label);
+      }
+    });
+
+    if (invalidTimes.length > 0) {
+      Alert.alert(
+        'Horários inválidos',
+        `Verifique os campos: ${invalidTimes.join(', ')}.`,
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSendWhatsApp = () => {
+    const message = formatReportA(report);
+    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Erro', 'Não foi possível abrir o WhatsApp.');
+    });
+  };
+
+  const handleOpenPreview = () => {
+    setPreviewVisible(true);
+  };
+
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>) : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        report,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem('reportA', { report });
+    } catch {
+      Alert.alert('Erro', 'Não foi possível arquivar os dados.');
+      return;
+    }
+
+    await handleExportHistory();
+    void syncQueue();
+
+    setReport(createInitialState());
+    setPhText('');
+    setPercentText({
+      avanco22h: '',
+      avanco00h: '',
+      avanco01h: '',
+      avanco03h: '',
+      avanco04h: '',
+      avalEstoque: '',
+      avalLoja: '',
+      acuracidade: '',
+      percentualAuditoria: '',
+    });
+    Alert.alert('Dados arquivados', 'Os dados foram arquivados e o formulário foi limpo.');
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory ? (JSON.parse(storedHistory) as Array<{ savedAt: string; report: ReportA }>) : [];
+      if (history.length === 0) {
+        Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
+        return;
+      }
+      const headers = [
+        'savedAt',
+        'lojaNum',
+        'lojaNome',
+        'enderecoLoja',
+        'qtdColaboradores',
+        'lider',
+        'hrChegada',
+        'inicioEstoque',
+        'terminoEstoque',
+        'inicioLoja',
+        'terminoLoja',
+        'inicioDivergencia',
+        'terminoDivergencia',
+        'terminoInventario',
+        'avanco22h',
+        'avanco00h',
+        'avanco01h',
+        'avanco03h',
+        'avanco04h',
+        'arquivo1',
+        'arquivo2',
+        'arquivo3',
+        'avalEstoque',
+        'avalLoja',
+        'acuracidade',
+        'percentualAuditoria',
+        'ph',
+        'satisfacao',
+        'contagemAntecipada',
+      ];
+      const rows = history.map((item) => {
+        const { report: data } = item;
+        return [
+          item.savedAt,
+          data.lojaNum,
+          data.lojaNome,
+          data.enderecoLoja,
+          data.qtdColaboradores,
+          data.lider,
+          data.hrChegada,
+          data.inicioEstoque,
+          data.terminoEstoque,
+          data.inicioLoja,
+          data.terminoLoja,
+          data.inicioDivergencia,
+          data.terminoDivergencia,
+          data.terminoInventario,
+          data.avanco22h,
+          data.avanco00h,
+          data.avanco01h,
+          data.avanco03h,
+          data.avanco04h,
+          data.arquivo1,
+          data.arquivo2,
+          data.arquivo3,
+          data.avalEstoque,
+          data.avalLoja,
+          data.acuracidade,
+          data.percentualAuditoria,
+          data.ph,
+          data.satisfacao,
+          data.contagemAntecipada,
+        ];
+      });
+      const filename = `inventexpert_reportA_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert(
+        'Exportação indisponível',
+        'Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.',
+      );
+    }
+  };
+
+  const headerBadge = useMemo(
+    () => report.contagemAntecipada || 'Não informado',
+    [report],
+  );
+
+  const handleClearForm = () => {
+    setReport(createInitialState());
+    setPhText('');
+    setPercentText({
+      avanco22h: '',
+      avanco00h: '',
+      avanco01h: '',
+      avanco03h: '',
+      avanco04h: '',
+      avalEstoque: '',
+      avalLoja: '',
+      acuracidade: '',
+      percentualAuditoria: '',
+    });
+    Alert.alert('Formulário limpo', 'Os dados foram apagados.');
+  };
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.select({ ios: 'padding', android: undefined })}
+      className="flex-1 bg-slate-50">
+      <ScrollView contentContainerClassName="px-4 pb-8 pt-4">
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">Identificação</Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Nº da loja</Text>
+            <TextInput
+              value={report.lojaNum}
+              onChangeText={(text) => setField('lojaNum', text)}
+              placeholder="Ex: 005"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Nome da Loja</Text>
+            <TextInput
+              value={report.lojaNome}
+              onChangeText={(text) => setField('lojaNome', text)}
+              placeholder="Ex: Loja Exemplo"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Endereço da Loja</Text>
+            <TextInput
+              value={report.enderecoLoja}
+              onChangeText={(text) => setField('enderecoLoja', text)}
+              placeholder="Ex: Rua, número, bairro"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Qtd. de colaboradores</Text>
+            <TextInput
+              value={numberToInput(report.qtdColaboradores)}
+              onChangeText={(text) => setField('qtdColaboradores', Number(text) || 0)}
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Líder do Inventário</Text>
+            <TextInput
+              value={report.lider}
+              onChangeText={(text) => setField('lider', text)}
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">Cronograma</Text>
+          <TimeInput
+            label="Horário de chegada em loja"
+            value={report.hrChegada}
+            onChange={(value) => setField('hrChegada', value)}
+            required
+          />
+          <TimeInput
+            label="Início da contagem de estoque"
+            value={report.inicioEstoque}
+            onChange={(value) => setField('inicioEstoque', value)}
+          />
+          <TimeInput
+            label="Término da contagem de estoque"
+            value={report.terminoEstoque}
+            onChange={(value) => setField('terminoEstoque', value)}
+          />
+          <TimeInput
+            label="Início da contagem da loja"
+            value={report.inicioLoja}
+            onChange={(value) => setField('inicioLoja', value)}
+          />
+          <TimeInput
+            label="Término da contagem da loja"
+            value={report.terminoLoja}
+            onChange={(value) => setField('terminoLoja', value)}
+          />
+          <TimeInput
+            label="Início da divergência"
+            value={report.inicioDivergencia}
+            onChange={(value) => setField('inicioDivergencia', value)}
+          />
+          <TimeInput
+            label="Término da divergência"
+            value={report.terminoDivergencia}
+            onChange={(value) => setField('terminoDivergencia', value)}
+          />
+          <TimeInput
+            label="Término do inventário"
+            value={report.terminoInventario}
+            onChange={(value) => setField('terminoInventario', value)}
+          />
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">Avanço (%)</Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avanço 22:00</Text>
+            <TextInput
+              value={percentText.avanco22h}
+              onChangeText={(text) => setPercentField('avanco22h', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avanço 00:00</Text>
+            <TextInput
+              value={percentText.avanco00h}
+              onChangeText={(text) => setPercentField('avanco00h', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avanço 01:00</Text>
+            <TextInput
+              value={percentText.avanco01h}
+              onChangeText={(text) => setPercentField('avanco01h', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avanço 03:00</Text>
+            <TextInput
+              value={percentText.avanco03h}
+              onChangeText={(text) => setPercentField('avanco03h', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avanço 04:00</Text>
+            <TextInput
+              value={percentText.avanco04h}
+              onChangeText={(text) => setPercentField('avanco04h', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">Gestão de Arquivos</Text>
+          <TimeInput
+            label="Envio do 1º arquivo"
+            value={report.arquivo1}
+            onChange={(value) => setField('arquivo1', value)}
+          />
+          <TimeInput
+            label="Envio do 2º arquivo"
+            value={report.arquivo2}
+            onChange={(value) => setField('arquivo2', value)}
+          />
+          <TimeInput
+            label="Envio do 3º arquivo"
+            value={report.arquivo3}
+            onChange={(value) => setField('arquivo3', value)}
+          />
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">Indicadores</Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avaliação do estoque (%)</Text>
+            <TextInput
+              value={percentText.avalEstoque}
+              onChangeText={(text) => setPercentField('avalEstoque', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Avaliação da loja (%)</Text>
+            <TextInput
+              value={percentText.avalLoja}
+              onChangeText={(text) => setPercentField('avalLoja', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Acuracidade (%)</Text>
+            <TextInput
+              value={percentText.acuracidade}
+              onChangeText={(text) => setPercentField('acuracidade', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Percentual de auditoria (%)</Text>
+            <TextInput
+              value={percentText.percentualAuditoria}
+              onChangeText={(text) => setPercentField('percentualAuditoria', text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">PH (Produtividade/Hora)</Text>
+            <TextInput
+              value={phText}
+              onChangeText={(text) => {
+                const formatted = formatFloatInput(text);
+                setPhText(formatted);
+                setField('ph', parseFloatInput(formatted));
+              }}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Satisfação (1 a 5)</Text>
+            <TextInput
+              value={numberToInput(report.satisfacao)}
+              onChangeText={(text) => {
+                const digits = text.replace(/\D/g, '').slice(0, 1);
+                if (!digits) {
+                  setField('satisfacao', 0);
+                  return;
+                }
+                const asNumber = Math.min(5, Math.max(1, Number(digits)));
+                setField('satisfacao', asNumber);
+              }}
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">Gerenciamento</Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">Contagem antecipada</Text>
+            <Text className="text-xs text-slate-500">Selecionado: {headerBadge}</Text>
+            <View className="mt-3 flex-row gap-2">
+              {(['Sim', 'Não'] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setField('contagemAntecipada', option)}
+                  className={`rounded-lg px-4 py-2 ${
+                    report.contagemAntecipada === option ? 'bg-blue-600' : 'bg-slate-200'
+                  }`}>
+                  <Text
+                    className={`text-sm font-semibold ${
+                      report.contagemAntecipada === option ? 'text-white' : 'text-slate-700'
+                    }`}>
+                    {option}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <Pressable
+          onPress={handleOpenPreview}
+          className="mt-2 items-center rounded-xl bg-blue-600 py-3">
+          <Text className="text-base font-semibold text-white">Enviar Andamento de Inventário</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              'Arquivar',
+              'Isso arquiva os dados e limpa o formulário.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Arquivar', onPress: () => void handleArchiveAndClear() },
+              ],
+            )
+          }
+          className="mt-2 items-center rounded-xl bg-slate-200 py-3">
+          <Text className="text-base font-semibold text-slate-700">Arquivar</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              'Limpar',
+              'Isso apagará os dados preenchidos.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Limpar', style: 'destructive', onPress: handleClearForm },
+              ],
+            )
+          }
+          className="mt-2 items-center rounded-xl bg-rose-50 py-3">
+          <Text className="text-base font-semibold text-rose-600">Limpar</Text>
+        </Pressable>
+
+        <Modal visible={previewVisible} transparent animationType="fade">
+          <View className="flex-1 items-center justify-center bg-black/50 px-4">
+            <View className="w-full max-w-md rounded-xl bg-white p-4">
+              <Text className="text-base font-semibold text-slate-800">Pré-visualização</Text>
+              <ScrollView className="mt-3 max-h-96 rounded-lg border border-slate-200 p-3">
+                <Text className="text-sm text-slate-700">{formatReportA(report)}</Text>
+              </ScrollView>
+              <View className="mt-4 flex-row gap-2">
+                <Pressable
+                  onPress={() => setPreviewVisible(false)}
+                  className="flex-1 items-center rounded-lg bg-slate-200 py-2">
+                  <Text className="text-sm font-semibold text-slate-700">Voltar</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPreviewVisible(false);
+                    handleSendWhatsApp();
+                  }}
+                  className="flex-1 items-center rounded-lg bg-blue-600 py-2">
+                  <Text className="text-sm font-semibold text-white">Enviar WhatsApp</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+</file>
+
+<file path="src/screens/ReportBScreen.tsx">
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Linking,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+
+import TimeInput from "@/src/components/TimeInput";
+import { enqueueSyncItem, syncQueue } from "@/src/services/sync";
+import type { ReportA, ReportB } from "@/src/types";
+import { shareCsvFile } from "@/src/utils/export";
+import {
+    formatCurrencyInput,
+    formatDateInput,
+    formatDateNow,
+    formatIntegerInput,
+    formatPercentInput,
+    formatReportB,
+    isValidDate,
+    isValidTime,
+    parseCurrencyInput,
+    parseIntegerInput,
+    parsePercentInput,
+} from "@/src/utils/parsers";
+
+const STORAGE_KEY = "inventexpert:reportB";
+const REPORT_A_STORAGE_KEY = "inventexpert:reportA";
+const PHOTO_STORAGE_KEY = "inventexpert:reportB:photos";
+const HISTORY_KEY = "inventexpert:reportB:history";
+
+const createInitialState = (): ReportB => ({
+  cliente: "",
+  lojaNum: "",
+  enderecoLoja: "",
+  data: formatDateNow(),
+  pivProgramado: 0,
+  pivRealizado: 0,
+  chegadaEquipe: "",
+  inicioDeposito: "",
+  terminoDeposito: "",
+  inicioLoja: "",
+  terminoLoja: "",
+  inicioAuditoriaCliente: "",
+  terminoAuditoriaCliente: "",
+  inicioDivergencia: "",
+  terminoDivergencia: "",
+  inicioNaoContados: "",
+  terminoNaoContados: "",
+  qtdAlterados: 0,
+  qtdNaoContados: 0,
+  qtdEncontradosNaoContados: 0,
+  totalPecas: 0,
+  valorFinanceiro: 0,
+  arquivo1: "",
+  arquivo2: "",
+  arquivo3: "",
+  avalPrepDeposito: 0,
+  avalPrepLoja: 0,
+  acuracidadeCliente: 0,
+  acuracidadeTerceirizada: 0,
+  satisfacao: 0,
+  ph: 0,
+  responsavel: "",
+  suporteSolicitado: "",
+  terminoInventario: "",
+});
+
+const applyReportAData = (current: ReportB, reportA: ReportA): ReportB => ({
+  ...current,
+  cliente: current.cliente || reportA.lojaNome,
+  lojaNum: current.lojaNum || reportA.lojaNum,
+  enderecoLoja: current.enderecoLoja || reportA.enderecoLoja,
+  pivProgramado: current.pivProgramado || reportA.qtdColaboradores,
+  chegadaEquipe: current.chegadaEquipe || reportA.hrChegada,
+  inicioDeposito: current.inicioDeposito || reportA.inicioEstoque,
+  terminoDeposito: current.terminoDeposito || reportA.terminoEstoque,
+  inicioLoja: current.inicioLoja || reportA.inicioLoja,
+  terminoLoja: current.terminoLoja || reportA.terminoLoja,
+  inicioAuditoriaCliente:
+    current.inicioAuditoriaCliente || reportA.inicioDivergencia,
+  inicioDivergencia: current.inicioDivergencia || reportA.inicioDivergencia,
+  terminoDivergencia: current.terminoDivergencia || reportA.terminoDivergencia,
+  arquivo1: current.arquivo1 || reportA.arquivo1,
+  arquivo2: current.arquivo2 || reportA.arquivo2,
+  arquivo3: current.arquivo3 || reportA.arquivo3,
+  responsavel: current.responsavel || reportA.lider,
+  terminoInventario: current.terminoInventario || reportA.terminoInventario,
+});
+
+const numberToInput = (value: number) => (value === 0 ? "" : `${value}`);
+const percentToInput = (value: number) =>
+  value === 0 ? "" : `${String(value).replace(".", ",")}`;
+
+type ReportBPercentKey =
+  | "avalPrepDeposito"
+  | "avalPrepLoja"
+  | "acuracidadeCliente"
+  | "acuracidadeTerceirizada";
+
+const PHOTO_PICK_LIMIT = 10;
+
+export default function ReportBScreen() {
+  const [report, setReport] = useState<ReportB>(createInitialState);
+  const [valorFinanceiroText, setValorFinanceiroText] = useState("");
+  const [totalPecasText, setTotalPecasText] = useState("");
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
+  const [suporteSelecionado, setSuporteSelecionado] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [isPhotoSharing, setIsPhotoSharing] = useState(false);
+  const [percentText, setPercentText] = useState<
+    Record<ReportBPercentKey, string>
+  >({
+    avalPrepDeposito: "",
+    avalPrepLoja: "",
+    acuracidadeCliente: "",
+    acuracidadeTerceirizada: "",
+  });
+
+  useEffect(() => {
+    const calculated =
+      report.pivProgramado > 0
+        ? report.totalPecas / report.pivProgramado
+        : 0;
+    if (report.ph !== calculated) {
+      setField("ph", calculated);
+    }
+  }, [report.totalPecas, report.pivProgramado, report.ph]);
+
+  const phDisplay = useMemo(() => {
+    if (!report.ph) {
+      return "";
+    }
+    return report.ph.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }, [report.ph]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const [stored, storedPhotos, storedReportA] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEY),
+        AsyncStorage.getItem(PHOTO_STORAGE_KEY),
+        AsyncStorage.getItem(REPORT_A_STORAGE_KEY),
+      ]);
+      if (stored) {
+        const parsed = JSON.parse(stored) as ReportB;
+        let nextReport = parsed;
+        if (storedReportA) {
+          const reportA = JSON.parse(storedReportA) as ReportA;
+          nextReport = applyReportAData(nextReport, reportA);
+        }
+        setReport(nextReport);
+        setSuporteSelecionado(Boolean(nextReport.suporteSolicitado));
+        setValorFinanceiroText(
+          nextReport.valorFinanceiro
+            ? formatCurrencyInput(String(nextReport.valorFinanceiro * 100))
+            : "",
+        );
+        setTotalPecasText(
+          nextReport.totalPecas
+            ? formatIntegerInput(String(nextReport.totalPecas))
+            : "",
+        );
+        setPercentText({
+          avalPrepDeposito: percentToInput(nextReport.avalPrepDeposito),
+          avalPrepLoja: percentToInput(nextReport.avalPrepLoja),
+          acuracidadeCliente: percentToInput(nextReport.acuracidadeCliente),
+          acuracidadeTerceirizada: percentToInput(
+            nextReport.acuracidadeTerceirizada,
+          ),
+        });
+      } else if (storedReportA) {
+        const reportA = JSON.parse(storedReportA) as ReportA;
+        setReport((prev) => applyReportAData(prev, reportA));
+      }
+      if (storedPhotos) {
+        setPhotoUris(JSON.parse(storedPhotos) as string[]);
+      }
+    };
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
+  }, [report]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(PHOTO_STORAGE_KEY, JSON.stringify(photoUris)).catch(
+      () => null,
+    );
+  }, [photoUris]);
+
+  const setField = <K extends keyof ReportB>(key: K, value: ReportB[K]) => {
+    setReport((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setPercentField = (key: ReportBPercentKey, text: string) => {
+    const formatted = formatPercentInput(text, 0, 100, 2);
+    setPercentText((prev) => ({ ...prev, [key]: formatted }));
+    setField(key, parsePercentInput(formatted, 0));
+  };
+
+  const handlePickImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Permissão necessária",
+        "Conceda acesso à galeria para anexar fotos.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      selectionLimit: PHOTO_PICK_LIMIT,
+    });
+
+    if (!result.canceled) {
+      const uris = result.assets.map((asset) => asset.uri);
+      setPhotoUris((prev) => Array.from(new Set([...prev, ...uris])));
+    }
+  };
+
+  const handleRemovePhoto = (uri: string) => {
+    setPhotoUris((prev) => prev.filter((item) => item !== uri));
+  };
+
+  const movePhoto = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= photoUris.length) {
+      return;
+    }
+    setPhotoUris((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const validateRequired = () => {
+    const missing: string[] = [];
+    if (!report.cliente.trim()) missing.push("Cliente");
+    if (!report.lojaNum.trim()) missing.push("Número da Loja");
+    if (!report.data.trim()) missing.push("Data do Inventário");
+    if (!report.chegadaEquipe.trim()) missing.push("HR de chegada da equipe");
+    if (!report.terminoInventario.trim()) missing.push("Término do inventário");
+    if (!report.responsavel.trim()) missing.push("Responsável pelo inventário");
+    if (!suporteSelecionado) missing.push("Houve solicitação de suporte");
+    if (photoUris.length === 0) missing.push("Anexos de fotos");
+
+    if (missing.length > 0) {
+      Alert.alert(
+        "Campos obrigatórios",
+        `Preencha os campos: ${missing.join(", ")}.`,
+      );
+      return false;
+    }
+
+    if (!isValidDate(report.data)) {
+      Alert.alert(
+        "Data inválida",
+        "Informe uma data válida no formato DD/MM/AAAA.",
+      );
+      return false;
+    }
+
+    const invalidTimes: string[] = [];
+    const timeFields: Array<[string, string]> = [
+      ["HR de chegada da equipe", report.chegadaEquipe],
+      ["Início da contagem do Depósito", report.inicioDeposito],
+      ["Término da contagem do Depósito", report.terminoDeposito],
+      ["Início da contagem da Loja", report.inicioLoja],
+      ["Término da contagem da Loja", report.terminoLoja],
+      ["Início da auditoria do cliente", report.inicioAuditoriaCliente],
+      ["Término da auditoria do cliente", report.terminoAuditoriaCliente],
+      ["Início da divergência", report.inicioDivergencia],
+      ["Término da divergência", report.terminoDivergencia],
+      ["Início dos não contados", report.inicioNaoContados],
+      ["Término dos não contados", report.terminoNaoContados],
+      ["Envio do 1º arquivo", report.arquivo1],
+      ["Envio do 2º arquivo", report.arquivo2],
+      ["Envio do 3º arquivo", report.arquivo3],
+      ["Término do inventário", report.terminoInventario],
+    ];
+
+    timeFields.forEach(([label, value]) => {
+      if (value.trim().length > 0 && !isValidTime(value)) {
+        invalidTimes.push(label);
+      }
+    });
+
+    if (invalidTimes.length > 0) {
+      Alert.alert(
+        "Horários inválidos",
+        `Verifique os campos: ${invalidTimes.join(", ")}.`,
+      );
+      return false;
+    }
+
+    if (report.satisfacao > 0 && (report.satisfacao < 1 || report.satisfacao > 5)) {
+      Alert.alert("Satisfação inválida", "Informe um valor entre 1 e 5.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleSendMessage = async () => {
+    if (!validateRequired()) {
+      return;
+    }
+    const message = formatReportB(report);
+    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Erro", "Não foi possível abrir o WhatsApp.");
+    }
+  };
+
+  const handleSharePhotos = async () => {
+    if (photoUris.length === 0) {
+      Alert.alert("Aviso", "Adicione fotos antes de compartilhar.");
+      return;
+    }
+    const isShareAvailable = await Sharing.isAvailableAsync();
+    if (!isShareAvailable) {
+      Alert.alert(
+        "Aviso",
+        "Compartilhamento de imagens não disponível neste dispositivo.",
+      );
+      return;
+    }
+
+    try {
+      setIsPhotoSharing(true);
+      for (const uri of photoUris) {
+        await Sharing.shareAsync(uri, {
+          dialogTitle: "Enviar fotos",
+        });
+      }
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Falha desconhecida.";
+      Alert.alert(
+        "Erro",
+        `Não foi possível compartilhar as fotos. Verifique se há um app compatível instalado.\n\nDetalhes: ${detail}`,
+      );
+    } finally {
+      setIsPhotoSharing(false);
+    }
+  };
+
+  const handleOpenPreview = () => {
+    if (!validateRequired()) {
+      return;
+    }
+    setPreviewVisible(true);
+  };
+
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>)
+        : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        report,
+        photosCount: photoUris.length,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem("reportB", {
+        report,
+        photosCount: photoUris.length,
+      });
+    } catch {
+      Alert.alert("Erro", "Não foi possível arquivar os dados.");
+      return;
+    }
+
+    await handleExportHistory();
+    void syncQueue();
+
+    for (const uri of photoUris) {
+      if (uri.startsWith("file://")) {
+        try {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    setReport(createInitialState());
+    setValorFinanceiroText("");
+    setTotalPecasText("");
+    setPhotoUris([]);
+    setSuporteSelecionado(false);
+    setPercentText({
+      avalPrepDeposito: "",
+      avalPrepLoja: "",
+      acuracidadeCliente: "",
+      acuracidadeTerceirizada: "",
+    });
+    Alert.alert(
+      "Dados arquivados",
+      "Os dados foram arquivados e o formulário foi limpo.",
+    );
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<{
+            savedAt: string;
+            report: ReportB;
+            photosCount: number;
+          }>)
+        : [];
+      if (history.length === 0) {
+        Alert.alert("Sem dados", "Não há dados arquivados para exportar.");
+        return;
+      }
+      const headers = [
+        "savedAt",
+        "cliente",
+        "lojaNum",
+        "enderecoLoja",
+        "data",
+        "pivProgramado",
+        "pivRealizado",
+        "chegadaEquipe",
+        "inicioDeposito",
+        "terminoDeposito",
+        "inicioLoja",
+        "terminoLoja",
+        "inicioAuditoriaCliente",
+        "terminoAuditoriaCliente",
+        "inicioDivergencia",
+        "terminoDivergencia",
+        "inicioNaoContados",
+        "terminoNaoContados",
+        "qtdAlterados",
+        "qtdNaoContados",
+        "qtdEncontradosNaoContados",
+        "totalPecas",
+        "valorFinanceiro",
+        "arquivo1",
+        "arquivo2",
+        "arquivo3",
+        "avalPrepDeposito",
+        "avalPrepLoja",
+        "acuracidadeCliente",
+        "acuracidadeTerceirizada",
+        "satisfacao",
+        "responsavel",
+        "suporteSolicitado",
+        "terminoInventario",
+        "photosCount",
+      ];
+      const rows = history.map((item) => {
+        const { report: data } = item;
+        return [
+          item.savedAt,
+          data.cliente,
+          data.lojaNum,
+          data.enderecoLoja,
+          data.data,
+          data.pivProgramado,
+          data.pivRealizado,
+          data.chegadaEquipe,
+          data.inicioDeposito,
+          data.terminoDeposito,
+          data.inicioLoja,
+          data.terminoLoja,
+          data.inicioAuditoriaCliente,
+          data.terminoAuditoriaCliente,
+          data.inicioDivergencia,
+          data.terminoDivergencia,
+          data.inicioNaoContados,
+          data.terminoNaoContados,
+          data.qtdAlterados,
+          data.qtdNaoContados,
+          data.qtdEncontradosNaoContados,
+          data.totalPecas,
+          data.valorFinanceiro,
+          data.arquivo1,
+          data.arquivo2,
+          data.arquivo3,
+          data.avalPrepDeposito,
+          data.avalPrepLoja,
+          data.acuracidadeCliente,
+          data.acuracidadeTerceirizada,
+          data.satisfacao,
+          data.responsavel,
+          data.suporteSolicitado,
+          data.terminoInventario,
+          item.photosCount,
+        ];
+      });
+      const filename = `inventexpert_reportB_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert(
+        "Exportação indisponível",
+        "Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.",
+      );
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.select({ ios: "padding", android: undefined })}
+      className="flex-1 bg-slate-50"
+    >
+      <ScrollView contentContainerClassName="px-4 pb-8 pt-4">
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Identificação
+          </Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Cliente
+            </Text>
+            <TextInput
+              value={report.cliente}
+              onChangeText={(text) => setField("cliente", text)}
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Número da Loja
+            </Text>
+            <TextInput
+              value={report.lojaNum}
+              onChangeText={(text) => setField("lojaNum", text)}
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Data do Inventário
+            </Text>
+            <TextInput
+              value={report.data}
+              onChangeText={(text) => setField("data", formatDateInput(text))}
+              placeholder="DD/MM/AAAA"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Endereço da Loja
+            </Text>
+            <TextInput
+              value={report.enderecoLoja}
+              onChangeText={(text) => setField("enderecoLoja", text)}
+              placeholder="Ex: Rua, número, bairro"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              PIV Programado
+            </Text>
+            <TextInput
+              value={numberToInput(report.pivProgramado)}
+              onChangeText={(text) =>
+                setField("pivProgramado", Number(text) || 0)
+              }
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              PIV Realizado
+            </Text>
+            <TextInput
+              value={numberToInput(report.pivRealizado)}
+              onChangeText={(text) =>
+                setField("pivRealizado", Number(text) || 0)
+              }
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Cronograma Operacional
+          </Text>
+          <TimeInput
+            label="HR de chegada da equipe"
+            value={report.chegadaEquipe}
+            onChange={(value) => setField("chegadaEquipe", value)}
+            required
+          />
+          <TimeInput
+            label="Início da contagem do Depósito"
+            value={report.inicioDeposito}
+            onChange={(value) => setField("inicioDeposito", value)}
+          />
+          <TimeInput
+            label="Término da contagem do Depósito"
+            value={report.terminoDeposito}
+            onChange={(value) => setField("terminoDeposito", value)}
+          />
+          <TimeInput
+            label="Início da contagem da Loja"
+            value={report.inicioLoja}
+            onChange={(value) => setField("inicioLoja", value)}
+          />
+          <TimeInput
+            label="Término da contagem da Loja"
+            value={report.terminoLoja}
+            onChange={(value) => setField("terminoLoja", value)}
+          />
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Auditoria e Divergências
+          </Text>
+          <TimeInput
+            label="Início da auditoria do cliente"
+            value={report.inicioAuditoriaCliente}
+            onChange={(value) => setField("inicioAuditoriaCliente", value)}
+          />
+          <TimeInput
+            label="Término da auditoria do cliente"
+            value={report.terminoAuditoriaCliente}
+            onChange={(value) => setField("terminoAuditoriaCliente", value)}
+          />
+          <TimeInput
+            label="Início da divergência"
+            value={report.inicioDivergencia}
+            onChange={(value) => setField("inicioDivergencia", value)}
+          />
+          <TimeInput
+            label="Término da divergência"
+            value={report.terminoDivergencia}
+            onChange={(value) => setField("terminoDivergencia", value)}
+          />
+          <TimeInput
+            label="Início dos não contados"
+            value={report.inicioNaoContados}
+            onChange={(value) => setField("inicioNaoContados", value)}
+          />
+          <TimeInput
+            label="Término dos não contados"
+            value={report.terminoNaoContados}
+            onChange={(value) => setField("terminoNaoContados", value)}
+          />
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Resultado
+          </Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Qtd. de itens alterados
+            </Text>
+            <TextInput
+              value={numberToInput(report.qtdAlterados)}
+              onChangeText={(text) =>
+                setField("qtdAlterados", Number(text) || 0)
+              }
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Qtd. de itens não contados
+            </Text>
+            <TextInput
+              value={numberToInput(report.qtdNaoContados)}
+              onChangeText={(text) =>
+                setField("qtdNaoContados", Number(text) || 0)
+              }
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Itens encontrados no não contados
+            </Text>
+            <TextInput
+              value={numberToInput(report.qtdEncontradosNaoContados)}
+              onChangeText={(text) =>
+                setField("qtdEncontradosNaoContados", Number(text) || 0)
+              }
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Total de peças
+            </Text>
+            <TextInput
+              value={totalPecasText}
+              onChangeText={(text) => {
+                const masked = formatIntegerInput(text);
+                setTotalPecasText(masked);
+                setField("totalPecas", parseIntegerInput(masked));
+              }}
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              PH (Peças por colaborador)
+            </Text>
+            <TextInput
+              value={phDisplay}
+              editable={false}
+              className="mt-2 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Valor financeiro total
+            </Text>
+            <TextInput
+              value={valorFinanceiroText}
+              onChangeText={(text) => {
+                const masked = formatCurrencyInput(text);
+                setValorFinanceiroText(masked);
+                setField("valorFinanceiro", parseCurrencyInput(masked));
+              }}
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Envio de Arquivos
+          </Text>
+          <TimeInput
+            label="Envio do 1º arquivo"
+            value={report.arquivo1}
+            onChange={(value) => setField("arquivo1", value)}
+          />
+          <TimeInput
+            label="Envio do 2º arquivo"
+            value={report.arquivo2}
+            onChange={(value) => setField("arquivo2", value)}
+          />
+          <TimeInput
+            label="Envio do 3º arquivo"
+            value={report.arquivo3}
+            onChange={(value) => setField("arquivo3", value)}
+          />
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Anexos de Fotos
+          </Text>
+          <Text className="mt-2 text-sm text-slate-600">
+            Adicione as fotos dos relatórios gerenciais antes do envio.
+          </Text>
+          <Text className="mt-1 text-xs text-slate-500">
+            É possível anexar até {PHOTO_PICK_LIMIT} fotos por vez. Se precisar,
+            repita o processo.
+          </Text>
+          <Pressable
+            onPress={handlePickImages}
+            className="mt-3 items-center rounded-lg bg-blue-600 py-2"
+          >
+            <Text className="text-sm font-semibold text-white">
+              Adicionar fotos
+            </Text>
+          </Pressable>
+          {photoUris.length === 0 ? (
+            <Text className="mt-3 text-sm text-slate-500">
+              Nenhuma foto anexada.
+            </Text>
+          ) : (
+            <View className="mt-3 flex-row flex-wrap gap-3">
+              {photoUris.map((uri, index) => (
+                <View key={uri} className="relative">
+                  <Image source={{ uri }} className="h-20 w-20 rounded-lg" />
+                  <View className="absolute bottom-1 left-1 rounded-md bg-slate-900/70 px-1">
+                    <Text className="text-[10px] font-semibold text-white">
+                      {index + 1}
+                    </Text>
+                  </View>
+                  <View className="absolute bottom-1 right-1 flex-row gap-1">
+                    <Pressable
+                      onPress={() => movePhoto(index, index - 1)}
+                      className="h-6 w-6 items-center justify-center rounded-full bg-slate-900/70"
+                    >
+                      <Ionicons name="arrow-up" size={12} color="#fff" />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => movePhoto(index, index + 1)}
+                      className="h-6 w-6 items-center justify-center rounded-full bg-slate-900/70"
+                    >
+                      <Ionicons name="arrow-down" size={12} color="#fff" />
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    onPress={() => handleRemovePhoto(uri)}
+                    className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full bg-rose-600"
+                  >
+                    <Ionicons name="close" size={14} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Indicadores de Qualidade
+          </Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Avaliação de preparação do depósito
+            </Text>
+            <TextInput
+              value={percentText.avalPrepDeposito}
+              onChangeText={(text) => setPercentField("avalPrepDeposito", text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Avaliação de preparação da loja
+            </Text>
+            <TextInput
+              value={percentText.avalPrepLoja}
+              onChangeText={(text) => setPercentField("avalPrepLoja", text)}
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Acuracidade cliente (%)
+            </Text>
+            <TextInput
+              value={percentText.acuracidadeCliente}
+              onChangeText={(text) =>
+                setPercentField("acuracidadeCliente", text)
+              }
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Acuracidade terceirizada (%)
+            </Text>
+            <TextInput
+              value={percentText.acuracidadeTerceirizada}
+              onChangeText={(text) =>
+                setPercentField("acuracidadeTerceirizada", text)
+              }
+              keyboardType="decimal-pad"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Satisfação (1 a 5)
+            </Text>
+            <TextInput
+              value={numberToInput(report.satisfacao)}
+              onChangeText={(text) => {
+                const digits = text.replace(/\D/g, "").slice(0, 1);
+                if (!digits) {
+                  setField("satisfacao", 0);
+                  return;
+                }
+                const asNumber = Math.min(5, Math.max(1, Number(digits)));
+                setField("satisfacao", asNumber);
+              }}
+              keyboardType="numeric"
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+        </View>
+
+        <View className="mb-4 rounded-xl bg-white p-4 shadow-sm">
+          <Text className="text-base font-semibold text-slate-800">
+            Finalização
+          </Text>
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Responsável pelo inventário
+            </Text>
+            <TextInput
+              value={report.responsavel}
+              onChangeText={(text) => setField("responsavel", text)}
+              className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
+            />
+          </View>
+          <TimeInput
+            label="Término do inventário"
+            value={report.terminoInventario}
+            onChange={(value) => setField("terminoInventario", value)}
+          />
+          <View className="mt-3">
+            <Text className="text-sm font-semibold text-slate-700">
+              Houve solicitação de suporte
+            </Text>
+            <Text className="text-xs text-slate-500">Seleção obrigatória</Text>
+            <View className="mt-3 flex-row gap-2">
+              {(["Sim", "Não", "N/A"] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => {
+                    setSuporteSelecionado(true);
+                    setField("suporteSolicitado", option);
+                  }}
+                  className={`rounded-lg px-4 py-2 ${
+                    report.suporteSolicitado === option
+                      ? "bg-blue-600"
+                      : "bg-slate-200"
+                  }`}
+                >
+                  <Text
+                    className={`text-sm font-semibold ${
+                      report.suporteSolicitado === option
+                        ? "text-white"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    {option}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <Pressable
+          onPress={handleOpenPreview}
+          className="mt-2 items-center rounded-xl bg-blue-600 py-3"
+        >
+          <Text className="text-base font-semibold text-white">
+            Enviar Resumo de Inventário
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              "Arquivar e limpar",
+              "Isso limpará o formulário e excluirá as fotos do app, mas os dados ficarão arquivados para análise.",
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Arquivar",
+                  onPress: () => void handleArchiveAndClear(),
+                },
+              ],
+            )
+          }
+          className="mt-2 items-center rounded-xl bg-slate-200 py-3"
+        >
+          <Text className="text-base font-semibold text-slate-700">
+            Arquivar e limpar
+          </Text>
+        </Pressable>
+
+        <Modal visible={previewVisible} transparent animationType="fade">
+          <View className="flex-1 items-center justify-center bg-black/50 px-4">
+            <View className="w-full max-w-md rounded-xl bg-white p-4">
+              <Text className="text-base font-semibold text-slate-800">
+                Pré-visualização
+              </Text>
+              <ScrollView className="mt-3 max-h-96 rounded-lg border border-slate-200 p-3">
+                <Text className="text-sm text-slate-700">
+                  {formatReportB(report)}
+                </Text>
+              </ScrollView>
+              <View className="mt-4 flex-row gap-2">
+                <Pressable
+                  onPress={() => setPreviewVisible(false)}
+                  className="flex-1 items-center rounded-lg bg-slate-200 py-2"
+                >
+                  <Text className="text-sm font-semibold text-slate-700">
+                    Voltar
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    setPreviewVisible(false);
+                    await handleSendMessage();
+                    Alert.alert(
+                      "Enviar fotos",
+                      "Depois de enviar a mensagem no WhatsApp, volte ao app para enviar as fotos.",
+                      [
+                        { text: "Cancelar", style: "cancel" },
+                        {
+                          text: "Enviar fotos",
+                          onPress: () => void handleSharePhotos(),
+                        },
+                      ],
+                    );
+                  }}
+                  className="flex-1 items-center rounded-lg bg-blue-600 py-2"
+                >
+                  <Text className="text-sm font-semibold text-white">
+                    Enviar mensagem
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleSharePhotos()}
+                  className="flex-1 items-center rounded-lg bg-slate-900 py-2"
+                >
+                  <Text className="text-sm font-semibold text-white">
+                    Enviar fotos
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+</file>
+
+</files>
