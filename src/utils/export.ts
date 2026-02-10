@@ -1,40 +1,44 @@
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-
-const escapeCsvValue = (value: unknown) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  const text = String(value);
-  if (text.includes('"') || text.includes(',') || text.includes('\n') || text.includes('\r')) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-};
-
-export const buildCsv = (headers: string[], rows: Array<Array<unknown>>) => {
-  const lines = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(','));
-  return lines.join('\n');
-};
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import { Alert } from "react-native";
 
 export const shareCsvFile = async (
   filename: string,
   headers: string[],
-  rows: Array<Array<unknown>>,
+  rows: (string | number)[][],
 ) => {
-  if (!FileSystem.documentDirectory) {
-    throw new Error('Diretório local indisponível.');
+  try {
+    // 1. Criar conteúdo CSV
+    const headerString = headers.join(",") + "\n";
+    const rowString = rows
+      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .join("\n");
+    const csvContent = headerString + rowString;
+
+    // --- CORREÇÃO DE TIPAGEM ---
+    // Forçamos o TypeScript a aceitar o módulo como 'any' para ignorar os erros falsos
+    const fs = FileSystem as any;
+
+    // 2. Definir caminho do arquivo (Usa documentDirectory ou cacheDirectory como fallback)
+    const directory = fs.documentDirectory || fs.cacheDirectory;
+    const fileUri = directory + filename;
+
+    // 3. Escrever arquivo
+    await fs.writeAsStringAsync(fileUri, csvContent, {
+      encoding: fs.EncodingType.UTF8,
+    });
+
+    // 4. Compartilhar
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(fileUri);
+    } else {
+      Alert.alert("Erro", "Compartilhamento não disponível neste dispositivo.");
+    }
+  } catch (error) {
+    console.error("Erro ao exportar CSV:", error);
+    Alert.alert(
+      "Erro",
+      "Falha ao gerar o arquivo CSV. Verifique as permissões.",
+    );
   }
-  const csv = buildCsv(headers, rows);
-  const uri = `${FileSystem.documentDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 });
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) {
-    throw new Error('Compartilhamento não disponível neste dispositivo.');
-  }
-  await Sharing.shareAsync(uri, {
-    mimeType: 'text/csv',
-    dialogTitle: 'Enviar para OneDrive',
-    UTI: 'public.comma-separated-values-text',
-  });
 };

@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -22,6 +23,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReportA, ReportB } from "../types";
 import { formatReportB } from "../utils/parsers";
 
+// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const REPORT_A_KEY = "inventexpert:reportA";
 const REPORT_B_KEY = "inventexpert:reportB";
@@ -62,9 +64,15 @@ const initialState: ReportB = {
 };
 
 export default function ReportBScreen() {
+  const navigation = useNavigation();
   const [report, setReport] = useState<ReportB>(initialState);
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
+
+  // Remove cabeçalho duplicado
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   useEffect(() => {
     const load = async () => {
@@ -358,8 +366,6 @@ export default function ReportBScreen() {
                 />
               </View>
             </View>
-
-            {/* Novos campos de Acuracidade */}
             <View style={styles.row}>
               <View style={styles.half}>
                 <Text style={styles.label}>Acur. Cliente (%)</Text>
@@ -384,7 +390,6 @@ export default function ReportBScreen() {
                 />
               </View>
             </View>
-
             <View style={styles.row}>
               <View style={styles.half}>
                 <Text style={styles.label}>Satisfação</Text>
@@ -404,7 +409,6 @@ export default function ReportBScreen() {
               onChangeText={(t) => setField("responsavel", t)}
             />
             {renderTimeField("Término Inventário", "terminoInventario")}
-
             <Text style={styles.label}>Houve solicitação de Suporte?</Text>
             <View style={styles.row}>
               <Pressable

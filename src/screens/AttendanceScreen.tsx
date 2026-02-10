@@ -1,14 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Clipboard from "expo-clipboard";
-import React, { useEffect, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
   Linking,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -18,108 +16,191 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { AttendanceCollaborator, AttendanceData } from "../types";
 
+import { enqueueSyncItem, syncQueue } from "../services/sync";
+import type { AttendanceCollaborator, AttendanceData } from "../types";
+import { shareCsvFile } from "../utils/export";
+import {
+  formatAttendanceMessage,
+  formatDateInput,
+  parseWhatsAppScale,
+} from "../utils/parsers";
+
+// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:attendance";
+const HISTORY_KEY = "inventexpert:attendance:history";
 
-const initialData: AttendanceData = {
-  data: new Date().toLocaleDateString("pt-BR"),
+const emptyData: AttendanceData = {
+  data: "",
   loja: "",
   enderecoLoja: "",
   colaboradores: [],
 };
 
 export default function AttendanceScreen() {
-  const [data, setData] = useState<AttendanceData>(initialData);
-  const [newName, setNewName] = useState("");
+  const navigation = useNavigation();
+  const [rawText, setRawText] = useState("");
+  const [attendance, setAttendance] = useState<AttendanceData>(emptyData);
   const [previewVisible, setPreviewVisible] = useState(false);
 
+  // Remove cabeçalho duplicado
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
+
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((res) => {
-      if (res) setData(JSON.parse(res));
-    });
+    const loadData = async () => {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as AttendanceData;
+        setAttendance({
+          data: parsed.data ?? "",
+          loja: parsed.loja ?? "",
+          enderecoLoja: parsed.enderecoLoja ?? "",
+          colaboradores: (parsed.colaboradores ?? []).map((item) => {
+            const legacy = item as AttendanceCollaborator & {
+              presente?: boolean;
+            };
+            return {
+              ...item,
+              status:
+                legacy.status ??
+                (legacy.presente ? "PRESENTE" : "NAO_DEFINIDO"),
+              substituto: legacy.substituto ?? "",
+            };
+          }),
+        });
+      }
+    };
+    void loadData();
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => null);
-  }, [data]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(attendance)).catch(
+      () => null,
+    );
+  }, [attendance]);
 
-  const addCollaborator = () => {
-    if (!newName.trim()) return;
-    const newColab: AttendanceCollaborator = {
-      id: Date.now().toString(),
-      nome: newName.trim(),
-      status: "NAO_DEFINIDO",
-    };
-    setData((prev) => ({
-      ...prev,
-      colaboradores: [...prev.colaboradores, newColab],
-    }));
-    setNewName("");
+  const handleParse = () => {
+    const parsed = parseWhatsAppScale(rawText);
+    setAttendance(parsed);
+    Alert.alert("Sucesso", "Texto processado. Verifique os campos abaixo.");
   };
 
-  const updateStatus = (
-    id: string,
+  const togglePresence = (
+    collaborator: AttendanceCollaborator,
     status: AttendanceCollaborator["status"],
   ) => {
-    setData((prev) => ({
+    setAttendance((prev) => ({
       ...prev,
-      colaboradores: prev.colaboradores.map((c) =>
-        c.id === id ? { ...c, status } : c,
+      colaboradores: prev.colaboradores.map((item) =>
+        item.id === collaborator.id ? { ...item, status } : item,
       ),
     }));
   };
 
-  const removeCollaborator = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      colaboradores: prev.colaboradores.filter((c) => c.id !== id),
-    }));
+  const previewMessage = useMemo(
+    () => formatAttendanceMessage(attendance),
+    [attendance],
+  );
+
+  const handleOpenPreview = () => {
+    if (!attendance.data.trim() || !attendance.loja.trim()) {
+      Alert.alert(
+        "Campos obrigatórios",
+        "Preencha Data e Loja antes de enviar.",
+      );
+      return;
+    }
+    setPreviewVisible(true);
   };
 
-  const formatMessage = () => {
-    const presentes = data.colaboradores
-      .filter((c) => c.status === "PRESENTE")
-      .map((c) => c.nome);
-    const ausentes = data.colaboradores
-      .filter((c) => c.status === "AUSENTE")
-      .map((c) => c.nome);
-
-    return `*RELATÓRIO DE ESCALA*
-
-📅 Data: *${data.data}*
-🏢 Loja: *${data.loja || "N/A"}*
-📍 Endereço: *${data.enderecoLoja || "N/A"}*
-
-👥 *Resumo da Equipe*
-Total: ${data.colaboradores.length} | Presentes: ${presentes.length} | Ausentes: ${ausentes.length}
-
-✅ *Presentes:*
-${presentes.length > 0 ? presentes.join("\n") : "- Ninguém"}
-
-❌ *Ausentes:*
-${ausentes.length > 0 ? ausentes.join("\n") : "- Ninguém"}
-
-📋 *Status Completo:*
-${data.colaboradores
-  .map((c) => {
-    const icon =
-      c.status === "PRESENTE" ? "✅" : c.status === "AUSENTE" ? "❌" : "❓";
-    return `${icon} ${c.nome}`;
-  })
-  .join("\n")}`;
+  const handleSendWhatsApp = () => {
+    const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Erro", "Não foi possível abrir o WhatsApp.");
+    });
   };
 
-  const handleSend = async () => {
-    const msg = formatMessage();
-    await Clipboard.setStringAsync(msg);
-    Alert.alert("Copiado!", "Cole no WhatsApp.", [
-      {
-        text: "Abrir WhatsApp",
-        onPress: () => Linking.openURL("whatsapp://send"),
-      },
-    ]);
+  const handleArchiveAndClear = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>)
+        : [];
+      history.push({
+        savedAt: new Date().toISOString(),
+        attendance,
+      });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem("attendance", { attendance });
+    } catch {
+      Alert.alert("Erro", "Não foi possível arquivar os dados.");
+      return;
+    }
+
+    await handleExportHistory();
+    void syncQueue();
+
+    setRawText("");
+    setAttendance(emptyData);
+    Alert.alert(
+      "Dados arquivados",
+      "A escala foi arquivada e o formulário foi limpo.",
+    );
+  };
+
+  const handleExportHistory = async () => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = storedHistory
+        ? (JSON.parse(storedHistory) as Array<{
+            savedAt: string;
+            attendance: AttendanceData;
+          }>)
+        : [];
+      if (history.length === 0) {
+        Alert.alert("Sem dados", "Não há dados arquivados para exportar.");
+        return;
+      }
+      const headers = [
+        "savedAt",
+        "data",
+        "loja",
+        "enderecoLoja",
+        "colaboradorNome",
+        "status",
+        "substituto",
+      ];
+      const rows = history.flatMap((item) => {
+        const base = [
+          item.savedAt,
+          item.attendance.data,
+          item.attendance.loja,
+          item.attendance.enderecoLoja,
+        ];
+        if (
+          !item.attendance.colaboradores ||
+          item.attendance.colaboradores.length === 0
+        ) {
+          return [[...base, "", "", ""]];
+        }
+        return item.attendance.colaboradores.map((collaborator) => [
+          ...base,
+          collaborator.nome,
+          collaborator.status,
+          collaborator.substituto ?? "",
+        ]);
+      });
+      const filename = `inventexpert_escala_${new Date().toISOString().slice(0, 10)}.csv`;
+      await shareCsvFile(filename, headers, rows);
+    } catch {
+      Alert.alert(
+        "Exportação indisponível",
+        "Os dados foram arquivados, mas o compartilhamento não está disponível neste dispositivo.",
+      );
+    }
   };
 
   return (
@@ -134,149 +215,185 @@ ${data.colaboradores
         <Text style={styles.headerTitle}>Controle de Escala</Text>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Identificação</Text>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Data</Text>
-                <TextInput
-                  style={styles.input}
-                  value={data.data}
-                  onChangeText={(t) =>
-                    setData((prev) => ({ ...prev, data: t }))
-                  }
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Loja</Text>
-                <TextInput
-                  style={styles.input}
-                  value={data.loja}
-                  onChangeText={(t) =>
-                    setData((prev) => ({ ...prev, loja: t }))
-                  }
-                />
-              </View>
-            </View>
-            <Text style={styles.label}>Endereço da Loja</Text>
-            <TextInput
-              style={styles.input}
-              value={data.enderecoLoja}
-              onChangeText={(t) =>
-                setData((prev) => ({ ...prev, enderecoLoja: t }))
-              }
-              placeholder="Rua, Número, Bairro..."
-            />
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Adicionar Colaborador</Text>
-            <View style={styles.addRow}>
-              <TextInput
-                style={[styles.input, { flex: 1, marginTop: 0 }]}
-                value={newName}
-                onChangeText={setNewName}
-                placeholder="Nome"
-                onSubmitEditing={addCollaborator}
-              />
-              <Pressable style={styles.btnAdd} onPress={addCollaborator}>
-                <Ionicons name="add" size={24} color="#fff" />
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.listContainer}>
-            {data.colaboradores.map((colab) => (
-              <View key={colab.id} style={styles.colabItem}>
-                <View style={styles.colabInfo}>
-                  <Text style={styles.colabName}>{colab.nome}</Text>
-                  <Pressable onPress={() => removeCollaborator(colab.id)}>
-                    <Text style={styles.removeText}>Remover</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.statusButtons}>
-                  <Pressable
-                    style={[
-                      styles.statusBtn,
-                      colab.status === "PRESENTE" && styles.presentBtn,
-                    ]}
-                    onPress={() => updateStatus(colab.id, "PRESENTE")}
-                  >
-                    <Text
-                      style={[
-                        styles.statusTxt,
-                        colab.status === "PRESENTE" && { color: "#fff" },
-                      ]}
-                    >
-                      P
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.statusBtn,
-                      colab.status === "AUSENTE" && styles.absentBtn,
-                    ]}
-                    onPress={() => updateStatus(colab.id, "AUSENTE")}
-                  >
-                    <Text
-                      style={[
-                        styles.statusTxt,
-                        colab.status === "AUSENTE" && { color: "#fff" },
-                      ]}
-                    >
-                      F
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-            {data.colaboradores.length === 0 && (
-              <Text style={styles.emptyText}>Lista vazia.</Text>
-            )}
-          </View>
-
-          <Pressable
-            style={styles.buttonPrimary}
-            onPress={() => setPreviewVisible(true)}
-          >
-            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.btnText}>Gerar Relatório</Text>
+      <ScrollView contentContainerStyle={styles.contentContainer}>
+        {/* PARSER WHATSAPP */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Parser de Escala (WhatsApp)</Text>
+          <Text style={styles.subtitle}>
+            Cole o texto do WhatsApp e clique em processar.
+          </Text>
+          <TextInput
+            value={rawText}
+            onChangeText={setRawText}
+            multiline
+            placeholder="Cole aqui o texto bruto da escala"
+            style={styles.textArea}
+            textAlignVertical="top"
+          />
+          <Pressable onPress={handleParse} style={styles.btnProcess}>
+            <Text style={styles.btnTextWhite}>Processar escala</Text>
           </Pressable>
-          <Pressable
-            style={styles.buttonClear}
-            onPress={() => setData(initialData)}
-          >
-            <Text style={styles.btnTextDanger}>Limpar Lista</Text>
-          </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      <Modal visible={previewVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.cardTitle}>Pré-visualização</Text>
-            <ScrollView style={styles.previewBox}>
-              <Text style={styles.previewText}>{formatMessage()}</Text>
-            </ScrollView>
-            <View style={styles.row}>
-              <Pressable
-                style={styles.btnBack}
-                onPress={() => setPreviewVisible(false)}
-              >
-                <Text>Voltar</Text>
-              </Pressable>
-              <Pressable style={styles.buttonPrimary} onPress={handleSend}>
-                <Text style={styles.btnText}>Copiar e Enviar</Text>
-              </Pressable>
-            </View>
-          </View>
         </View>
-      </Modal>
+
+        {/* DETALHES */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Detalhes da Escala</Text>
+
+          <Text style={styles.label}>Data</Text>
+          <TextInput
+            value={attendance.data}
+            onChangeText={(text) =>
+              setAttendance((prev) => ({
+                ...prev,
+                data: formatDateInput(text),
+              }))
+            }
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Loja</Text>
+          <TextInput
+            value={attendance.loja}
+            onChangeText={(text) =>
+              setAttendance((prev) => ({ ...prev, loja: text }))
+            }
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Endereço da Loja</Text>
+          <TextInput
+            value={attendance.enderecoLoja}
+            onChangeText={(text) =>
+              setAttendance((prev) => ({ ...prev, enderecoLoja: text }))
+            }
+            style={styles.input}
+          />
+        </View>
+
+        {/* PRESENÇA */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Presença</Text>
+          {attendance.colaboradores.length === 0 ? (
+            <Text style={styles.subtitle}>
+              Nenhum colaborador identificado ainda.
+            </Text>
+          ) : (
+            attendance.colaboradores.map((collaborator) => (
+              <View key={collaborator.id} style={styles.collaboratorCard}>
+                <Text style={styles.collaboratorName}>{collaborator.nome}</Text>
+
+                <View style={styles.statusRow}>
+                  <Pressable
+                    onPress={() => togglePresence(collaborator, "PRESENTE")}
+                    style={[
+                      styles.iconBtn,
+                      collaborator.status === "PRESENTE"
+                        ? styles.bgEmerald
+                        : styles.bgSlate,
+                    ]}
+                  >
+                    <Ionicons
+                      name="checkmark"
+                      size={18}
+                      color={
+                        collaborator.status === "PRESENTE" ? "#fff" : "#0F172A"
+                      }
+                    />
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => togglePresence(collaborator, "AUSENTE")}
+                    style={[
+                      styles.iconBtn,
+                      collaborator.status === "AUSENTE"
+                        ? styles.bgRose
+                        : styles.bgSlate,
+                    ]}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={18}
+                      color={
+                        collaborator.status === "AUSENTE" ? "#fff" : "#0F172A"
+                      }
+                    />
+                  </Pressable>
+                </View>
+
+                <View style={styles.marginTop}>
+                  <Text style={styles.subLabel}>Substituição (se houver)</Text>
+                  <TextInput
+                    value={collaborator.substituto ?? ""}
+                    onChangeText={(text) =>
+                      setAttendance((prev) => ({
+                        ...prev,
+                        colaboradores: prev.colaboradores.map((item) =>
+                          item.id === collaborator.id
+                            ? { ...item, substituto: text }
+                            : item,
+                        ),
+                      }))
+                    }
+                    placeholder="Nome do substituto"
+                    style={styles.input}
+                  />
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <Pressable onPress={handleOpenPreview} style={styles.btnPrimary}>
+          <Text style={styles.btnTextWhite}>Enviar Escala</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              "Arquivar e limpar",
+              "Isso limpará a escala, mas os dados ficarão arquivados para análise.",
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Arquivar",
+                  onPress: () => void handleArchiveAndClear(),
+                },
+              ],
+            )
+          }
+          style={styles.btnSecondary}
+        >
+          <Text style={styles.btnTextSecondary}>Arquivar e limpar</Text>
+        </Pressable>
+
+        <Modal visible={previewVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.cardTitle}>Pré-visualização</Text>
+              <ScrollView style={styles.previewScroll}>
+                <Text style={styles.previewText}>{previewMessage}</Text>
+              </ScrollView>
+              <View style={styles.modalActions}>
+                <Pressable
+                  onPress={() => setPreviewVisible(false)}
+                  style={styles.btnBack}
+                >
+                  <Text style={styles.btnTextSecondary}>Voltar</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPreviewVisible(false);
+                    handleSendWhatsApp();
+                  }}
+                  style={styles.btnConfirm}
+                >
+                  <Text style={styles.btnTextWhite}>Enviar WhatsApp</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -291,108 +408,121 @@ const styles = StyleSheet.create({
   },
   headerLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 6 },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  scrollContent: { padding: 16 },
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    paddingTop: 16,
+  },
   card: {
+    marginBottom: 16,
+    borderRadius: 12,
     backgroundColor: "#fff",
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
     elevation: 2,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1E40AF",
-    marginBottom: 12,
-    textTransform: "uppercase",
-  },
-  label: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 8 },
-  input: {
+  cardTitle: { fontSize: 16, fontWeight: "600", color: "#1E293B" },
+  subtitle: { marginTop: 8, fontSize: 14, color: "#475569" },
+  textArea: {
+    marginTop: 12,
+    minHeight: 140,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 4,
-    fontSize: 16,
-    color: "#1E293B",
-  },
-  row: { flexDirection: "row", gap: 10 },
-  half: { flex: 1 },
-  addRow: { flexDirection: "row", gap: 10, alignItems: "center" },
-  btnAdd: {
-    backgroundColor: "#2563EB",
-    padding: 10,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  listContainer: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 8,
-    elevation: 2,
-    marginBottom: 16,
-  },
-  colabItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    textAlignVertical: "top",
   },
-  colabInfo: { flex: 1 },
-  colabName: { fontSize: 16, fontWeight: "600", color: "#1E293B" },
-  removeText: { fontSize: 12, color: "#DC2626", marginTop: 4 },
-  statusButtons: { flexDirection: "row", gap: 8 },
-  statusBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
-    justifyContent: "center",
+  btnProcess: {
+    marginTop: 12,
     alignItems: "center",
-  },
-  presentBtn: { backgroundColor: "#16A34A" },
-  absentBtn: { backgroundColor: "#DC2626" },
-  statusTxt: { fontWeight: "bold", color: "#64748B" },
-  emptyText: { textAlign: "center", color: "#94A3B8", padding: 20 },
-  buttonPrimary: {
+    borderRadius: 8,
     backgroundColor: "#2563EB",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
+    paddingVertical: 10,
   },
-  buttonClear: { marginTop: 12, padding: 14, alignItems: "center" },
-  btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
+  btnTextWhite: { fontSize: 14, fontWeight: "600", color: "#fff" },
+  label: { marginTop: 12, fontSize: 14, fontWeight: "600", color: "#334155" },
+  input: {
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#0F172A",
+  },
+  collaboratorCard: {
+    marginTop: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+  },
+  collaboratorName: { fontSize: 14, fontWeight: "500", color: "#1E293B" },
+  statusRow: { marginTop: 8, flexDirection: "row", gap: 12 },
+  iconBtn: {
+    height: 36,
+    width: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+  },
+  bgEmerald: { backgroundColor: "#059669" },
+  bgRose: { backgroundColor: "#E11D48" },
+  bgSlate: { backgroundColor: "#E2E8F0" },
+  marginTop: { marginTop: 12 },
+  subLabel: { fontSize: 12, fontWeight: "600", color: "#475569" },
+  btnPrimary: {
+    marginTop: 16,
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: "#2563EB",
+    paddingVertical: 12,
+  },
+  btnSecondary: {
+    marginTop: 8,
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
+    paddingVertical: 12,
+  },
+  btnTextSecondary: { fontSize: 16, fontWeight: "600", color: "#334155" },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 16,
   },
   modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    borderRadius: 12,
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    maxHeight: "80%",
+    padding: 16,
   },
-  previewBox: {
-    backgroundColor: "#F1F5F9",
-    padding: 12,
+  previewScroll: {
+    marginTop: 12,
+    maxHeight: 384,
     borderRadius: 8,
-    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
   },
   previewText: { fontSize: 14, color: "#334155" },
+  modalActions: { marginTop: 16, flexDirection: "row", gap: 8 },
   btnBack: {
     flex: 1,
-    padding: 14,
     alignItems: "center",
+    borderRadius: 8,
     backgroundColor: "#E2E8F0",
-    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  btnConfirm: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#2563EB",
+    paddingVertical: 10,
   },
 });

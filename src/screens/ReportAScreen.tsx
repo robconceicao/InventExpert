@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   Image,
   KeyboardAvoidingView,
@@ -13,12 +14,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
+// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:reportA";
 
@@ -40,7 +42,6 @@ const initialState: ReportA = {
   avanco01h: "",
   avanco03h: "",
   avanco04h: "",
-  // Novos campos para a lógica
   usarAvancoExtra: false,
   avancoExtraHora: "",
   avancoExtraValor: "",
@@ -57,8 +58,14 @@ const initialState: ReportA = {
 };
 
 export default function ReportAScreen() {
+  const navigation = useNavigation();
   const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
+
+  // Remove cabeçalho duplicado
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((res) => {
@@ -109,6 +116,7 @@ export default function ReportAScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+
       <View style={styles.header}>
         <Image
           source={HeaderIcon}
@@ -136,7 +144,7 @@ export default function ReportAScreen() {
                 />
               </View>
               <View style={styles.half}>
-                <Text style={styles.label}>Colaboradores</Text>
+                <Text style={styles.label}>Qtd. Colab.</Text>
                 <TextInput
                   style={styles.input}
                   value={String(report.qtdColaboradores)}
@@ -191,10 +199,8 @@ export default function ReportAScreen() {
             {renderTimeField("Término Inventário", "terminoInventario")}
           </View>
 
-          {/* Seção de Avanço com Switch */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>3. Avanço (%)</Text>
-
             <View style={styles.row}>
               <View style={styles.half}>
                 <Text style={styles.label}>22:00</Text>
@@ -228,7 +234,6 @@ export default function ReportAScreen() {
                   placeholder="%"
                 />
               </View>
-
               <View style={[styles.half, { justifyContent: "flex-end" }]}>
                 <Pressable
                   style={[
