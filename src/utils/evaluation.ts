@@ -200,8 +200,10 @@ export function evaluateConferrer(
 
   const taxaErroPor1000 = qtde > 0 ? (erro / qtde) * 1000 : 0;
   const acuracia = Math.max(0, 100 - taxaErro);
-  const percentual1a1 = qtde > 0 ? (umAum / qtde) * 100 : 0;
-  const percentualBloco = qtde > 0 ? (bloco / qtde) * 100 : 0;
+  const percentual1a1Raw = qtde > 0 ? (umAum / qtde) * 100 : 0;
+  const percentualBlocoRaw = qtde > 0 ? (bloco / qtde) * 100 : 0;
+  const percentual1a1 = Math.min(100, Math.max(0, percentual1a1Raw));
+  const percentualBloco = Math.min(100, Math.max(0, percentualBlocoRaw));
 
   const { valor: irb, classificacao: irbClassificacao } = calcularIRB(
     percentualBloco,

@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Alert } from "react-native";
 
@@ -8,29 +8,32 @@ export const shareCsvFile = async (
   rows: (string | number)[][],
 ) => {
   try {
-    // 1. Criar conteúdo CSV
-    const headerString = headers.join(",") + "\n";
+    const headerString = headers.join(";") + "\n";
     const rowString = rows
-      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .map((row) =>
+        row
+          .map((val) => {
+            const s = String(val ?? "").replace(/"/g, '""');
+            return s.includes(";") || s.includes("\n") ? `"${s}"` : s;
+          })
+          .join(";")
+      )
       .join("\n");
-    const csvContent = headerString + rowString;
+    const csvContent = "\uFEFF" + headerString + rowString;
 
-    // --- CORREÇÃO DE TIPAGEM (TypeScript) ---
-    // Forçamos o 'fs' como any para ignorar os erros que aparecem no seu editor
-    const fs = FileSystem as any;
+    const directory =
+      FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
+    const fileUri = directory.replace(/\/?$/, "/") + filename;
 
-    // 2. Definir caminho (Tenta documentDirectory, se falhar usa cacheDirectory)
-    const directory = fs.documentDirectory || fs.cacheDirectory;
-    const fileUri = directory + filename;
-
-    // 3. Escrever arquivo
-    await fs.writeAsStringAsync(fileUri, csvContent, {
-      encoding: fs.EncodingType.UTF8,
+    await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+      encoding: FileSystem.EncodingType.UTF8,
     });
 
-    // 4. Compartilhar
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(fileUri);
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/csv",
+        dialogTitle: "Exportar CSV",
+      });
     } else {
       Alert.alert("Erro", "Compartilhamento não disponível neste dispositivo.");
     }

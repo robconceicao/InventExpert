@@ -253,16 +253,16 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
     return -1;
   };
 
-  const header = parseRow(lines[0]).map((h) => h.trim());
+  const header = parseRow(lines[0]).map((h) => h.replace(/^"|"$/g, "").trim());
   const col = {
     nome: findCol(header, [/^nome\s+do\s+colaborador$/i, /^nome$/i, /colaborador/i, /name/i]),
-    qtde: findCol(header, [/^qtde$/i, /qtd/i, /quantidade/i]),
+    qtde: findCol(header, [/^qtde$/i, /^qtd$/i, /quantidade/i]),
     horas: findCol(header, [/^horas$/i, /hour/i]),
-    produtividade: findCol(header, [/produtividade/i, /prod/i]),
-    erro: findCol(header, [/^erro$/i, /erros/i]),
-    pctErro: findCol(header, [/%\s*erro/i, /erro\s*%/i, /percentual\s*erro/i]),
-    umAum: findCol(header, [/1a1/i, /1\s*a\s*1/i, /um a um/i]),
-    bloco: findCol(header, [/^bloco$/i, /BLOCO/i]),
+    produtividade: findCol(header, [/^produtividade$/i, /^prod$/i]),
+    erro: findCol(header, [/erro\s*\(qtde\)/i, /erro\s*\(/i, /^erro$/i, /erros/i]),
+    pctErro: findCol(header, [/%\s*\(\s*erroqtd?\)?/i, /%\s*erro/i, /erroqtd/i, /erro\s*%/i, /percentual\s*erro/i]),
+    umAum: findCol(header, [/^1a1$/i, /1\s*a\s*1/i, /um a um/i]),
+    bloco: findCol(header, [/^bloco$/i, /^BLOCO$/i]),
     anuencia: findCol(header, [/anu[eê]ncia/i, /autoriza/i, /l[ií]der/i]),
   };
 
@@ -271,7 +271,7 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
 
   const result: ConferrerInput[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cells = parseRow(lines[i]);
+    const cells = parseRow(lines[i]).map((c) => (c ?? "").replace(/^"|"$/g, "").trim());
     const nome = (cells[col.nome] ?? "").trim();
     if (!nome) continue;
 
@@ -280,7 +280,8 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
     const blocoVal =
       col.bloco >= 0 ? parseNumberBR(cells[col.bloco]) : 0;
 
-    const qtde = hasQtde ? parseNumberBR(cells[col.qtde]) : umAumVal + blocoVal || 0;
+    let qtde = hasQtde ? parseNumberBR(cells[col.qtde]) : umAumVal + blocoVal || 0;
+    if (qtde <= 0 && (umAumVal > 0 || blocoVal > 0)) qtde = umAumVal + blocoVal;
     const horas = col.horas >= 0 ? parseNumberBR(cells[col.horas]) || 1 : 1;
     const produtividade =
       col.produtividade >= 0 && cells[col.produtividade]
@@ -300,8 +301,16 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
       anuenciaLider = /^s$|^sim$|^yes$|^1$|^true$/i.test(v);
     }
 
-    const finalUmAum = umAum || Math.max(0, qtde - bloco);
-    const finalBloco = bloco || Math.max(0, qtde - umAum);
+    let finalUmAum = umAum || Math.max(0, qtde - bloco);
+    let finalBloco = bloco || Math.max(0, qtde - umAum);
+    if (qtde > 0 && finalUmAum + finalBloco > qtde) {
+      const scale = qtde / (finalUmAum + finalBloco);
+      finalUmAum = Math.round(finalUmAum * scale);
+      finalBloco = Math.max(0, qtde - finalUmAum);
+    }
+    if (qtde > 0 && finalUmAum + finalBloco < qtde) {
+      finalBloco = Math.max(0, qtde - finalUmAum);
+    }
     result.push({
       nome,
       qtde,
