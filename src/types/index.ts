@@ -70,6 +70,8 @@ export interface ReportB {
 export interface AttendanceCollaborator {
   id: string;
   nome: string;
+  numero?: number; // número da escala (ex: 1, 2, 3)
+  ehBkp?: boolean; // true se veio de linha "BKP NOME"
   status: "PRESENTE" | "AUSENTE" | "NAO_DEFINIDO";
   substituto?: string;
 }

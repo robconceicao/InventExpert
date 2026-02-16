@@ -45,28 +45,35 @@ export const parseWhatsAppScale = (text: string): AttendanceData => {
 
   const nomes: AttendanceCollaborator[] = [];
 
-  // Regex para identificar linhas que começam com número (ex: "1 GABRIEL...")
-  // ^\d+ -> Começa com digitos
-  // [\s.-]* -> Pode ter espaço, ponto ou traço depois do numero
-  // (.*) -> Captura o resto como nome
-  const collaboratorRegex = /^\d+[\s.-]*(.*)/;
-
-  // Começa a procurar colaboradores da linha 3 em diante (índice 3 é a 4ª linha)
-  // Mas vamos varrer tudo para garantir, caso a formatação varie um pouco,
-  // priorizando a regra de "começar com número".
+  // Linhas 3+: número + nome (ex: "1 GABRIEL...") ou BKP + nome (ex: "BKP NICOLAS NASCIMENTO")
   lines.forEach((line, index) => {
-    // Ignora as 3 primeiras linhas que já usamos para cabeçalho
     if (index < 3) return;
 
-    const match = line.match(collaboratorRegex);
-    if (match && match[1]) {
-      // match[1] é o nome limpo (sem o número da frente)
-      const cleanName = match[1].trim();
+    const matchNum = line.match(/^(\d+)[\s.-]*(.*)/);
+    if (matchNum && matchNum[2]?.trim()) {
+      const num = parseInt(matchNum[1], 10);
+      const cleanName = matchNum[2].trim().replace(/\s*[✅❌]\s*$/, "").trim();
       if (cleanName.length > 2) {
-        // Ignora lixo muito curto
         nomes.push({
           id: Date.now().toString() + Math.random().toString(),
           nome: cleanName,
+          numero: num,
+          ehBkp: false,
+          status: "NAO_DEFINIDO",
+          substituto: "",
+        });
+      }
+      return;
+    }
+
+    const matchBkp = line.match(/^BKP\s+(.+)/i);
+    if (matchBkp && matchBkp[1]?.trim()) {
+      const cleanName = matchBkp[1].trim().replace(/\s*[✅❌]\s*$/, "").trim();
+      if (cleanName.length > 2) {
+        nomes.push({
+          id: Date.now().toString() + Math.random().toString(),
+          nome: cleanName,
+          ehBkp: true,
           status: "NAO_DEFINIDO",
           substituto: "",
         });
@@ -90,36 +97,23 @@ export const formatDateInput = (text: string) => {
   return v;
 };
 
-// ... (Mantenha as funções formatAttendanceMessage, formatReportA e formatReportB iguais)
 export const formatAttendanceMessage = (data: AttendanceData): string => {
-  const presentes = data.colaboradores.filter((c) => c.status === "PRESENTE");
-  const ausentes = data.colaboradores.filter((c) => c.status === "AUSENTE");
-  const listaPresentes = presentes.map((c) =>
-    c.substituto ? `${c.nome} (Subst: ${c.substituto})` : c.nome,
-  );
-  return `*RELATÓRIO DE ESCALA*
-
-📅 Data: *${data.data}*
-🏢 Loja: *${data.loja || "N/A"}*
-📍 Endereço: *${data.enderecoLoja || "N/A"}*
-
-👥 *Resumo da Equipe*
-Total: ${data.colaboradores.length} | Presentes: ${presentes.length} | Ausentes: ${ausentes.length}
-
-✅ *Presentes:*
-${listaPresentes.length > 0 ? listaPresentes.join("\n") : "- Ninguém"}
-
-❌ *Ausentes:*
-${ausentes.length > 0 ? ausentes.map((c) => c.nome).join("\n") : "- Ninguém"}
-
-📋 *Status Completo:*
-${data.colaboradores
-  .map((c) => {
-    const icon =
-      c.status === "PRESENTE" ? "✅" : c.status === "AUSENTE" ? "❌" : "❓";
-    return `${icon} ${c.nome}`;
-  })
-  .join("\n")}`;
+  const icon = (c: AttendanceCollaborator) =>
+    c.status === "PRESENTE" ? " ✅" : c.status === "AUSENTE" ? " ❌" : "";
+  const linhas =
+    `${data.data}\n` +
+    `${data.loja || "N/A"}\n` +
+    `${data.enderecoLoja || "N/A"}\n\n` +
+    data.colaboradores
+      .map((c, i) => {
+        if (c.ehBkp) {
+          return `BKP ${c.nome}${icon(c)}`;
+        }
+        const num = c.numero ?? i + 1;
+        return `${num} ${c.nome}${icon(c)}`;
+      })
+      .join("\n");
+  return linhas;
 };
 
 export const formatReportA = (r: ReportA): string => {
@@ -218,10 +212,11 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
+    const separators = /[,\t;]/;
     for (let i = 0; i < row.length; i++) {
       const c = row[i];
       if (c === '"') inQuotes = !inQuotes;
-      else if ((c === "," || c === "\t") && !inQuotes) {
+      else if (separators.test(c) && !inQuotes) {
         result.push(current.trim());
         current = "";
       } else {

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 import { useNavigation } from "@react-navigation/native";
 import React, { useLayoutEffect, useMemo, useState } from "react";
 import {
@@ -17,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { FARMACIA_CONFIG } from "../config/evaluationConfig";
 import type { ConferrerEvaluation } from "../types";
+import { readFileAsCsvText } from "../utils/fileImport";
 import { shareCsvFile } from "../utils/export";
 import { evaluateAllConferrers } from "../utils/evaluation";
 import { parseConferrersCsv } from "../utils/parsers";
@@ -48,12 +50,33 @@ export default function ConferrersEvaluationScreen() {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
+  const handlePickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "text/csv",
+          "text/plain",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      const text = await readFileAsCsvText(file.uri, file.mimeType ?? undefined);
+      setRawText(text);
+      Alert.alert("Arquivo carregado", `${file.name} importado. Clique em Processar.`);
+    } catch (e) {
+      Alert.alert("Erro", "Não foi possível ler o arquivo. Tente CSV.");
+    }
+  };
+
   const handleProcess = () => {
     const parsed = parseConferrersCsv(rawText);
     if (parsed.length === 0) {
       Alert.alert(
         "Dados inválidos",
-        "Cole os dados no formato:\nNome, Qtde, Horas, Produtividade, Erro, %Erro, 1a1, Bloco\n\nOu use o exemplo como referência."
+        "Cole os dados (vírgula, ; ou tab) ou anexe CSV/Excel.\nColunas: Nome, Qtde, Horas, Produtividade, Erro, %Erro, 1a1, Bloco"
       );
       return;
     }
@@ -134,9 +157,16 @@ export default function ConferrersEvaluationScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Importar Dados</Text>
           <Text style={styles.subtitle}>
-            Cole a tabela (CSV ou Excel). Colunas: Nome, Qtde, Horas,
-            Produtividade, Erro, %Erro, 1a1, Bloco. Opcional: Anuência (Sim/Não).
+            Cole a tabela (separadores: vírgula, ponto e vírgula ou tab) ou anexe
+            arquivo CSV/Excel. Colunas: Nome, Qtde, Horas, Produtividade, Erro,
+            %Erro, 1a1, Bloco. Opcional: Anuência (Sim/Não).
           </Text>
+          <View style={styles.importRow}>
+            <Pressable onPress={handlePickFile} style={styles.btnAttach}>
+              <Ionicons name="attach" size={20} color="#2563EB" />
+              <Text style={styles.btnAttachText}>Anexar CSV/Excel</Text>
+            </Pressable>
+          </View>
           <TextInput
             value={rawText}
             onChangeText={setRawText}
@@ -370,6 +400,18 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: "600", color: "#1E293B" },
   subtitle: { marginTop: 8, fontSize: 13, color: "#64748B" },
+  importRow: { marginTop: 8 },
+  btnAttach: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    borderStyle: "dashed",
+  },
+  btnAttachText: { fontSize: 14, fontWeight: "600", color: "#2563EB" },
   textArea: {
     marginTop: 12,
     minHeight: 140,

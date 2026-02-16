@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing"; // Import necessário
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -21,11 +24,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReportA, ReportB } from "../types";
+import { enqueueSyncItem, syncQueue } from "../services/sync";
 import { formatReportB } from "../utils/parsers";
 
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const REPORT_A_KEY = "inventexpert:reportA";
 const REPORT_B_KEY = "inventexpert:reportB";
+const REPORT_B_HISTORY_KEY = "inventexpert:reportB:history";
 
 const initialState: ReportB = {
   cliente: "",
@@ -67,6 +72,7 @@ export default function ReportBScreen() {
   const [report, setReport] = useState<ReportB>(initialState);
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [isSharingPhotos, setIsSharingPhotos] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -165,19 +171,70 @@ export default function ReportBScreen() {
       Alert.alert("Atenção", "Nenhuma foto selecionada.");
       return;
     }
-
-    // O expo-sharing geralmente compartilha um arquivo por vez de forma confiável em todas as versões.
-    // Vamos tentar compartilhar a última foto ou iterar (o comportamento varia por versão do Android).
-    // Para garantir funcionalidade, vamos compartilhar a primeira/última ou abrir o share sheet.
-
-    // Tenta compartilhar a última foto adicionada (geralmente a do relatório assinado)
-    const lastPhoto = photoUris[photoUris.length - 1];
-
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(lastPhoto);
-    } else {
+    if (!(await Sharing.isAvailableAsync())) {
       Alert.alert("Erro", "Compartilhamento não suportado.");
+      return;
     }
+    try {
+      setIsSharingPhotos(true);
+      const imageTags = await Promise.all(
+        photoUris.map(async (uri) => {
+          const base64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          return `<img src="data:image/jpeg;base64,${base64}" style="width:100%;page-break-after:always;" />`;
+        }),
+      );
+      const html = `<html><body style="margin:0;padding:0;">${imageTags.join("")}</body></html>`;
+      const printed = await Print.printToFileAsync({ html });
+      const name = `relatorio_${report.lojaNum || "B"}_${report.data?.replace(/\//g, "-") || "final"}.pdf`;
+      const outputUri = `${FileSystem.cacheDirectory}${name}`;
+      await FileSystem.moveAsync({ from: printed.uri, to: outputUri });
+      await Sharing.shareAsync(outputUri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Enviar fotos do relatório",
+      });
+    } catch {
+      Alert.alert("Erro", "Falha ao gerar o PDF com as fotos.");
+    } finally {
+      setIsSharingPhotos(false);
+    }
+  };
+
+  const handleArchive = async (clearForm: boolean) => {
+    try {
+      const stored = await AsyncStorage.getItem(REPORT_B_HISTORY_KEY);
+      const history = stored
+        ? (JSON.parse(stored) as Array<{ savedAt: string; report: ReportB }>)
+        : [];
+      history.push({ savedAt: new Date().toISOString(), report: { ...report } });
+      await AsyncStorage.setItem(REPORT_B_HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem("reportB", { report });
+      void syncQueue();
+      if (clearForm) {
+        setReport(initialState);
+        setPhotoUris([]);
+        Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
+      } else {
+        Alert.alert("Arquivado", "Dados salvos com sucesso.");
+      }
+    } catch {
+      Alert.alert("Erro", "Não foi possível arquivar.");
+    }
+  };
+
+  const handleClearOnly = () => {
+    Alert.alert("Limpar Tudo?", "Isso apagará os dados e fotos atuais sem salvar.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Limpar",
+        style: "destructive",
+        onPress: () => {
+          setReport(initialState);
+          setPhotoUris([]);
+        },
+      },
+    ]);
   };
 
   return (
@@ -494,6 +551,23 @@ export default function ReportBScreen() {
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
             <Text style={styles.btnText}>Continuar para Envio</Text>
           </Pressable>
+
+          <View style={[styles.row, { marginTop: 8, gap: 8 }]}>
+            <Pressable
+              style={[styles.buttonClear, { flex: 1 }]}
+              onPress={handleClearOnly}
+            >
+              <Text style={styles.btnTextDanger}>Limpar</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.buttonClear, { flex: 1, backgroundColor: "#E2E8F0" }]}
+              onPress={() => void handleArchive(true)}
+            >
+              <Text style={[styles.btnTextDanger, { color: "#334155" }]}>
+                Limpar/Arquivar
+              </Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -540,15 +614,17 @@ export default function ReportBScreen() {
                 styles.buttonPrimary,
                 { marginTop: 10, backgroundColor: "#0284C7" },
               ]}
-              onPress={handleShareImages}
+              onPress={() => void handleShareImages()}
+              disabled={photoUris.length === 0 || isSharingPhotos}
             >
-              <Ionicons
-                name="images"
-                size={20}
-                color="#fff"
-                style={{ marginRight: 10 }}
-              />
-              <Text style={styles.btnText}>2º Enviar Fotos</Text>
+              {isSharingPhotos ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Ionicons name="images" size={20} color="#fff" style={{ marginRight: 10 }} />
+              )}
+              <Text style={styles.btnText}>
+                2º Enviar Fotos {photoUris.length > 0 ? `(${photoUris.length})` : ""}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -631,6 +707,14 @@ const styles = StyleSheet.create({
   },
   btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
   btnTextSecondary: { color: "#2563EB", fontWeight: "bold" },
+  buttonClear: {
+    flex: 1,
+    backgroundColor: "#FEE2E2",
+    padding: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

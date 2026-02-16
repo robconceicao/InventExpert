@@ -295,7 +295,9 @@ export default function AttendanceScreen() {
           ) : (
             attendance.colaboradores.map((collaborator) => (
               <View key={collaborator.id} style={styles.collaboratorCard}>
-                <Text style={styles.collaboratorName}>{collaborator.nome}</Text>
+                <Text style={styles.collaboratorName}>
+                  {collaborator.ehBkp ? `BKP ${collaborator.nome}` : collaborator.nome}
+                </Text>
 
                 <View style={styles.statusRow}>
                   <Pressable
@@ -357,9 +359,29 @@ export default function AttendanceScreen() {
           )}
         </View>
 
-        <Pressable onPress={handleOpenPreview} style={styles.btnPrimary}>
-          <Text style={styles.btnTextWhite}>Enviar Escala</Text>
-        </Pressable>
+        <View style={styles.sendRow}>
+          <Pressable onPress={handleOpenPreview} style={styles.btnPrimary}>
+            <Text style={styles.btnTextWhite}>Enviar Escala</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (!attendance.data.trim() || !attendance.loja.trim()) {
+                Alert.alert(
+                  "Campos obrigatórios",
+                  "Preencha Data e Loja antes de enviar.",
+                );
+                return;
+              }
+              const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
+              Linking.openURL(url).catch(() =>
+                Alert.alert("Erro", "Não foi possível abrir o WhatsApp.")
+              );
+            }}
+            style={styles.btnSendUpdate}
+          >
+            <Text style={styles.btnTextSecondary}>Enviar atualização</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.actionRow}>
           <Pressable
@@ -494,10 +516,22 @@ const styles = StyleSheet.create({
   marginTop: { marginTop: 12 },
   subLabel: { fontSize: 12, fontWeight: "600", color: "#475569" },
   btnPrimary: {
-    marginTop: 16,
+    flex: 1,
     alignItems: "center",
     borderRadius: 12,
     backgroundColor: "#2563EB",
+    paddingVertical: 12,
+  },
+  sendRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
+  btnSendUpdate: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
     paddingVertical: 12,
   },
   btnSecondary: {

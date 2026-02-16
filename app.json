@@ -57,7 +57,8 @@
           "cameraPermission": "Permita o acesso à câmera para digitalizar relatórios."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-router"
     ],
     "experiments": {
       "reactCompiler": true

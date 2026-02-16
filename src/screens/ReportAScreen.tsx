@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -14,15 +15,16 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReportA } from "../types";
+import { enqueueSyncItem, syncQueue } from "../services/sync";
 import { formatReportA } from "../utils/parsers";
 
-// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:reportA";
+const HISTORY_KEY = "inventexpert:reportA:history";
 
 const initialState: ReportA = {
   lojaNum: "",
@@ -111,6 +113,38 @@ export default function ReportAScreen() {
   const handleSend = () => {
     const msg = formatReportA(report);
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+  };
+
+  const handleArchive = async (clearForm: boolean) => {
+    try {
+      const stored = await AsyncStorage.getItem(HISTORY_KEY);
+      const history = stored
+        ? (JSON.parse(stored) as Array<{ savedAt: string; report: ReportA }>)
+        : [];
+      history.push({ savedAt: new Date().toISOString(), report: { ...report } });
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      await enqueueSyncItem("reportA", { report });
+      void syncQueue();
+      if (clearForm) {
+        setReport(initialState);
+        Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
+      } else {
+        Alert.alert("Arquivado", "Dados salvos com sucesso.");
+      }
+    } catch {
+      Alert.alert("Erro", "Não foi possível arquivar.");
+    }
+  };
+
+  const handleClearOnly = () => {
+    Alert.alert("Limpar Tudo?", "Isso apagará os dados atuais sem salvar.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Limpar",
+        style: "destructive",
+        onPress: () => setReport(initialState),
+      },
+    ]);
   };
 
   return (
@@ -428,12 +462,20 @@ export default function ReportAScreen() {
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
             <Text style={styles.btnText}>Gerar Relatório</Text>
           </Pressable>
-          <View style={styles.row}>
+          <View style={[styles.row, { marginTop: 8, gap: 8 }]}>
             <Pressable
-              style={styles.buttonClear}
-              onPress={() => setReport(initialState)}
+              style={[styles.buttonClear, { flex: 1 }]}
+              onPress={handleClearOnly}
             >
-              <Text style={styles.btnTextDanger}>Limpar Tudo</Text>
+              <Text style={styles.btnTextDanger}>Limpar</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.buttonClear, { flex: 1, backgroundColor: "#E2E8F0" }]}
+              onPress={() => void handleArchive(true)}
+            >
+              <Text style={[styles.btnTextDanger, { color: "#334155" }]}>
+                Limpar/Arquivar
+              </Text>
             </Pressable>
           </View>
         </ScrollView>
