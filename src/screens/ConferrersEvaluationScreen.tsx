@@ -20,8 +20,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { FARMACIA_CONFIG } from "../config/evaluationConfig";
 import type { ConferrerEvaluation } from "../types";
 import { readFileAsCsvText } from "../utils/fileImport";
-import { shareCsvFile } from "../utils/export";
-import { evaluateAllConferrers } from "../utils/evaluation";
+import { shareCsvFile, shareTextFile } from "../utils/export";
+import { evaluateAllConferrers, type LimitesErroRef } from "../utils/evaluation";
+import { generateGerencialReportText } from "../utils/gerencialReport";
 import { generateIndividualReportText } from "../utils/individualReport";
 import { parseConferrersCsv } from "../utils/parsers";
 
@@ -44,6 +45,11 @@ export default function ConferrersEvaluationScreen() {
     scoreMedio: number;
   } | null>(null);
   const [metaDinamica, setMetaDinamica] = useState<number>(0);
+  const [referencias, setReferencias] = useState<{
+    limitesErro: LimitesErroRef;
+    metaProdutividade: number;
+    limitesDinamicos: boolean;
+  } | null>(null);
   const [detailModal, setDetailModal] = useState<ConferrerEvaluation | null>(
     null
   );
@@ -82,13 +88,30 @@ export default function ConferrersEvaluationScreen() {
       );
       return;
     }
-    const { evaluations: ev, metaDinamica: meta, resumo: res } = evaluateAllConferrers(
-      parsed,
-      FARMACIA_CONFIG
-    );
+    const { evaluations: ev, metaDinamica: meta, resumo: res, referencias: ref } =
+      evaluateAllConferrers(parsed, FARMACIA_CONFIG);
     setEvaluations(ev);
     setMetaDinamica(meta);
     setResumo(res);
+    setReferencias(ref.referencias);
+  };
+
+  const handleExportGerencial = async () => {
+    if (evaluations.length === 0 || !resumo) {
+      Alert.alert("Sem dados", "Processe os dados primeiro.");
+      return;
+    }
+    const text = generateGerencialReportText(
+      evaluations,
+      resumo,
+      metaDinamica,
+      referencias ?? undefined
+    );
+    await shareTextFile(
+      `inventexpert_relatorio_gerencial_${new Date().toISOString().slice(0, 10)}.txt`,
+      text,
+      "Exportar Relatório Gerencial"
+    );
   };
 
   const top5 = useMemo(
@@ -115,25 +138,47 @@ export default function ConferrersEvaluationScreen() {
     const headers = [
       "Rank",
       "Nome",
-      "Score",
-      "Classificação",
-      "Prod/h",
-      "Erro%",
-      "1a1%",
-      "Bloco%",
+      "Qtde",
+      "Horas",
+      "Erro",
+      "1a1",
+      "Bloco",
+      "Produtividade_itens_h",
+      "Taxa_Erro_%",
+      "Acuracia_%",
+      "Percentual_1a1",
+      "Percentual_Bloco",
       "IRB",
+      "Pontos_Qualidade",
+      "Pontos_Produtividade",
+      "Pontos_Metodo",
+      "Bonificacoes",
+      "Penalidades",
+      "Score_Final",
+      "Classificacao",
       "Alertas",
     ];
     const rows = evaluations.map((e, i) => [
       i + 1,
       e.input.nome,
-      e.scoreFinal,
-      e.classificacaoGeral,
+      e.input.qtde,
+      e.input.horas,
+      e.input.erro,
+      e.input.umAum,
+      e.input.bloco,
       e.produtividadeReal,
       e.taxaErroPercentual,
+      e.acuracia,
       e.percentual1a1,
       e.percentualBloco,
       e.irb,
+      e.pontosQualidade,
+      e.pontosProdutividade,
+      e.pontosMetodo,
+      e.bonificacoes,
+      e.penalidades,
+      e.scoreFinal,
+      e.classificacaoGeral,
       e.alertas.map((a) => a.mensagem).join("; ") || "-",
     ]);
     await shareCsvFile(
@@ -285,10 +330,16 @@ export default function ConferrersEvaluationScreen() {
               ))}
             </View>
 
-            <Pressable onPress={() => void handleExportCsv()} style={styles.btnExport}>
-              <Ionicons name="download-outline" size={20} color="#fff" />
-              <Text style={styles.btnTextWhite}>Exportar CSV</Text>
-            </Pressable>
+            <View style={styles.exportRow}>
+              <Pressable onPress={() => void handleExportCsv()} style={styles.btnExport}>
+                <Ionicons name="download-outline" size={20} color="#fff" />
+                <Text style={styles.btnTextWhite}>Exportar CSV</Text>
+              </Pressable>
+              <Pressable onPress={() => void handleExportGerencial()} style={styles.btnExport}>
+                <Ionicons name="document-text-outline" size={20} color="#fff" />
+                <Text style={styles.btnTextWhite}>Relatório Gerencial</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </ScrollView>
@@ -327,7 +378,9 @@ export default function ConferrersEvaluationScreen() {
                       evaluations.length,
                       metaDinamica,
                       resumo.produtividadeMedia,
-                      resumo.taxaMediaErro
+                      resumo.taxaMediaErro,
+                      undefined,
+                      FARMACIA_CONFIG.pesos
                     );
                     Linking.openURL(
                       `whatsapp://send?text=${encodeURIComponent(text)}`
@@ -509,12 +562,19 @@ const styles = StyleSheet.create({
   listNome: { fontSize: 15, fontWeight: "500", color: "#1E293B" },
   listMeta: { fontSize: 12, color: "#64748B", marginTop: 2 },
   listBadge: { fontSize: 16 },
+  exportRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
   btnExport: {
+    flex: 1,
+    minWidth: 140,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginTop: 8,
     borderRadius: 12,
     backgroundColor: "#059669",
     paddingVertical: 12,

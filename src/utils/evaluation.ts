@@ -108,17 +108,17 @@ function calcularPontosMetodo(
   return Math.max(0, Math.min(100, pontosBase));
 }
 
-/** IRB - Índice de Risco de Bloco */
+/** IRB - Índice de Risco de Bloco (POP: Limite Erro = mediana do time ou config) */
 function calcularIRB(
   percentualBloco: number,
   taxaErro: number,
+  limiteErroPercentual: number,
   anuenciaLider?: boolean
 ): { valor: number; classificacao: ClassificacaoIRB } {
-  const limiteErro = 1.5;
-  let irb = (percentualBloco / 100) * (taxaErro / limiteErro);
-  if (!anuenciaLider && percentualBloco > 20) {
-    irb *= 1.5;
-  }
+  const limiteErro = limiteErroPercentual > 0 ? limiteErroPercentual : 14.4;
+  const fatorRisco = anuenciaLider ? 1.0 : 1.5;
+  const irb =
+    (percentualBloco / 100) * (taxaErro / limiteErro) * fatorRisco;
   const classificacao: ClassificacaoIRB =
     irb < 0.3 ? "Baixo" : irb < 0.8 ? "Medio" : irb < 1.5 ? "Alto" : "Critico";
   return { valor: Math.round(irb * 100) / 100, classificacao };
@@ -188,7 +188,8 @@ export function evaluateConferrer(
     bom: number;
     atencao: number;
     critico: number;
-  }
+  },
+  limiteErroParaIRB?: number
 ): ConferrerEvaluation {
   const norm = normalizeInput(input);
   const { qtde, horas, erro, umAum, bloco, anuenciaLider } = norm;
@@ -197,6 +198,7 @@ export function evaluateConferrer(
     norm.produtividade ?? (horas > 0 && qtde > 0 ? qtde / horas : 0);
   const meta = config.metaProdutividade_itensH === "auto" ? metaDinamica : config.metaProdutividade_itensH;
   const limites = limitesErro ?? config.limites.erro;
+  const limiteIRB = limiteErroParaIRB ?? limites.bom;
 
   const taxaErroPor1000 = qtde > 0 ? (erro / qtde) * 1000 : 0;
   const acuracia = Math.max(0, 100 - taxaErro);
@@ -208,6 +210,7 @@ export function evaluateConferrer(
   const { valor: irb, classificacao: irbClassificacao } = calcularIRB(
     percentualBloco,
     taxaErro,
+    limiteIRB,
     anuenciaLider
   );
 
@@ -287,7 +290,13 @@ export function evaluateConferrer(
   if (irb > 1.5) {
     alertas.push({
       tipo: "irbAlto",
-      mensagem: "Risco de bloco elevado - revisar contagens",
+      mensagem: "IRB crítico (> 1,5) - investigação obrigatória",
+    });
+  }
+  if (scoreFinal < 50) {
+    alertas.push({
+      tipo: "scoreCritico",
+      mensagem: "Score crítico (< 50) - ação imediata necessária",
     });
   }
 
@@ -313,7 +322,14 @@ export function evaluateConferrer(
   };
 }
 
-/** Calcula meta dinâmica (mediana das produtividades) e avalia todos */
+export type LimitesErroRef = {
+  excelente: number;
+  bom: number;
+  atencao: number;
+  critico: number;
+};
+
+/** Calcula meta dinâmica (P50 produtividades) e limites de erro dinâmicos (POP §6) */
 export function evaluateAllConferrers(
   inputs: ConferrerInput[],
   config: EvaluationConfig = FARMACIA_CONFIG
@@ -327,6 +343,11 @@ export function evaluateAllConferrers(
     produtividadeMedia: number;
     scoreMedio: number;
   };
+  referencias: {
+    limitesErro: LimitesErroRef;
+    metaProdutividade: number;
+    limitesDinamicos: boolean;
+  };
 } {
   const normalized = inputs.map(normalizeInput);
   const produtividades = normalized
@@ -335,8 +356,26 @@ export function evaluateAllConferrers(
   const metaDinamica =
     produtividades.length > 0 ? percentil(produtividades, 50) : 150;
 
+  const taxasErro = normalized
+    .filter((n) => n.qtde > 0)
+    .map((n) => (n.erro / n.qtde) * 100);
+  const p50Erro = taxasErro.length > 0 ? percentil(taxasErro, 50) : 14.4;
+  const p75Erro = taxasErro.length > 0 ? percentil(taxasErro, 75) : 17.12;
+  const limitesErroDinamicos: LimitesErroRef = {
+    excelente: Math.max(0.5, p50Erro * 0.4),
+    bom: p50Erro,
+    atencao: p75Erro,
+    critico: p75Erro * 1.5,
+  };
+
   const evaluations = inputs.map((input) =>
-    evaluateConferrer(input, config, metaDinamica)
+    evaluateConferrer(
+      input,
+      config,
+      metaDinamica,
+      limitesErroDinamicos,
+      limitesErroDinamicos.bom
+    )
   );
 
   const totalItens = evaluations.reduce((s, e) => s + e.input.qtde, 0);
@@ -362,6 +401,16 @@ export function evaluateAllConferrers(
       taxaMediaErro: Math.round(taxaMediaErro * 100) / 100,
       produtividadeMedia: Math.round(produtividadeMedia * 10) / 10,
       scoreMedio: Math.round(scoreMedio * 10) / 10,
+    },
+    referencias: {
+      limitesErro: {
+        excelente: Math.round(limitesErroDinamicos.excelente * 100) / 100,
+        bom: Math.round(limitesErroDinamicos.bom * 100) / 100,
+        atencao: Math.round(limitesErroDinamicos.atencao * 100) / 100,
+        critico: Math.round(limitesErroDinamicos.critico * 100) / 100,
+      },
+      metaProdutividade: Math.round(metaDinamica * 10) / 10,
+      limitesDinamicos: true,
     },
   };
 }

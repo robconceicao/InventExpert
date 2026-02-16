@@ -2,6 +2,33 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Alert } from "react-native";
 
+/** Compartilha um arquivo de texto (ex.: relatório gerencial .txt) */
+export const shareTextFile = async (
+  filename: string,
+  content: string,
+  dialogTitle = "Exportar relatório"
+) => {
+  try {
+    const directory =
+      FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
+    const fileUri = directory.replace(/\/?$/, "/") + filename;
+    await FileSystem.writeAsStringAsync(fileUri, "\uFEFF" + content, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/plain",
+        dialogTitle,
+      });
+    } else {
+      Alert.alert("Erro", "Compartilhamento não disponível neste dispositivo.");
+    }
+  } catch (error) {
+    console.error("Erro ao exportar texto:", error);
+    Alert.alert("Erro", "Falha ao gerar o arquivo.");
+  }
+};
+
 export const shareCsvFile = async (
   filename: string,
   headers: string[],
