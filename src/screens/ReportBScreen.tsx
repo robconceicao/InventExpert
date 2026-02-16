@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
+import * as Sharing from "expo-sharing"; // Import necessário
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   Alert,
@@ -20,14 +20,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportA, ReportB } from "../types";
 import { formatReportB } from "../utils/parsers";
 
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const REPORT_A_KEY = "inventexpert:reportA";
 const REPORT_B_KEY = "inventexpert:reportB";
-const HISTORY_KEY = "inventexpert:reportB:history";
 
 const initialState: ReportB = {
   cliente: "",
@@ -155,7 +153,11 @@ export default function ReportBScreen() {
 
   const handleSendText = () => {
     const msg = formatReportB(report);
-    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(
+      () => {
+        Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
+      },
+    );
   };
 
   const handleShareImages = async () => {
@@ -163,43 +165,19 @@ export default function ReportBScreen() {
       Alert.alert("Atenção", "Nenhuma foto selecionada.");
       return;
     }
+
+    // O expo-sharing geralmente compartilha um arquivo por vez de forma confiável em todas as versões.
+    // Vamos tentar compartilhar a última foto ou iterar (o comportamento varia por versão do Android).
+    // Para garantir funcionalidade, vamos compartilhar a primeira/última ou abrir o share sheet.
+
+    // Tenta compartilhar a última foto adicionada (geralmente a do relatório assinado)
     const lastPhoto = photoUris[photoUris.length - 1];
+
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(lastPhoto);
     } else {
       Alert.alert("Erro", "Compartilhamento não suportado.");
     }
-  };
-
-  const handleArchiveAndClear = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = storedHistory ? JSON.parse(storedHistory) : [];
-      history.push({ savedAt: new Date().toISOString(), report });
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-      await enqueueSyncItem("reportB", { report });
-
-      setReport(initialState);
-      setPhotoUris([]);
-      Alert.alert("Sucesso", "Resumo arquivado e tela limpa.");
-      void syncQueue();
-    } catch {
-      Alert.alert("Erro", "Falha ao arquivar.");
-    }
-  };
-
-  const handleClearOnly = () => {
-    Alert.alert("Limpar", "Deseja apagar sem salvar?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Limpar",
-        style: "destructive",
-        onPress: () => {
-          setReport(initialState);
-          setPhotoUris([]);
-        },
-      },
-    ]);
   };
 
   return (
@@ -219,8 +197,7 @@ export default function ReportBScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* SESSÕES 1 a 6 - MANTENHA O CÓDIGO EXISTENTE DOS INPUTS AQUI */}
-          {/* Para brevidade, estou assumindo que você manterá os inputs que já funcionam */}
+          {/* ... MANTENHA TODOS OS CAMPOS DO FORMULÁRIO IGUAIS (Seções 1 a 6) ... */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>1. Identificação</Text>
             <Text style={styles.label}>Cliente</Text>
@@ -248,7 +225,6 @@ export default function ReportBScreen() {
                 />
               </View>
             </View>
-            {/* ... (Continue com os outros campos da Seção 1) */}
             <View style={styles.row}>
               <View style={styles.half}>
                 <Text style={styles.label}>PIV Prog.</Text>
@@ -275,8 +251,105 @@ export default function ReportBScreen() {
             </View>
           </View>
 
-          {/* ... SESSÕES 2, 3, 4, 5 (CÓDIGO DEVE SER O MESMO DO ARQUIVO ANTERIOR) ... */}
-          {/* Vou colocar a Seção 6 completa aqui para garantir o estilo do rádio */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>2. Cronograma Operacional</Text>
+            {renderTimeField("Chegada Equipe", "chegadaEquipe")}
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Início Dep.", "inicioDeposito")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Dep.", "terminoDeposito")}
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Início Loja", "inicioLoja")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Loja", "terminoLoja")}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>3. Auditoria e Divergências</Text>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Ini. Diverg.", "inicioDivergencia")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Diverg.", "terminoDivergencia")}
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.half}>
+                {renderTimeField("Ini. Não Cont.", "inicioNaoContados")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Não Cont.", "terminoNaoContados")}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>4. Resultado</Text>
+            <Text style={styles.label}>Total de Peças</Text>
+            <TextInput
+              style={styles.input}
+              value={String(report.totalPecas)}
+              onChangeText={(t) => setField("totalPecas", Number(t) || "")}
+              keyboardType="numeric"
+              placeholder="0"
+            />
+            <Text style={styles.label}>Valor Financeiro (R$)</Text>
+            <TextInput
+              style={styles.input}
+              value={String(report.valorFinanceiro)}
+              onChangeText={(t) => setField("valorFinanceiro", Number(t) || "")}
+              keyboardType="numeric"
+            />
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>Alt. Diverg.</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.qtdAlterados)}
+                  onChangeText={(t) =>
+                    setField("qtdAlterados", Number(t) || "")
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.half}>
+                <Text style={styles.label}>Não Cont.</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.qtdNaoContados)}
+                  onChangeText={(t) =>
+                    setField("qtdNaoContados", Number(t) || "")
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            <Text style={styles.label}>Enc. no Não Contado</Text>
+            <TextInput
+              style={styles.input}
+              value={String(report.qtdEncontradosNaoContados)}
+              onChangeText={(t) =>
+                setField("qtdEncontradosNaoContados", Number(t) || "")
+              }
+              keyboardType="numeric"
+            />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>5. Envio de Arquivos</Text>
+            {renderTimeField("Envio 1º Arq", "envioArquivo1")}
+            {renderTimeField("Envio 2º Arq", "envioArquivo2")}
+            {renderTimeField("Envio 3º Arq", "envioArquivo3")}
+          </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
@@ -421,26 +494,6 @@ export default function ReportBScreen() {
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
             <Text style={styles.btnText}>Continuar para Envio</Text>
           </Pressable>
-
-          <View style={styles.actionRow}>
-            <Pressable
-              style={[
-                styles.btnSecondary,
-                { backgroundColor: "#FEE2E2", flex: 1, marginRight: 8 },
-              ]}
-              onPress={handleClearOnly}
-            >
-              <Text style={[styles.btnTextSecondary, { color: "#DC2626" }]}>
-                Limpar
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.btnSecondary, { flex: 1, marginLeft: 8 }]}
-              onPress={handleArchiveAndClear}
-            >
-              <Text style={styles.btnTextSecondary}>Arquivar e Limpar</Text>
-            </Pressable>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -603,27 +656,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#E2E8F0",
     borderRadius: 12,
   },
-  actionRow: {
-    flexDirection: "row",
-    marginTop: 16,
-    justifyContent: "space-between",
-  },
-  btnSecondary: {
-    alignItems: "center",
-    borderRadius: 12,
-    backgroundColor: "#E2E8F0",
-    paddingVertical: 12,
-  },
-  // ESTILOS QUE FALTAVAM:
-  radioBtn: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  radioBtnSelected: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
-  radioTxt: { color: "#64748B", fontWeight: "bold" },
-  radioTxtSelected: { color: "#2563EB" },
 });

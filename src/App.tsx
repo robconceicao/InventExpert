@@ -19,6 +19,7 @@ export default function App() {
               ReportA: '',
               ReportB: 'ReportB',
               Attendance: 'Attendance',
+              ConferrersEvaluation: 'ConferrersEvaluation',
               Scanner: 'Scanner',
             },
           },

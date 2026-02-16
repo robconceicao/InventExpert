@@ -7,6 +7,7 @@ import { Image, Platform, Pressable, Text, View } from "react-native";
 // Importações dos componentes e telas
 import SyncStatus from "../../src/components/SyncStatus";
 import AttendanceScreen from "../screens/AttendanceScreen";
+import ConferrersEvaluationScreen from "../screens/ConferrersEvaluationScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
 import ScannerScreen from "../screens/ScannerScreen";
@@ -16,6 +17,7 @@ export type RootTabParamList = {
   ReportA: undefined;
   ReportB: undefined;
   Attendance: undefined;
+  ConferrersEvaluation: undefined;
   Scanner: undefined;
 };
 
@@ -83,6 +85,7 @@ export default function RootTabs() {
             ReportA: "clipboard",
             ReportB: "document-text",
             Attendance: "people",
+            ConferrersEvaluation: "analytics",
             Scanner: "scan",
           };
           const iconName =
@@ -105,6 +108,11 @@ export default function RootTabs() {
         name="Attendance"
         component={AttendanceScreen}
         options={{ title: "Escala" }}
+      />
+      <Tab.Screen
+        name="ConferrersEvaluation"
+        component={ConferrersEvaluationScreen}
+        options={{ title: "Avaliação" }}
       />
       {showScanner ? (
         <Tab.Screen

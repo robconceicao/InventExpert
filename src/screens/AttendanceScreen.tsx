@@ -126,7 +126,7 @@ export default function AttendanceScreen() {
     });
   };
 
-  const handleArchiveAndClear = async () => {
+  const handleArchive = async (clearForm = false) => {
     try {
       const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
       const history = storedHistory
@@ -146,9 +146,13 @@ export default function AttendanceScreen() {
     await handleExportHistory();
     void syncQueue();
 
-    setRawText("");
-    setAttendance(emptyData);
-    Alert.alert("Arquivado", "Dados salvos e tela limpa.");
+    if (clearForm) {
+      setRawText("");
+      setAttendance(emptyData);
+      Alert.alert("Arquivado", "Dados salvos e tela limpa.");
+    } else {
+      Alert.alert("Arquivado", "Dados salvos com sucesso.");
+    }
   };
 
   const handleClearOnly = () => {
@@ -362,7 +366,7 @@ export default function AttendanceScreen() {
             onPress={handleClearOnly}
             style={[
               styles.btnSecondary,
-              { backgroundColor: "#FEE2E2", flex: 1, marginRight: 8 },
+              { backgroundColor: "#FEE2E2", flex: 1, marginRight: 6 },
             ]}
           >
             <Text style={[styles.btnTextSecondary, { color: "#DC2626" }]}>
@@ -370,8 +374,14 @@ export default function AttendanceScreen() {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => void handleArchiveAndClear()}
-            style={[styles.btnSecondary, { flex: 1, marginLeft: 8 }]}
+            onPress={() => void handleArchive(false)}
+            style={[styles.btnSecondary, { flex: 1, marginHorizontal: 6 }]}
+          >
+            <Text style={styles.btnTextSecondary}>Arquivar</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void handleArchive(true)}
+            style={[styles.btnSecondary, { flex: 1, marginLeft: 6 }]}
           >
             <Text style={styles.btnTextSecondary}>Arquivar e Limpar</Text>
           </Pressable>

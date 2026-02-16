@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -15,16 +14,15 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
+// --- CAMINHO ATUALIZADO ---
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:reportA";
-const HISTORY_KEY = "inventexpert:reportA:history";
 
 const initialState: ReportA = {
   lojaNum: "",
@@ -64,6 +62,7 @@ export default function ReportAScreen() {
   const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
 
+  // Remove cabeçalho duplicado
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -114,36 +113,10 @@ export default function ReportAScreen() {
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
   };
 
-  const handleArchiveAndClear = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
-      const history = storedHistory ? JSON.parse(storedHistory) : [];
-      history.push({ savedAt: new Date().toISOString(), report });
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-      await enqueueSyncItem("reportA", { report });
-
-      setReport(initialState);
-      Alert.alert("Sucesso", "Relatório arquivado e tela limpa.");
-      void syncQueue();
-    } catch {
-      Alert.alert("Erro", "Falha ao arquivar.");
-    }
-  };
-
-  const handleClearOnly = () => {
-    Alert.alert("Limpar", "Deseja apagar sem salvar?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Limpar",
-        style: "destructive",
-        onPress: () => setReport(initialState),
-      },
-    ]);
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+
       <View style={styles.header}>
         <Image
           source={HeaderIcon}
@@ -158,8 +131,6 @@ export default function ReportAScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* ... SESSÕES 1 A 6 IDÊNTICAS AO ANTERIOR, NÃO MUDA NADA NOS CAMPOS ... */}
-          {/* MANTENHA O CÓDIGO DOS INPUTS AQUI (Sections 1-6) */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>1. Identificação</Text>
             <View style={styles.row}>
@@ -284,6 +255,7 @@ export default function ReportAScreen() {
                 </Pressable>
               </View>
             </View>
+
             {!report.usarAvancoExtra ? (
               <View style={styles.row}>
                 <View style={styles.half}>
@@ -456,24 +428,12 @@ export default function ReportAScreen() {
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
             <Text style={styles.btnText}>Gerar Relatório</Text>
           </Pressable>
-
-          <View style={styles.actionRow}>
+          <View style={styles.row}>
             <Pressable
-              style={[
-                styles.btnSecondary,
-                { backgroundColor: "#FEE2E2", flex: 1, marginRight: 8 },
-              ]}
-              onPress={handleClearOnly}
+              style={styles.buttonClear}
+              onPress={() => setReport(initialState)}
             >
-              <Text style={[styles.btnTextSecondary, { color: "#DC2626" }]}>
-                Limpar
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.btnSecondary, { flex: 1, marginLeft: 8 }]}
-              onPress={handleArchiveAndClear}
-            >
-              <Text style={styles.btnTextSecondary}>Arquivar e Limpar</Text>
+              <Text style={styles.btnTextDanger}>Limpar Tudo</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -559,14 +519,15 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10,
   },
-  btnSecondary: {
-    alignItems: "center",
+  buttonClear: {
+    flex: 1,
+    backgroundColor: "#FEE2E2",
+    padding: 14,
     borderRadius: 12,
-    backgroundColor: "#E2E8F0",
-    paddingVertical: 12,
+    alignItems: "center",
   },
   btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  btnTextSecondary: { color: "#334155", fontWeight: "bold" },
+  btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
   radioBtn: {
     flex: 1,
     padding: 12,
@@ -625,10 +586,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#E2E8F0",
     borderRadius: 12,
-  },
-  actionRow: {
-    flexDirection: "row",
-    marginTop: 16,
-    justifyContent: "space-between",
   },
 });
