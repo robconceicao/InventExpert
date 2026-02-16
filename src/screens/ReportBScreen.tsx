@@ -3,8 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import Share from "react-native-share";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -171,31 +170,29 @@ export default function ReportBScreen() {
       Alert.alert("Atenção", "Nenhuma foto selecionada.");
       return;
     }
-    if (!(await Sharing.isAvailableAsync())) {
-      Alert.alert("Erro", "Compartilhamento não suportado.");
-      return;
-    }
     try {
       setIsSharingPhotos(true);
-      const imageTags = await Promise.all(
+      // Garante URIs no formato file:// para compatibilidade
+      const urlsToShare = await Promise.all(
         photoUris.map(async (uri) => {
-          const base64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          return `<img src="data:image/jpeg;base64,${base64}" style="width:100%;page-break-after:always;" />`;
+          if (uri.startsWith("file://")) return uri;
+          const name = `foto_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+          const dest = `${FileSystem.cacheDirectory}${name}`;
+          await FileSystem.copyAsync({ from: uri, to: dest });
+          return dest;
         }),
       );
-      const html = `<html><body style="margin:0;padding:0;">${imageTags.join("")}</body></html>`;
-      const printed = await Print.printToFileAsync({ html });
-      const name = `relatorio_${report.lojaNum || "B"}_${report.data?.replace(/\//g, "-") || "final"}.pdf`;
-      const outputUri = `${FileSystem.cacheDirectory}${name}`;
-      await FileSystem.moveAsync({ from: printed.uri, to: outputUri });
-      await Sharing.shareAsync(outputUri, {
-        mimeType: "application/pdf",
-        dialogTitle: "Enviar fotos do relatório",
+      await Share.open({
+        urls: urlsToShare,
+        type: "image/jpeg",
+        title: "Fotos do relatório",
+        message: "Fotos do inventário",
       });
-    } catch {
-      Alert.alert("Erro", "Falha ao gerar o PDF com as fotos.");
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      if (err?.message !== "User did not share") {
+        Alert.alert("Erro", "Falha ao compartilhar as fotos como imagens.");
+      }
     } finally {
       setIsSharingPhotos(false);
     }

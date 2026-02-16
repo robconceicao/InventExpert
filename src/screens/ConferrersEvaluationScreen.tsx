@@ -5,6 +5,7 @@ import React, { useLayoutEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -21,6 +22,7 @@ import type { ConferrerEvaluation } from "../types";
 import { readFileAsCsvText } from "../utils/fileImport";
 import { shareCsvFile } from "../utils/export";
 import { evaluateAllConferrers } from "../utils/evaluation";
+import { generateIndividualReportText } from "../utils/individualReport";
 import { parseConferrersCsv } from "../utils/parsers";
 
 const HeaderIcon = require("../../assets/images/splash-icon.png");
@@ -313,6 +315,30 @@ export default function ConferrersEvaluationScreen() {
                 <Text style={styles.modalSubtitle}>
                   Score: {detailModal.scoreFinal} — {detailModal.classificacaoGeral}
                 </Text>
+                <Pressable
+                  style={[styles.btnPrimary, { marginBottom: 12 }]}
+                  onPress={() => {
+                    if (!detailModal || !resumo) return;
+                    const rank =
+                      evaluations.findIndex((e) => e.input.nome === detailModal.input.nome) + 1;
+                    const text = generateIndividualReportText(
+                      detailModal,
+                      rank,
+                      evaluations.length,
+                      metaDinamica,
+                      resumo.produtividadeMedia,
+                      resumo.taxaMediaErro
+                    );
+                    Linking.openURL(
+                      `whatsapp://send?text=${encodeURIComponent(text)}`
+                    ).catch(() =>
+                      Alert.alert("Erro", "Não foi possível abrir o WhatsApp.")
+                    );
+                  }}
+                >
+                  <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+                  <Text style={styles.btnTextWhite}>Enviar ao Conferente (WhatsApp)</Text>
+                </Pressable>
                 <ScrollView style={styles.modalScroll}>
                   <Text style={styles.modalSection}>📈 Produtividade</Text>
                   <Text style={styles.modalText}>

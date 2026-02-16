@@ -240,7 +240,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco22h)}
-                  onChangeText={(t) => setField("avanco22h", Number(t) || "")}
+                  onChangeText={(t) => setField("avanco22h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -250,7 +250,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco00h)}
-                  onChangeText={(t) => setField("avanco00h", Number(t) || "")}
+                  onChangeText={(t) => setField("avanco00h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -262,7 +262,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco01h)}
-                  onChangeText={(t) => setField("avanco01h", Number(t) || "")}
+                  onChangeText={(t) => setField("avanco01h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -272,7 +272,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco03h)}
-                  onChangeText={(t) => setField("avanco03h", Number(t) || "")}
+                  onChangeText={(t) => setField("avanco03h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -284,7 +284,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco04h)}
-                  onChangeText={(t) => setField("avanco04h", Number(t) || "")}
+                  onChangeText={(t) => setField("avanco04h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -302,7 +302,7 @@ export default function ReportAScreen() {
                     style={styles.input}
                     value={String(report.avancoExtraValor)}
                     onChangeText={(t) =>
-                      setField("avancoExtraValor", Number(t) || "")
+                      setField("avancoExtraValor", t === "" ? "" : Number(t))
                     }
                     keyboardType="numeric"
                     placeholder="%"

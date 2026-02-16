@@ -100,20 +100,28 @@ export const formatDateInput = (text: string) => {
 export const formatAttendanceMessage = (data: AttendanceData): string => {
   const icon = (c: AttendanceCollaborator) =>
     c.status === "PRESENTE" ? " ✅" : c.status === "AUSENTE" ? " ❌" : "";
-  const linhas =
+  const linhas: string[] = [];
+  for (let i = 0; i < data.colaboradores.length; i++) {
+    const c = data.colaboradores[i];
+    if (c.ehBkp) {
+      linhas.push(`BKP ${c.nome}${icon(c)}`);
+      continue;
+    }
+    const num = c.numero ?? i + 1;
+    const sub = (c.substituto ?? "").trim();
+    if (sub) {
+      linhas.push(`${num} ${c.nome} ❌`);
+      linhas.push(`${sub} (substituição) ✅`);
+    } else {
+      linhas.push(`${num} ${c.nome}${icon(c)}`);
+    }
+  }
+  return (
     `${data.data}\n` +
     `${data.loja || "N/A"}\n` +
     `${data.enderecoLoja || "N/A"}\n\n` +
-    data.colaboradores
-      .map((c, i) => {
-        if (c.ehBkp) {
-          return `BKP ${c.nome}${icon(c)}`;
-        }
-        const num = c.numero ?? i + 1;
-        return `${num} ${c.nome}${icon(c)}`;
-      })
-      .join("\n");
-  return linhas;
+    linhas.join("\n")
+  );
 };
 
 export const formatReportA = (r: ReportA): string => {
