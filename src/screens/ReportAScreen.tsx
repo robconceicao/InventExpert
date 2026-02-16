@@ -44,7 +44,6 @@ const initialState: ReportA = {
   avanco01h: "",
   avanco03h: "",
   avanco04h: "",
-  usarAvancoExtra: false,
   avancoExtraHora: "",
   avancoExtraValor: "",
   envioArquivo1: "",
@@ -268,75 +267,49 @@ export default function ReportAScreen() {
                   placeholder="%"
                 />
               </View>
-              <View style={[styles.half, { justifyContent: "flex-end" }]}>
-                <Pressable
-                  style={[
-                    styles.toggleBtn,
-                    report.usarAvancoExtra && styles.toggleBtnActive,
-                  ]}
-                  onPress={() =>
-                    setField("usarAvancoExtra", !report.usarAvancoExtra)
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.toggleTxt,
-                      report.usarAvancoExtra && { color: "#fff" },
-                    ]}
-                  >
-                    {report.usarAvancoExtra ? "Encerrado Antes" : "Até 04h00"}
-                  </Text>
-                </Pressable>
+              <View style={styles.half}>
+                <Text style={styles.label}>03:00</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avanco03h)}
+                  onChangeText={(t) => setField("avanco03h", Number(t) || "")}
+                  keyboardType="numeric"
+                  placeholder="%"
+                />
               </View>
             </View>
-
-            {!report.usarAvancoExtra ? (
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Text style={styles.label}>04:00</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(report.avanco04h)}
+                  onChangeText={(t) => setField("avanco04h", Number(t) || "")}
+                  keyboardType="numeric"
+                  placeholder="%"
+                />
+              </View>
+            </View>
+            <View style={styles.customTimeBox}>
+              <Text style={styles.customTimeTitle}>Incluir novo horário (opcional)</Text>
               <View style={styles.row}>
                 <View style={styles.half}>
-                  <Text style={styles.label}>03:00</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={String(report.avanco03h)}
-                    onChangeText={(t) => setField("avanco03h", Number(t) || "")}
-                    keyboardType="numeric"
-                    placeholder="%"
-                  />
+                  {renderTimeField("Hora", "avancoExtraHora")}
                 </View>
                 <View style={styles.half}>
-                  <Text style={styles.label}>04:00</Text>
+                  <Text style={styles.label}>Avanço (%)</Text>
                   <TextInput
                     style={styles.input}
-                    value={String(report.avanco04h)}
-                    onChangeText={(t) => setField("avanco04h", Number(t) || "")}
+                    value={String(report.avancoExtraValor)}
+                    onChangeText={(t) =>
+                      setField("avancoExtraValor", Number(t) || "")
+                    }
                     keyboardType="numeric"
                     placeholder="%"
                   />
                 </View>
               </View>
-            ) : (
-              <View style={styles.customTimeBox}>
-                <Text style={styles.customTimeTitle}>
-                  Horário de Encerramento Real
-                </Text>
-                <View style={styles.row}>
-                  <View style={styles.half}>
-                    {renderTimeField("Hora", "avancoExtraHora")}
-                  </View>
-                  <View style={styles.half}>
-                    <Text style={styles.label}>Avanço Final (%)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(report.avancoExtraValor)}
-                      onChangeText={(t) =>
-                        setField("avancoExtraValor", Number(t) || "")
-                      }
-                      keyboardType="numeric"
-                      placeholder="Ex: 100"
-                    />
-                  </View>
-                </View>
-              </View>
-            )}
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -401,13 +374,17 @@ export default function ReportAScreen() {
                 />
               </View>
               <View style={styles.half}>
-                <Text style={styles.label}>Satisfação (1-5)</Text>
+                <Text style={styles.label}>Satisfação (ex: 4.5)</Text>
                 <TextInput
                   style={styles.input}
                   value={String(report.satisfacao)}
-                  onChangeText={(t) => setField("satisfacao", Number(t) || "")}
-                  keyboardType="numeric"
-                  maxLength={1}
+                  onChangeText={(t) => {
+                    const v = t.replace(",", ".").trim();
+                    const num = parseFloat(v);
+                    setField("satisfacao", v === "" ? "" : (isNaN(num) ? report.satisfacao : num));
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="0-5"
                 />
               </View>
             </View>

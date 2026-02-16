@@ -715,6 +715,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
+  radioBtn: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  radioBtnSelected: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
+  radioTxt: { color: "#64748B", fontWeight: "bold" },
+  radioTxtSelected: { color: "#2563EB" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

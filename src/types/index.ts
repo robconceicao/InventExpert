@@ -17,8 +17,7 @@ export interface ReportA {
   avanco01h: number | "";
   avanco03h: number | "";
   avanco04h: number | "";
-  usarAvancoExtra: boolean;
-  avancoExtraHora: string;
+  avancoExtraHora: string; // opcional: incluir novo horário
   avancoExtraValor: number | "";
   envioArquivo1: string;
   envioArquivo2: string;

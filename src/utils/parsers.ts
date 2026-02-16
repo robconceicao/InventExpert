@@ -119,15 +119,12 @@ export const formatAttendanceMessage = (data: AttendanceData): string => {
 export const formatReportA = (r: ReportA): string => {
   let blocoAvancos = `Avanço 22h00: ${fmtPct(r.avanco22h)}
 Avanço 00h00: ${fmtPct(r.avanco00h)}
-Avanço 01h00: ${fmtPct(r.avanco01h)}`;
-  if (r.usarAvancoExtra) {
-    const horaReal = r.avancoExtraHora
-      ? r.avancoExtraHora.replace(":", "h")
-      : "??h??";
-    blocoAvancos += `\nAvanço Final (${horaReal}): ${fmtPct(r.avancoExtraValor)}`;
-  } else {
-    blocoAvancos += `\nAvanço 03h00: ${fmtPct(r.avanco03h)}
+Avanço 01h00: ${fmtPct(r.avanco01h)}
+Avanço 03h00: ${fmtPct(r.avanco03h)}
 Avanço 04h00: ${fmtPct(r.avanco04h)}`;
+  if (r.avancoExtraHora && r.avancoExtraValor !== "") {
+    const horaReal = r.avancoExtraHora.replace(":", "h");
+    blocoAvancos += `\nAvanço ${horaReal}: ${fmtPct(r.avancoExtraValor)}`;
   }
   return `*ACOMPANHAMENTO DE INVENTÁRIO*
 
@@ -197,10 +194,23 @@ Houve Suporte?: ${fmtBool(r.suporteSolicitado)}
 PH Calculado: *${phCalculado}*`;
 };
 
+// Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 5.23 -> 5.23
+const parseNumberBR = (s: string): number => {
+  const v = String(s ?? "").trim();
+  if (!v) return 0;
+  if (v.includes(",")) {
+    const normal = v.replace(/\./g, "").replace(",", ".");
+    const n = parseFloat(normal);
+    return isNaN(n) ? 0 : n;
+  }
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+};
+
 // ==========================
 // PARSER DE CONFERENTES (CSV/Excel)
 // ==========================
-/** Colunas: Nome, Qtde, Horas, Produtividade?, Erro, %Erro?, 1a1, Bloco [, Anuência?] */
+/** Colunas: Nome/Nome do Colaborador, Qtde, Horas, Produtividade?, Erro, %Erro?, 1a1, Bloco/BLOCO. Aceita , ; ou tab. Números BR (1.234,56). */
 export const parseConferrersCsv = (text: string): ConferrerInput[] => {
   const lines = text
     .split(/[\r\n]+/)
@@ -237,14 +247,14 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
 
   const header = parseRow(lines[0]).map((h) => h.trim());
   const col = {
-    nome: findCol(header, [/^nome$/i, /name/i]),
+    nome: findCol(header, [/^nome\s+do\s+colaborador$/i, /^nome$/i, /colaborador/i, /name/i]),
     qtde: findCol(header, [/^qtde$/i, /qtd/i, /quantidade/i]),
     horas: findCol(header, [/^horas$/i, /hour/i]),
     produtividade: findCol(header, [/produtividade/i, /prod/i]),
     erro: findCol(header, [/^erro$/i, /erros/i]),
     pctErro: findCol(header, [/%\s*erro/i, /erro\s*%/i, /percentual\s*erro/i]),
     umAum: findCol(header, [/1a1/i, /1\s*a\s*1/i, /um a um/i]),
-    bloco: findCol(header, [/bloco/i]),
+    bloco: findCol(header, [/^bloco$/i, /BLOCO/i]),
     anuencia: findCol(header, [/anu[eê]ncia/i, /autoriza/i, /l[ií]der/i]),
   };
 
@@ -258,32 +268,19 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
     if (!nome) continue;
 
     const umAumVal =
-      col.umAum >= 0
-        ? parseFloat(String(cells[col.umAum] ?? 0).replace(",", ".")) || 0
-        : 0;
+      col.umAum >= 0 ? parseNumberBR(cells[col.umAum]) : 0;
     const blocoVal =
-      col.bloco >= 0
-        ? parseFloat(String(cells[col.bloco] ?? 0).replace(",", ".")) || 0
-        : 0;
+      col.bloco >= 0 ? parseNumberBR(cells[col.bloco]) : 0;
 
-    const qtde = hasQtde
-      ? parseFloat(String(cells[col.qtde] ?? 0).replace(",", ".")) || 0
-      : umAumVal + blocoVal || 0;
-    const horas = col.horas >= 0
-      ? parseFloat(String(cells[col.horas] ?? 1).replace(",", ".")) || 1
-      : 1;
+    const qtde = hasQtde ? parseNumberBR(cells[col.qtde]) : umAumVal + blocoVal || 0;
+    const horas = col.horas >= 0 ? parseNumberBR(cells[col.horas]) || 1 : 1;
     const produtividade =
       col.produtividade >= 0 && cells[col.produtividade]
-        ? parseFloat(String(cells[col.produtividade]).replace(",", "."))
+        ? parseNumberBR(cells[col.produtividade])
         : undefined;
-    const erro =
-      col.erro >= 0
-        ? parseFloat(String(cells[col.erro] ?? 0).replace(",", ".")) || 0
-        : 0;
+    const erro = col.erro >= 0 ? parseNumberBR(cells[col.erro]) : 0;
     const pctRaw = col.pctErro >= 0 ? cells[col.pctErro] : null;
-    const percentualErro = pctRaw
-      ? parseFloat(String(pctRaw).replace(",", ".").replace("%", ""))
-      : undefined;
+    const percentualErro = pctRaw ? parseNumberBR(String(pctRaw).replace("%", "")) : undefined;
     const umAum =
       col.umAum >= 0 ? umAumVal : Math.max(0, qtde - blocoVal);
     const bloco =

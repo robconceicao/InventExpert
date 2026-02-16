@@ -396,12 +396,6 @@ export default function AttendanceScreen() {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => void handleArchive(false)}
-            style={[styles.btnSecondary, { flex: 1, marginHorizontal: 6 }]}
-          >
-            <Text style={styles.btnTextSecondary}>Arquivar</Text>
-          </Pressable>
-          <Pressable
             onPress={() => void handleArchive(true)}
             style={[styles.btnSecondary, { flex: 1, marginLeft: 6 }]}
           >
