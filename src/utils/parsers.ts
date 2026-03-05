@@ -1,7 +1,7 @@
 import type {
   AttendanceCollaborator,
   AttendanceData,
-  ConferrerInput,
+  InventoryCheckerInput,
   ReportA,
   ReportB,
 } from "../types";
@@ -216,10 +216,12 @@ const parseNumberBR = (s: string): number => {
 };
 
 // ==========================
-// PARSER DE CONFERENTES (CSV/Excel)
+// PARSER INVENTEXP - CONFERENTES (CSV/Excel)
 // ==========================
-/** Colunas: Nome/Nome do Colaborador, Qtde, Horas, Produtividade?, Erro, %Erro?, 1a1, Bloco/BLOCO. Aceita , ; ou tab. Números BR (1.234,56). */
-export const parseConferrersCsv = (text: string): ConferrerInput[] => {
+/** Colunas: Nome, Qtde, Qtde1a1, Produtividade, Erro. Aceita , ; ou tab. Números BR (1.234,56). */
+export const parseInventoryCheckersCsv = (
+  text: string,
+): InventoryCheckerInput[] => {
   const lines = text
     .split(/[\r\n]+/)
     .map((l) => l.trim())
@@ -255,73 +257,40 @@ export const parseConferrersCsv = (text: string): ConferrerInput[] => {
 
   const header = parseRow(lines[0]).map((h) => h.replace(/^"|"$/g, "").trim());
   const col = {
-    nome: findCol(header, [/^nome\s+do\s+colaborador$/i, /^nome$/i, /colaborador/i, /name/i]),
-    qtde: findCol(header, [/^qtde$/i, /^qtd$/i, /quantidade/i]),
-    horas: findCol(header, [/^horas$/i, /hour/i]),
-    produtividade: findCol(header, [/^produtividade$/i, /^prod$/i]),
-    erro: findCol(header, [/erro\s*\(qtde\)/i, /erro\s*\(/i, /^erro$/i, /erros/i]),
-    pctErro: findCol(header, [/%\s*\(\s*erroqtd?\)?/i, /%\s*erro/i, /erroqtd/i, /erro\s*%/i, /percentual\s*erro/i]),
-    umAum: findCol(header, [/^1a1$/i, /1\s*a\s*1/i, /um a um/i]),
-    bloco: findCol(header, [/^bloco$/i, /^BLOCO$/i]),
-    anuencia: findCol(header, [/anu[eê]ncia/i, /autoriza/i, /l[ií]der/i]),
+    nome: findCol(header, [/^nome/i, /colaborador/i, /name/i]),
+    qtde: findCol(header, [/^qtde/i, /^qtd/i, /quantidade/i]),
+    qtde1a1: findCol(header, [/^qtde1a1/i, /1\s*a\s*1/i, /^1a1/i, /unit[aá]rio/i]),
+    produtividade: findCol(header, [/^produtividade/i, /prod.*hora/i, /itens.*hora/i, /^(?!horas).*prod/i, /prod/i]),
+    erro: findCol(header, [/^erro/i, /erros/i, /erro.*qtde/i]),
   };
 
-  if (col.nome < 0) return [];
-  const hasQtde = col.qtde >= 0;
+  if (col.nome < 0 || col.qtde < 0 || col.qtde1a1 < 0 || col.produtividade < 0 || col.erro < 0) {
+    return [];
+  }
 
-  const result: ConferrerInput[] = [];
+  const result: InventoryCheckerInput[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cells = parseRow(lines[i]).map((c) => (c ?? "").replace(/^"|"$/g, "").trim());
+    const cells = parseRow(lines[i]).map((c) =>
+      (c ?? "").replace(/^"|"$/g, "").trim(),
+    );
     const nome = (cells[col.nome] ?? "").trim();
     if (!nome) continue;
 
-    const umAumVal =
-      col.umAum >= 0 ? parseNumberBR(cells[col.umAum]) : 0;
-    const blocoVal =
-      col.bloco >= 0 ? parseNumberBR(cells[col.bloco]) : 0;
+    const qtde = parseNumberBR(cells[col.qtde]);
+    const qtde1a1 = parseNumberBR(cells[col.qtde1a1]);
+    const produtividade = parseNumberBR(cells[col.produtividade]);
+    const erro = parseNumberBR(cells[col.erro]);
 
-    let qtde = hasQtde ? parseNumberBR(cells[col.qtde]) : umAumVal + blocoVal || 0;
-    if (qtde <= 0 && (umAumVal > 0 || blocoVal > 0)) qtde = umAumVal + blocoVal;
-    const horas = col.horas >= 0 ? parseNumberBR(cells[col.horas]) || 1 : 1;
-    const produtividade =
-      col.produtividade >= 0 && cells[col.produtividade]
-        ? parseNumberBR(cells[col.produtividade])
-        : undefined;
-    const erro = col.erro >= 0 ? parseNumberBR(cells[col.erro]) : 0;
-    const pctRaw = col.pctErro >= 0 ? cells[col.pctErro] : null;
-    const percentualErro = pctRaw ? parseNumberBR(String(pctRaw).replace("%", "")) : undefined;
-    const umAum =
-      col.umAum >= 0 ? umAumVal : Math.max(0, qtde - blocoVal);
-    const bloco =
-      col.bloco >= 0 ? blocoVal : Math.max(0, qtde - umAumVal);
+    if (qtde <= 0 || produtividade < 0 || erro < 0) continue;
 
-    let anuenciaLider: boolean | undefined;
-    if (col.anuencia >= 0 && cells[col.anuencia]) {
-      const v = String(cells[col.anuencia]).toLowerCase();
-      anuenciaLider = /^s$|^sim$|^yes$|^1$|^true$/i.test(v);
-    }
-
-    let finalUmAum = umAum || Math.max(0, qtde - bloco);
-    let finalBloco = bloco || Math.max(0, qtde - umAum);
-    if (qtde > 0 && finalUmAum + finalBloco > qtde) {
-      const scale = qtde / (finalUmAum + finalBloco);
-      finalUmAum = Math.round(finalUmAum * scale);
-      finalBloco = Math.max(0, qtde - finalUmAum);
-    }
-    if (qtde > 0 && finalUmAum + finalBloco < qtde) {
-      finalBloco = Math.max(0, qtde - finalUmAum);
-    }
     result.push({
       nome,
       qtde,
-      horas,
+      qtde1a1,
       produtividade,
       erro,
-      percentualErro,
-      umAum: finalUmAum,
-      bloco: finalBloco,
-      anuenciaLider,
     });
   }
+
   return result;
 };
