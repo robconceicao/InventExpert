@@ -47,8 +47,27 @@ export default function AuthScreen() {
     }
   };
 
+  const validatePassword = (pass: string) => {
+    const hasLetter = /[a-zA-Z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSymbol = /[^a-zA-Z0-9]/.test(pass);
+    const isRightLength = pass.length > 0 && pass.length <= 8;
+    return hasLetter && hasNumber && hasSymbol && isRightLength;
+  };
+
   const handleSignUp = async () => {
     if (!supabase) return;
+    if (!trimmedEmail || !password) {
+      return Alert.alert("Aviso", "Preencha todos os campos.");
+    }
+
+    if (!validatePassword(password)) {
+      return Alert.alert(
+        "Senha Inválida",
+        "A senha deve ter no máximo 8 caracteres e conter letras, números e símbolos."
+      );
+    }
+
     try {
       setLoading(true);
       const { error } = await supabase.auth.signUp({
@@ -58,7 +77,10 @@ export default function AuthScreen() {
       if (error) {
         Alert.alert("Erro", translateAuthError(error.message));
       } else {
-        Alert.alert("Sucesso", "Verifique seu e-mail para ativar a conta.");
+        Alert.alert(
+          "Sucesso!",
+          "Enviamos um link de ativação para o seu e-mail. Por favor, confirme-o para liberar seu acesso."
+        );
       }
     } finally {
       setLoading(false);
@@ -99,6 +121,12 @@ export default function AuthScreen() {
             <Text style={styles.title}>InventExpert</Text>
             <Text style={styles.subtitle}>
               Gestão de Inventário para Líderes
+            </Text>
+          </View>
+
+          <View style={styles.instructionsContainer}>
+            <Text style={styles.instructionsText}>
+              <Text style={{ fontWeight: "700" }}>Primeiro acesso?</Text> Digite seu e-mail e uma senha (máx. 8 caracteres, com letras, números e símbolos) e clique em {"\""}Criar nova conta{"\""}. Em seguida, confirme a ativação no seu e-mail.
             </Text>
           </View>
 
@@ -217,5 +245,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginBottom: 16,
+  },
+  instructionsContainer: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: "#3B82F6",
+  },
+  instructionsText: {
+    fontSize: 13,
+    color: "#1E40AF",
+    lineHeight: 18,
   },
 });
