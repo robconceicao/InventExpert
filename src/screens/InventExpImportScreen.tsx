@@ -6,6 +6,7 @@ import {
     Alert,
     Image,
     Linking,
+    Platform,
     Pressable,
     ScrollView,
     StatusBar,
@@ -205,11 +206,14 @@ export default function InventExpImportScreen() {
       index + 1,
       evaluations.length,
     );
-    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(text)}`).catch(
+    const waUrl = Platform.OS === "web"
+      ? `https://wa.me/?text=${encodeURIComponent(text)}`
+      : `whatsapp://send?text=${encodeURIComponent(text)}`;
+    Linking.openURL(waUrl).catch(
       () =>
         Alert.alert(
           "Erro",
-          "Não foi possível abrir o WhatsApp neste dispositivo.",
+          "N\u00e3o foi poss\u00edvel abrir o WhatsApp neste dispositivo.",
         ),
     );
   };

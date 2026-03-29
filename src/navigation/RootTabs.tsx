@@ -5,13 +5,17 @@ import React, { useEffect, useState } from "react";
 import { Image, Platform, Pressable, Text, View } from "react-native";
 
 // Importações dos componentes e telas
-import SyncStatus from "../../src/components/SyncStatus";
+import SyncStatus from "../components/SyncStatus";
 import AttendanceScreen from "../screens/AttendanceScreen";
 import InventExpImportScreen from "../screens/InventExpImportScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
-import ScannerScreen from "../screens/ScannerScreen";
+import AuthScreen from "../screens/AuthScreen";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
+
+// Metro automatically resolves ScannerScreen.web.tsx on web (stub)
+// and ScannerScreen.tsx on native
+import ScannerScreen from "../screens/ScannerScreen";
 
 export type RootTabParamList = {
   ReportA: undefined;
@@ -45,6 +49,10 @@ export default function RootTabs() {
     };
   }, []);
 
+  if (!session) {
+    return <AuthScreen />;
+  }
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -76,7 +84,14 @@ export default function RootTabs() {
           </View>
         ),
         tabBarActiveTintColor: "#2563EB",
-        tabBarStyle: { backgroundColor: "#fff" },
+        tabBarStyle: {
+          backgroundColor: "#fff",
+          borderTopWidth: 1,
+          borderTopColor: "#E2E8F0",
+          elevation: 0,
+          shadowOpacity: 0,
+          height: Platform.OS === "web" ? 56 : undefined,
+        },
         tabBarIcon: ({ color, size }) => {
           const iconMap: Record<
             keyof RootTabParamList,

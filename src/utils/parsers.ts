@@ -21,7 +21,7 @@ const fmtMoeda = (val: number | "") =>
         .toFixed(2)
         .replace(".", ",")
         .replace(/\B(?=(\d{3})+(?!\d))/g, ".")}*`;
-const fmtVal = (val: any) => (!val ? "" : `*${val}*`);
+const fmtVal = (val: string | number | boolean | null | undefined) => (!val && val !== 0 ? "" : `*${val}*`);
 const fmtBool = (val: boolean | null) =>
   val === true ? "*Sim*" : val === false ? "*Não*" : "*N/A*";
 
@@ -124,16 +124,36 @@ export const formatAttendanceMessage = (data: AttendanceData): string => {
   );
 };
 
+// Converte "HH:MM" para minutos para comparação
+const timeToMinutes = (t: string): number => {
+  if (!t) return Infinity;
+  const [h, m] = t.split(":").map(Number);
+  const mins = (h ?? 0) * 60 + (m ?? 0);
+  // Horários de 0-17h são tratados como dia seguinte (pós-meia-noite)
+  return (h ?? 0) < 18 ? mins + 1440 : mins;
+};
+
 export const formatReportA = (r: ReportA): string => {
-  let blocoAvancos = `Avanço 22h00: ${fmtPct(r.avanco22h)}
-Avanço 00h00: ${fmtPct(r.avanco00h)}
-Avanço 01h00: ${fmtPct(r.avanco01h)}
-Avanço 03h00: ${fmtPct(r.avanco03h)}
-Avanço 04h00: ${fmtPct(r.avanco04h)}`;
+  // Monta os avanços padrão como pares [hora_str, minutos, valor]
+  const avancos: { label: string; mins: number; val: number | "" }[] = [
+    { label: "22h00", mins: timeToMinutes("22:00"), val: r.avanco22h },
+    { label: "00h00", mins: timeToMinutes("00:00"), val: r.avanco00h },
+    { label: "01h00", mins: timeToMinutes("01:00"), val: r.avanco01h },
+    { label: "03h00", mins: timeToMinutes("03:00"), val: r.avanco03h },
+    { label: "04h00", mins: timeToMinutes("04:00"), val: r.avanco04h },
+  ];
   if (r.avancoExtraHora && r.avancoExtraValor !== "") {
-    const horaReal = r.avancoExtraHora.replace(":", "h");
-    blocoAvancos += `\nAvanço ${horaReal}: ${fmtPct(r.avancoExtraValor)}`;
+    avancos.push({
+      label: r.avancoExtraHora.replace(":", "h"),
+      mins: timeToMinutes(r.avancoExtraHora),
+      val: r.avancoExtraValor,
+    });
   }
+  avancos.sort((a, b) => a.mins - b.mins);
+  const blocoAvancos = avancos
+    .map((a) => `Avanço ${a.label}: ${fmtPct(a.val)}`)
+    .join("\n");
+
   return `*ACOMPANHAMENTO DE INVENTÁRIO*
 
 Nº Loja: ${fmtVal(r.lojaNum)}
@@ -162,12 +182,6 @@ Produtividade (PH): ${fmtIntBr(r.ph)}`;
 };
 
 export const formatReportB = (r: ReportB): string => {
-  const phCalculado =
-    typeof r.totalPecas === "number" &&
-    typeof r.pivProgramado === "number" &&
-    r.pivProgramado > 0
-      ? (r.totalPecas / r.pivProgramado).toFixed(0)
-      : "0";
   return `*RESUMO FINAL DO INVENTÁRIO*
 
 Nº Loja: ${fmtVal(r.lojaNum)}
@@ -180,26 +194,26 @@ Ini. Cont. Dep.: ${fmtTime(r.inicioDeposito)}
 Fim Cont. Dep.: ${fmtTime(r.terminoDeposito)}
 Ini. Cont. Loja: ${fmtTime(r.inicioLoja)}
 Fim Cont. Loja: ${fmtTime(r.terminoLoja)}
-Ini. Div. Controlados: ${fmtTime(r.inicioDivergencia)}
+Início Aud. Cliente: ${fmtTime(r.inicioAuditoriaCliente)}
+Fim Aud. Cliente: ${fmtTime(r.terminoAuditoriaCliente)}
+Ini. Div. Controlados: ${fmtTime(r.inicioControlados)}
 Ini. Divergência: ${fmtTime(r.inicioDivergencia)}
 Fim Divergência: ${fmtTime(r.terminoDivergencia)}
+Ini. Ñ contados: ${fmtTime(r.inicioNaoContados)}
+Fim Ñ contados: ${fmtTime(r.terminoNaoContados)}
 Itens Alt. Diverg.: ${fmtVal(r.qtdAlterados)}
-Itens Não Cont.: ${fmtVal(r.qtdNaoContados)}
+Itens Ñ Cont.: ${fmtVal(r.qtdNaoContados)}
 Enc. no Não Cont.: ${fmtVal(r.qtdEncontradosNaoContados)}
-Envio 1º Arq.: ${fmtTime(r.envioArquivo1)}
-Envio 2º Arq.: ${fmtTime(r.envioArquivo2)}
-Envio 3º Arq.: ${fmtTime(r.envioArquivo3)}
 Fim Inventário: ${fmtTime(r.terminoInventario)}
 Total Peças: ${fmtIntBr(r.totalPecas)}
-Valor Total: ${fmtMoeda(r.valorFinanceiro)}
+Val. Fin.: ${fmtMoeda(r.valorFinanceiro)}
 Aval. Prep. Dep.: ${fmtPct(r.avalPrepDeposito)}
 Aval. Prep. Loja: ${fmtPct(r.avalPrepLoja)}
 Satisfação: ${fmtVal(r.satisfacao)}
 Responsável: ${fmtVal(r.responsavel)}
 Acurac. Cliente: ${fmtPct(r.acuracidadeCliente)}
 Acurac. Terc.: ${fmtPct(r.acuracidadeTerceirizada)}
-Houve Suporte?: ${fmtBool(r.suporteSolicitado)}
-PH Calculado: *${phCalculado}*`;
+Houve Suporte: ${fmtBool(r.suporteSolicitado)}`;
 };
 
 // Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 5.23 -> 5.23

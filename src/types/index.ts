@@ -27,7 +27,7 @@ export interface ReportA {
   acuracidade: number | "";
   percentualAuditoria: number | "";
   ph: number | "";
-  satisfacao: number | "";
+  satisfacao: number | string;
   contagemAntecipada: boolean | null;
 }
 
@@ -44,6 +44,7 @@ export interface ReportB {
   terminoLoja: string;
   inicioAuditoriaCliente: string;
   terminoAuditoriaCliente: string;
+  inicioControlados: string;
   inicioDivergencia: string;
   terminoDivergencia: string;
   inicioNaoContados: string;
@@ -60,7 +61,7 @@ export interface ReportB {
   avalPrepLoja: number | "";
   acuracidadeCliente: number | "";
   acuracidadeTerceirizada: number | "";
-  satisfacao: number | "";
+  satisfacao: number | string;
   responsavel: string;
   suporteSolicitado: boolean | null;
   terminoInventario: string;
@@ -109,4 +110,3 @@ export interface InventoryCheckerEvaluation {
   nivelColor: string;
   tags: string[];
 }
-

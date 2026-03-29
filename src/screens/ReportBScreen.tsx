@@ -1,37 +1,39 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
-import * as FileSystem from "expo-file-system/legacy";
-import * as ImagePicker from "expo-image-picker";
-import Share from "react-native-share";
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
+import React, {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useState,
+} from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Linking,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { ReportA, ReportB } from "../types";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
+import type { ReportB } from "../types";
 import { formatReportB } from "../utils/parsers";
 
 const HeaderIcon = require("../../assets/images/splash-icon.png");
-const REPORT_A_KEY = "inventexpert:reportA";
 const REPORT_B_KEY = "inventexpert:reportB";
 const REPORT_B_HISTORY_KEY = "inventexpert:reportB:history";
 
-const initialState: ReportB = {
+const makeInitialState = (): ReportB => ({
   cliente: "",
   lojaNum: "",
   data: new Date().toLocaleDateString("pt-BR"),
@@ -44,6 +46,7 @@ const initialState: ReportB = {
   terminoLoja: "",
   inicioAuditoriaCliente: "",
   terminoAuditoriaCliente: "",
+  inicioControlados: "",
   inicioDivergencia: "",
   terminoDivergencia: "",
   inicioNaoContados: "",
@@ -64,50 +67,32 @@ const initialState: ReportB = {
   responsavel: "",
   suporteSolicitado: null,
   terminoInventario: "",
-};
+});
+
 
 export default function ReportBScreen() {
   const navigation = useNavigation();
-  const [report, setReport] = useState<ReportB>(initialState);
-  const [photoUris, setPhotoUris] = useState<string[]>([]);
+  const [report, setReport] = useState<ReportB>(makeInitialState);
+  const [backupUri, setBackupUri] = useState<string | null>(null);
+  const [backupName, setBackupName] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [isSharingPhotos, setIsSharingPhotos] = useState(false);
+  const [isSharingBackup, setIsSharingBackup] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  useEffect(() => {
-    const load = async () => {
-      const savedB = await AsyncStorage.getItem(REPORT_B_KEY);
-      if (savedB) setReport(JSON.parse(savedB));
-      else {
-        const savedA = await AsyncStorage.getItem(REPORT_A_KEY);
-        if (savedA) {
-          const rA: ReportA = JSON.parse(savedA);
-          setReport((prev) => ({
-            ...prev,
-            cliente: rA.lojaNome,
-            lojaNum: rA.lojaNum,
-            pivProgramado: rA.qtdColaboradores,
-            chegadaEquipe: rA.hrChegada,
-            inicioDeposito: rA.inicioContagemEstoque,
-            terminoDeposito: rA.terminoContagemEstoque,
-            inicioLoja: rA.inicioContagemLoja,
-            terminoLoja: rA.terminoContagemLoja,
-            inicioDivergencia: rA.inicioDivergencia,
-            terminoDivergencia: rA.terminoDivergencia,
-            envioArquivo1: rA.envioArquivo1,
-            envioArquivo2: rA.envioArquivo2,
-            envioArquivo3: rA.envioArquivo3,
-            responsavel: rA.lider,
-            terminoInventario: rA.terminoInventario,
-          }));
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        const savedB = await AsyncStorage.getItem(REPORT_B_KEY);
+        if (savedB) {
+          setReport(JSON.parse(savedB));
         }
-      }
-    };
-    load();
-  }, []);
+      };
+      load();
+    }, []),
+  );
 
   useEffect(() => {
     AsyncStorage.setItem(REPORT_B_KEY, JSON.stringify(report)).catch(
@@ -146,55 +131,58 @@ export default function ReportBScreen() {
     </View>
   );
 
-  const pickImages = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 1,
+  const pickBackup = async () => {
+    const res = await DocumentPicker.getDocumentAsync({
+      type: ["application/zip", "application/x-zip-compressed", "*/*"],
+      copyToCacheDirectory: true,
     });
-    if (!res.canceled)
-      setPhotoUris((prev) => [...prev, ...res.assets.map((a) => a.uri)]);
+    if (!res.canceled && res.assets.length > 0) {
+      const asset = res.assets[0];
+      setBackupUri(asset.uri);
+      setBackupName(asset.name);
+    }
   };
 
   const handleSendText = () => {
     const msg = formatReportB(report);
-    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(
-      () => {
-        Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
-      },
-    );
+    const waUrl =
+      Platform.OS === "web"
+        ? `https://wa.me/?text=${encodeURIComponent(msg)}`
+        : `whatsapp://send?text=${encodeURIComponent(msg)}`;
+    Linking.openURL(waUrl).catch(() => {
+      Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
+    });
   };
 
-  const handleShareImages = async () => {
-    if (photoUris.length === 0) {
-      Alert.alert("Atenção", "Nenhuma foto selecionada.");
+  const handleShareBackup = async () => {
+    if (!backupUri) {
+      Alert.alert("Atenção", "Nenhum arquivo de backup selecionado.");
+      return;
+    }
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Backup selecionado ✅",
+        `Arquivo: ${backupName ?? "backup"}\n\nEnvie manualmente pelo WhatsApp Web após enviar o texto.`,
+      );
       return;
     }
     try {
-      setIsSharingPhotos(true);
-      // Garante URIs no formato file:// para compatibilidade
-      const urlsToShare = await Promise.all(
-        photoUris.map(async (uri) => {
-          if (uri.startsWith("file://")) return uri;
-          const name = `foto_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-          const dest = `${FileSystem.cacheDirectory}${name}`;
-          await FileSystem.copyAsync({ from: uri, to: dest });
-          return dest;
-        }),
-      );
-      await Share.open({
-        urls: urlsToShare,
-        type: "image/jpeg",
-        title: "Fotos do relatório",
-        message: "Fotos do inventário",
+      setIsSharingBackup(true);
+      // Dynamic require avoids loading the native module on web
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const RNShare = (require("react-native-share") as { default: { open: (opts: Record<string, unknown>) => Promise<void> } }).default;
+      await RNShare.open({
+        url: backupUri,
+        title: "Backup do inventário",
+        message: "Backup do inventário",
       });
     } catch (e: unknown) {
       const err = e as { message?: string };
       if (err?.message !== "User did not share") {
-        Alert.alert("Erro", "Falha ao compartilhar as fotos como imagens.");
+        Alert.alert("Erro", "Falha ao compartilhar o backup.");
       }
     } finally {
-      setIsSharingPhotos(false);
+      setIsSharingBackup(false);
     }
   };
 
@@ -202,15 +190,19 @@ export default function ReportBScreen() {
     try {
       const stored = await AsyncStorage.getItem(REPORT_B_HISTORY_KEY);
       const history = stored
-        ? (JSON.parse(stored) as Array<{ savedAt: string; report: ReportB }>)
+        ? (JSON.parse(stored) as { savedAt: string; report: ReportB }[])
         : [];
-      history.push({ savedAt: new Date().toISOString(), report: { ...report } });
+      history.push({
+        savedAt: new Date().toISOString(),
+        report: { ...report },
+      });
       await AsyncStorage.setItem(REPORT_B_HISTORY_KEY, JSON.stringify(history));
       await enqueueSyncItem("reportB", { report });
       void syncQueue();
       if (clearForm) {
-        setReport(initialState);
-        setPhotoUris([]);
+        setReport(makeInitialState());
+        setBackupUri(null);
+        setBackupName(null);
         Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
       } else {
         Alert.alert("Arquivado", "Dados salvos com sucesso.");
@@ -221,17 +213,22 @@ export default function ReportBScreen() {
   };
 
   const handleClearOnly = () => {
-    Alert.alert("Limpar Tudo?", "Isso apagará os dados e fotos atuais sem salvar.", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Limpar",
-        style: "destructive",
-        onPress: () => {
-          setReport(initialState);
-          setPhotoUris([]);
+    Alert.alert(
+      "Limpar Tudo?",
+      "Isso apagará os dados e o backup atual sem salvar.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Limpar",
+          style: "destructive",
+          onPress: () => {
+            setReport(makeInitialState());
+            setBackupUri(null);
+            setBackupName(null);
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
@@ -286,7 +283,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.pivProgramado)}
                   onChangeText={(t) =>
-                    setField("pivProgramado", Number(t) || "")
+                    setField("pivProgramado", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -297,7 +294,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.pivRealizado)}
                   onChangeText={(t) =>
-                    setField("pivRealizado", Number(t) || "")
+                    setField("pivRealizado", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -330,6 +327,15 @@ export default function ReportBScreen() {
             <Text style={styles.sectionTitle}>3. Auditoria e Divergências</Text>
             <View style={styles.row}>
               <View style={styles.half}>
+                {renderTimeField("Início Aud. Cliente", "inicioAuditoriaCliente")}
+              </View>
+              <View style={styles.half}>
+                {renderTimeField("Fim Aud. Cliente", "terminoAuditoriaCliente")}
+              </View>
+            </View>
+            {renderTimeField("Ini. Div. Controlados", "inicioControlados")}
+            <View style={styles.row}>
+              <View style={styles.half}>
                 {renderTimeField("Ini. Diverg.", "inicioDivergencia")}
               </View>
               <View style={styles.half}>
@@ -338,10 +344,10 @@ export default function ReportBScreen() {
             </View>
             <View style={styles.row}>
               <View style={styles.half}>
-                {renderTimeField("Ini. Não Cont.", "inicioNaoContados")}
+                {renderTimeField("Ini. Ñ Cont.", "inicioNaoContados")}
               </View>
               <View style={styles.half}>
-                {renderTimeField("Fim Não Cont.", "terminoNaoContados")}
+                {renderTimeField("Fim Ñ Cont.", "terminoNaoContados")}
               </View>
             </View>
           </View>
@@ -352,7 +358,7 @@ export default function ReportBScreen() {
             <TextInput
               style={styles.input}
               value={String(report.totalPecas)}
-              onChangeText={(t) => setField("totalPecas", Number(t) || "")}
+              onChangeText={(t) => setField("totalPecas", t === "" ? "" : Number(t))}
               keyboardType="numeric"
               placeholder="0"
             />
@@ -360,7 +366,7 @@ export default function ReportBScreen() {
             <TextInput
               style={styles.input}
               value={String(report.valorFinanceiro)}
-              onChangeText={(t) => setField("valorFinanceiro", Number(t) || "")}
+              onChangeText={(t) => setField("valorFinanceiro", t === "" ? "" : Number(t))}
               keyboardType="numeric"
             />
             <View style={styles.row}>
@@ -370,7 +376,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.qtdAlterados)}
                   onChangeText={(t) =>
-                    setField("qtdAlterados", Number(t) || "")
+                    setField("qtdAlterados", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -381,7 +387,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.qtdNaoContados)}
                   onChangeText={(t) =>
-                    setField("qtdNaoContados", Number(t) || "")
+                    setField("qtdNaoContados", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -392,7 +398,7 @@ export default function ReportBScreen() {
               style={styles.input}
               value={String(report.qtdEncontradosNaoContados)}
               onChangeText={(t) =>
-                setField("qtdEncontradosNaoContados", Number(t) || "")
+                setField("qtdEncontradosNaoContados", t === "" ? "" : Number(t))
               }
               keyboardType="numeric"
             />
@@ -416,7 +422,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.avalPrepDeposito)}
                   onChangeText={(t) =>
-                    setField("avalPrepDeposito", Number(t) || "")
+                    setField("avalPrepDeposito", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -427,7 +433,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.avalPrepLoja)}
                   onChangeText={(t) =>
-                    setField("avalPrepLoja", Number(t) || "")
+                    setField("avalPrepLoja", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -440,7 +446,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.acuracidadeCliente)}
                   onChangeText={(t) =>
-                    setField("acuracidadeCliente", Number(t) || "")
+                    setField("acuracidadeCliente", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -451,7 +457,7 @@ export default function ReportBScreen() {
                   style={styles.input}
                   value={String(report.acuracidadeTerceirizada)}
                   onChangeText={(t) =>
-                    setField("acuracidadeTerceirizada", Number(t) || "")
+                    setField("acuracidadeTerceirizada", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -463,9 +469,12 @@ export default function ReportBScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.satisfacao)}
-                  onChangeText={(t) => setField("satisfacao", Number(t) || "")}
+                  onChangeText={(t) => {
+                    const v = t.replace(",", ".").trim();
+                    setField("satisfacao", v);
+                  }}
                   keyboardType="numeric"
-                  maxLength={1}
+                  placeholder="ex: 4.5"
                 />
               </View>
             </View>
@@ -475,7 +484,7 @@ export default function ReportBScreen() {
               value={report.responsavel}
               onChangeText={(t) => setField("responsavel", t)}
             />
-            {renderTimeField("Término Inventário", "terminoInventario")}
+            {renderTimeField("Fim Inventário", "terminoInventario")}
             <Text style={styles.label}>Houve solicitação de Suporte?</Text>
             <View style={styles.row}>
               <Pressable
@@ -516,29 +525,19 @@ export default function ReportBScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Fotos</Text>
+            <Text style={styles.sectionTitle}>Backup</Text>
             <Text style={styles.helpText}>
-              Selecione as fotos (Documento Assinado, etc)
+              Selecione o arquivo compactado de backup (zip)
             </Text>
-            <Pressable style={styles.buttonPhoto} onPress={pickImages}>
-              <Ionicons name="images-outline" size={24} color="#2563EB" />
-              <Text style={styles.btnTextSecondary}>Selecionar Fotos</Text>
+            <Pressable style={styles.buttonPhoto} onPress={pickBackup}>
+              <Ionicons name="folder-open-outline" size={24} color="#2563EB" />
+              <Text style={styles.btnTextSecondary}>Selecionar Backup</Text>
             </Pressable>
-            <ScrollView horizontal style={{ marginTop: 10 }}>
-              {photoUris.map((u, i) => (
-                <Image
-                  key={i}
-                  source={{ uri: u }}
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 8,
-                    marginRight: 8,
-                    backgroundColor: "#eee",
-                  }}
-                />
-              ))}
-            </ScrollView>
+            {backupName ? (
+              <Text style={[styles.helpText, { marginTop: 8, color: "#16A34A" }]}>
+                ✅ {backupName}
+              </Text>
+            ) : null}
           </View>
 
           <Pressable
@@ -557,7 +556,10 @@ export default function ReportBScreen() {
               <Text style={styles.btnTextDanger}>Limpar</Text>
             </Pressable>
             <Pressable
-              style={[styles.buttonClear, { flex: 1, backgroundColor: "#E2E8F0" }]}
+              style={[
+                styles.buttonClear,
+                { flex: 1, backgroundColor: "#E2E8F0" },
+              ]}
               onPress={() => void handleArchive(true)}
             >
               <Text style={[styles.btnTextDanger, { color: "#334155" }]}>
@@ -574,7 +576,7 @@ export default function ReportBScreen() {
             <Text style={styles.sectionTitle}>Pré-visualização e Envio</Text>
             <Text style={styles.helpText}>1. Clique para enviar o Texto.</Text>
             <Text style={styles.helpText}>
-              2. Volte e clique para enviar as Fotos.
+              2. Volte e clique para enviar o Backup.
             </Text>
 
             <ScrollView style={styles.previewBox}>
@@ -611,17 +613,20 @@ export default function ReportBScreen() {
                 styles.buttonPrimary,
                 { marginTop: 10, backgroundColor: "#0284C7" },
               ]}
-              onPress={() => void handleShareImages()}
-              disabled={photoUris.length === 0 || isSharingPhotos}
+              onPress={() => void handleShareBackup()}
+              disabled={!backupUri || isSharingBackup}
             >
-              {isSharingPhotos ? (
+              {isSharingBackup ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Ionicons name="images" size={20} color="#fff" style={{ marginRight: 10 }} />
+                <Ionicons
+                  name="archive"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 10 }}
+                />
               )}
-              <Text style={styles.btnText}>
-                2º Enviar Fotos {photoUris.length > 0 ? `(${photoUris.length})` : ""}
-              </Text>
+              <Text style={styles.btnText}>2º Enviar Backup</Text>
             </Pressable>
           </View>
         </View>

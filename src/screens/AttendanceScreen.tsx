@@ -7,6 +7,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -120,7 +121,9 @@ export default function AttendanceScreen() {
 
   const handleSendWhatsApp = () => {
     // ENVIO DIRETO SEM COLAR (Abre com o texto preenchido)
-    const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
+    const url = Platform.OS === "web"
+      ? `https://wa.me/?text=${encodeURIComponent(previewMessage)}`
+      : `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
     Linking.openURL(url).catch(() => {
       Alert.alert("Erro", "Não foi possível abrir o WhatsApp.");
     });
@@ -130,7 +133,7 @@ export default function AttendanceScreen() {
     try {
       const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
       const history = storedHistory
-        ? (JSON.parse(storedHistory) as Array<Record<string, unknown>>)
+        ? (JSON.parse(storedHistory) as Record<string, unknown>[])
         : [];
       history.push({
         savedAt: new Date().toISOString(),
@@ -173,10 +176,10 @@ export default function AttendanceScreen() {
     try {
       const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
       const history = storedHistory
-        ? (JSON.parse(storedHistory) as Array<{
+        ? (JSON.parse(storedHistory) as {
             savedAt: string;
             attendance: AttendanceData;
-          }>)
+          }[])
         : [];
       if (history.length === 0) {
         // Alert.alert('Sem dados', 'Não há dados arquivados para exportar.');
@@ -372,7 +375,9 @@ export default function AttendanceScreen() {
                 );
                 return;
               }
-              const url = `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
+              const url = Platform.OS === "web"
+                ? `https://wa.me/?text=${encodeURIComponent(previewMessage)}`
+                : `whatsapp://send?text=${encodeURIComponent(previewMessage)}`;
               Linking.openURL(url).catch(() =>
                 Alert.alert("Erro", "Não foi possível abrir o WhatsApp.")
               );
@@ -403,34 +408,35 @@ export default function AttendanceScreen() {
           </Pressable>
         </View>
 
-        <Modal visible={previewVisible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.cardTitle}>Pré-visualização</Text>
-              <ScrollView style={styles.previewScroll}>
-                <Text style={styles.previewText}>{previewMessage}</Text>
-              </ScrollView>
-              <View style={styles.modalActions}>
-                <Pressable
-                  onPress={() => setPreviewVisible(false)}
-                  style={styles.btnBack}
-                >
-                  <Text style={styles.btnTextSecondary}>Voltar</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setPreviewVisible(false);
-                    handleSendWhatsApp();
-                  }}
-                  style={styles.btnConfirm}
-                >
-                  <Text style={styles.btnTextWhite}>Enviar WhatsApp</Text>
-                </Pressable>
-              </View>
+      </ScrollView>
+
+      <Modal visible={previewVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.cardTitle}>Pré-visualização</Text>
+            <ScrollView style={styles.previewScroll}>
+              <Text style={styles.previewText}>{previewMessage}</Text>
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setPreviewVisible(false)}
+                style={styles.btnBack}
+              >
+                <Text style={styles.btnTextSecondary}>Voltar</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setPreviewVisible(false);
+                  handleSendWhatsApp();
+                }}
+                style={styles.btnConfirm}
+              >
+                <Text style={styles.btnTextWhite}>Enviar WhatsApp</Text>
+              </Pressable>
             </View>
           </View>
-        </Modal>
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

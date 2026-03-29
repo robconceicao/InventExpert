@@ -1,6 +1,20 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
+
+// ---- Web helper: trigger browser download ----
+const downloadOnWeb = (filename: string, content: string, mimeType: string) => {
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
 /** Compartilha um arquivo de texto (ex.: relatório gerencial .txt) */
 export const shareTextFile = async (
@@ -8,6 +22,10 @@ export const shareTextFile = async (
   content: string,
   dialogTitle = "Exportar relatório"
 ) => {
+  if (Platform.OS === "web") {
+    downloadOnWeb(filename, content, "text/plain;charset=utf-8");
+    return;
+  }
   try {
     const directory =
       FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
@@ -34,25 +52,30 @@ export const shareCsvFile = async (
   headers: string[],
   rows: (string | number)[][],
 ) => {
-  try {
-    const headerString = headers.join(";") + "\n";
-    const rowString = rows
-      .map((row) =>
-        row
-          .map((val) => {
-            const s = String(val ?? "").replace(/"/g, '""');
-            return s.includes(";") || s.includes("\n") ? `"${s}"` : s;
-          })
-          .join(";")
-      )
-      .join("\n");
-    const csvContent = "\uFEFF" + headerString + rowString;
+  const headerString = headers.join(";") + "\n";
+  const rowString = rows
+    .map((row) =>
+      row
+        .map((val) => {
+          const s = String(val ?? "").replace(/"/g, '""');
+          return s.includes(";") || s.includes("\n") ? `"${s}"` : s;
+        })
+        .join(";"),
+    )
+    .join("\n");
+  const csvContent = headerString + rowString;
 
+  if (Platform.OS === "web") {
+    downloadOnWeb(filename, csvContent, "text/csv;charset=utf-8");
+    return;
+  }
+
+  try {
     const directory =
       FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
     const fileUri = directory.replace(/\/?$/, "/") + filename;
 
-    await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+    await FileSystem.writeAsStringAsync(fileUri, "\uFEFF" + csvContent, {
       encoding: FileSystem.EncodingType.UTF8,
     });
 

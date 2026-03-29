@@ -3,23 +3,23 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Linking,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { ReportA } from "../types";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
+import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
 const HeaderIcon = require("../../assets/images/splash-icon.png");
@@ -76,6 +76,39 @@ export default function ReportAScreen() {
 
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
+
+    // Auto-fill ReportB when ReportA changes
+    AsyncStorage.getItem("inventexpert:reportB").then((res) => {
+      const bReport = res ? JSON.parse(res) : {};
+      const updatedB = {
+        ...bReport,
+        cliente: report.lojaNome || bReport.cliente || "",
+        lojaNum: report.lojaNum || bReport.lojaNum || "",
+        chegadaEquipe: report.hrChegada || bReport.chegadaEquipe || "",
+        inicioDeposito:
+          report.inicioContagemEstoque || bReport.inicioDeposito || "",
+        terminoDeposito:
+          report.terminoContagemEstoque || bReport.terminoDeposito || "",
+        inicioLoja: report.inicioContagemLoja || bReport.inicioLoja || "",
+        terminoLoja: report.terminoContagemLoja || bReport.terminoLoja || "",
+        inicioDivergencia:
+          report.inicioDivergencia || bReport.inicioDivergencia || "",
+        envioArquivo1: report.envioArquivo1 || bReport.envioArquivo1 || "",
+        envioArquivo2: report.envioArquivo2 || bReport.envioArquivo2 || "",
+        envioArquivo3: report.envioArquivo3 || bReport.envioArquivo3 || "",
+        avalPrepDeposito: report.avalEstoque || bReport.avalPrepDeposito || "",
+        avalPrepLoja: report.avalLoja || bReport.avalPrepLoja || "",
+        satisfacao: report.satisfacao || bReport.satisfacao || "",
+        responsavel: report.lider || bReport.responsavel || "",
+        terminoInventario:
+          report.terminoInventario || bReport.terminoInventario || "",
+      };
+
+      AsyncStorage.setItem(
+        "inventexpert:reportB",
+        JSON.stringify(updatedB),
+      ).catch(() => null);
+    });
   }, [report]);
 
   const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
@@ -111,16 +144,23 @@ export default function ReportAScreen() {
 
   const handleSend = () => {
     const msg = formatReportA(report);
-    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+    const waUrl =
+      Platform.OS === "web"
+        ? `https://wa.me/?text=${encodeURIComponent(msg)}`
+        : `whatsapp://send?text=${encodeURIComponent(msg)}`;
+    Linking.openURL(waUrl);
   };
 
   const handleArchive = async (clearForm: boolean) => {
     try {
       const stored = await AsyncStorage.getItem(HISTORY_KEY);
       const history = stored
-        ? (JSON.parse(stored) as Array<{ savedAt: string; report: ReportA }>)
+        ? (JSON.parse(stored) as { savedAt: string; report: ReportA }[])
         : [];
-      history.push({ savedAt: new Date().toISOString(), report: { ...report } });
+      history.push({
+        savedAt: new Date().toISOString(),
+        report: { ...report },
+      });
       await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
       await enqueueSyncItem("reportA", { report });
       void syncQueue();
@@ -182,7 +222,7 @@ export default function ReportAScreen() {
                   style={styles.input}
                   value={String(report.qtdColaboradores)}
                   onChangeText={(t) =>
-                    setField("qtdColaboradores", Number(t) || "")
+                    setField("qtdColaboradores", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -229,7 +269,7 @@ export default function ReportAScreen() {
                 {renderTimeField("Fim Diverg.", "terminoDivergencia")}
               </View>
             </View>
-            {renderTimeField("Término Inventário", "terminoInventario")}
+            {renderTimeField("Fim Inventário", "terminoInventario")}
           </View>
 
           <View style={styles.section}>
@@ -240,7 +280,9 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco22h)}
-                  onChangeText={(t) => setField("avanco22h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) =>
+                    setField("avanco22h", t === "" ? "" : Number(t))
+                  }
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -250,7 +292,9 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco00h)}
-                  onChangeText={(t) => setField("avanco00h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) =>
+                    setField("avanco00h", t === "" ? "" : Number(t))
+                  }
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -262,7 +306,9 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco01h)}
-                  onChangeText={(t) => setField("avanco01h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) =>
+                    setField("avanco01h", t === "" ? "" : Number(t))
+                  }
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -272,7 +318,9 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco03h)}
-                  onChangeText={(t) => setField("avanco03h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) =>
+                    setField("avanco03h", t === "" ? "" : Number(t))
+                  }
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -284,14 +332,18 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco04h)}
-                  onChangeText={(t) => setField("avanco04h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) =>
+                    setField("avanco04h", t === "" ? "" : Number(t))
+                  }
                   keyboardType="numeric"
                   placeholder="%"
                 />
               </View>
             </View>
             <View style={styles.customTimeBox}>
-              <Text style={styles.customTimeTitle}>Incluir novo horário (opcional)</Text>
+              <Text style={styles.customTimeTitle}>
+                Incluir novo horário (opcional)
+              </Text>
               <View style={styles.row}>
                 <View style={styles.half}>
                   {renderTimeField("Hora", "avancoExtraHora")}
@@ -327,7 +379,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avalEstoque)}
-                  onChangeText={(t) => setField("avalEstoque", Number(t) || "")}
+                  onChangeText={(t) => setField("avalEstoque", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                 />
               </View>
@@ -336,7 +388,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avalLoja)}
-                  onChangeText={(t) => setField("avalLoja", Number(t) || "")}
+                  onChangeText={(t) => setField("avalLoja", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                 />
               </View>
@@ -347,7 +399,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.acuracidade)}
-                  onChangeText={(t) => setField("acuracidade", Number(t) || "")}
+                  onChangeText={(t) => setField("acuracidade", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                 />
               </View>
@@ -357,7 +409,7 @@ export default function ReportAScreen() {
                   style={styles.input}
                   value={String(report.percentualAuditoria)}
                   onChangeText={(t) =>
-                    setField("percentualAuditoria", Number(t) || "")
+                    setField("percentualAuditoria", t === "" ? "" : Number(t))
                   }
                   keyboardType="numeric"
                 />
@@ -369,7 +421,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.ph)}
-                  onChangeText={(t) => setField("ph", Number(t) || "")}
+                  onChangeText={(t) => setField("ph", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                 />
               </View>
@@ -380,11 +432,10 @@ export default function ReportAScreen() {
                   value={String(report.satisfacao)}
                   onChangeText={(t) => {
                     const v = t.replace(",", ".").trim();
-                    const num = parseFloat(v);
-                    setField("satisfacao", v === "" ? "" : (isNaN(num) ? report.satisfacao : num));
+                    setField("satisfacao", v);
                   }}
-                  keyboardType="decimal-pad"
-                  placeholder="0-5"
+                  keyboardType="numeric"
+                  placeholder="ex: 4.5"
                 />
               </View>
             </View>
@@ -447,7 +498,10 @@ export default function ReportAScreen() {
               <Text style={styles.btnTextDanger}>Limpar</Text>
             </Pressable>
             <Pressable
-              style={[styles.buttonClear, { flex: 1, backgroundColor: "#E2E8F0" }]}
+              style={[
+                styles.buttonClear,
+                { flex: 1, backgroundColor: "#E2E8F0" },
+              ]}
               onPress={() => void handleArchive(true)}
             >
               <Text style={[styles.btnTextDanger, { color: "#334155" }]}>

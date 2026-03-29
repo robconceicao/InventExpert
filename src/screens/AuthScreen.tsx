@@ -51,7 +51,7 @@ export default function AuthScreen() {
     if (!supabase) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
       });
@@ -59,6 +59,27 @@ export default function AuthScreen() {
         Alert.alert("Erro", translateAuthError(error.message));
       } else {
         Alert.alert("Sucesso", "Verifique seu e-mail para ativar a conta.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!supabase) return;
+    if (!trimmedEmail) {
+      return Alert.alert("Aviso", "Por favor, digite seu e-mail primeiro para recuperar a senha.");
+    }
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
+      if (error) {
+        Alert.alert("Erro", translateAuthError(error.message));
+      } else {
+        Alert.alert(
+          "Recuperação enviada",
+          "Um link para criar uma nova senha foi enviado para seu e-mail."
+        );
       }
     } finally {
       setLoading(false);
@@ -131,10 +152,9 @@ export default function AuthScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() =>
-              Alert.alert("Recuperação", "Funcionalidade em desenvolvimento.")
-            }
+            onPress={handleResetPassword}
             style={styles.buttonGhost}
+            disabled={loading}
           >
             <Text style={styles.buttonTextGhost}>Esqueci minha senha</Text>
           </Pressable>

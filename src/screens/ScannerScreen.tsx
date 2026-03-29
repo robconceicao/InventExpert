@@ -1,21 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import DocumentScanner from "react-native-document-scanner-plugin";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,11 +24,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const HeaderIcon = require("../../assets/images/splash-icon.png");
 
 export default function ScannerScreen() {
+  const navigation = useNavigation();
   const [scannedImages, setScannedImages] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [pdfName, setPdfName] = useState("");
   const [isSharing, setIsSharing] = useState(false);
+
+  React.useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   const handleScan = async (append = false) => {
     if (Platform.OS === "web") {
@@ -83,15 +89,18 @@ export default function ScannerScreen() {
     try {
       setIsSharing(true);
       const imageTags = await Promise.all(
-        scannedImages.map(async (uri) => {
+        scannedImages.map(async (uri, idx) => {
           const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          return `<img src="data:image/jpeg;base64,${base64}" style="width:100%;page-break-after:always;" />`;
+          const breakStyle = idx < scannedImages.length - 1
+            ? "page-break-after:always;"
+            : "";
+          return `<img src="data:image/jpeg;base64,${base64}" style="display:block;width:100%;height:auto;margin:0;padding:0;${breakStyle}" />`;
         }),
       );
 
-      const html = `<html><body style="margin:0;padding:0;">${imageTags.join("")}</body></html>`;
+      const html = `<!DOCTYPE html><html style="margin:0;padding:0;"><body style="margin:0;padding:0;">${imageTags.join("")}</body></html>`;
       const printed = await Print.printToFileAsync({ html });
 
       const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
