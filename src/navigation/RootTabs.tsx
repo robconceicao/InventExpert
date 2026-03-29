@@ -11,6 +11,8 @@ import InventExpImportScreen from "../screens/InventExpImportScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
 import AuthScreen from "../screens/AuthScreen";
+import ManagementScreen from "../screens/ManagementScreen";
+import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 
 // Metro automatically resolves ScannerScreen.web.tsx on web (stub)
@@ -21,7 +23,9 @@ export type RootTabParamList = {
   ReportA: undefined;
   ReportB: undefined;
   Attendance: undefined;
+  Escala: undefined;
   InventExp: undefined;
+  Management: undefined;
   Scanner: undefined;
 };
 
@@ -105,8 +109,10 @@ export default function RootTabs() {
           > = {
             ReportA: "clipboard",
             ReportB: "document-text",
-            Attendance: "people",
+            Attendance: "checkmark-circle-outline",
+            Escala: "calendar",
             InventExp: "analytics",
+            Management: "briefcase",
             Scanner: "scan",
           };
           const iconName =
@@ -128,12 +134,22 @@ export default function RootTabs() {
       <Tab.Screen
         name="Attendance"
         component={AttendanceScreen}
-        options={{ title: "Escala" }}
+        options={{ title: "Reg. Presenças" }}
+      />
+      <Tab.Screen
+        name="Escala"
+        component={EscalaDashboardScreen}
+        options={{ title: "Plano Escala" }}
       />
       <Tab.Screen
         name="InventExp"
         component={InventExpImportScreen}
         options={{ title: "Avaliação" }}
+      />
+      <Tab.Screen
+        name="Management"
+        component={ManagementScreen}
+        options={{ title: "Gestão" }}
       />
       {showScanner ? (
         <Tab.Screen

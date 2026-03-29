@@ -4,6 +4,7 @@
  */
 export { ColaboradoresRepository } from './repository';
 export { ColaboradoresService }    from './service';
+export { useColaboradores }        from './controller';
 export type {
   ColaboradorFuncao,
   ICrudResult,
