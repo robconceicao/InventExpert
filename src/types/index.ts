@@ -110,3 +110,155 @@ export interface InventoryCheckerEvaluation {
   nivelColor: string;
   tags: string[];
 }
+
+// =============================================================================
+// BACKEND MODULES — Motor de Escalas
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// CLIENTES
+// ---------------------------------------------------------------------------
+export interface Cliente {
+  id: string;
+  nome: string;
+  cidade: string;
+  estado: string;
+  endereco?: string;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ClienteInput = Omit<Cliente, 'id' | 'created_at' | 'updated_at'>;
+
+// ---------------------------------------------------------------------------
+// COLABORADORES
+// ---------------------------------------------------------------------------
+export type ColaboradorFuncao = 'LIDER' | 'CONFERENTE';
+
+export interface Colaborador {
+  id: string;
+  matricula?: string;
+  nome: string;
+  funcao: ColaboradorFuncao;
+  cidade: string;
+  estado: string;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ColaboradorInput = Omit<Colaborador, 'id' | 'created_at' | 'updated_at'>;
+
+// ---------------------------------------------------------------------------
+// HISTÓRICO DE PRODUTIVIDADE
+// ---------------------------------------------------------------------------
+export interface Produtividade {
+  id: string;
+  colaborador_id: string;
+  inventario_ref?: string;
+  data_inventario: string;        // ISO date string
+  qtde: number;
+  qtde1a1: number;
+  produtividade_ph: number;       // itens/hora
+  erro: number;
+  horas_estimadas?: number;
+  operacao_tipo?: InventoryOperationType;
+  score_final?: number;
+  nivel?: InventoryScoreLevel;
+  created_at: string;
+}
+
+export type ProdutividadeInput = Omit<Produtividade, 'id' | 'created_at'>;
+
+// ---------------------------------------------------------------------------
+// INVENTÁRIOS
+// ---------------------------------------------------------------------------
+export type InventarioStatus = 'AGENDADO' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO';
+
+export interface Inventario {
+  id: string;
+  cliente_id: string;
+  data: string;                   // ISO date string
+  hora_inicio?: string;
+  tipo_operacao: InventoryOperationType;
+  headcount: number;
+  status: InventarioStatus;
+  observacoes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  // Joins opcionais
+  clientes?: Pick<Cliente, 'id' | 'nome' | 'cidade' | 'estado'>;
+}
+
+export type InventarioInput = Omit<Inventario, 'id' | 'created_at' | 'updated_at' | 'clientes'>;
+
+// ---------------------------------------------------------------------------
+// ESCALA
+// ---------------------------------------------------------------------------
+export type EscalaPapel = 'LIDER' | 'CONFERENTE' | 'RESERVA';
+
+export interface EscalaItem {
+  id: string;
+  inventario_id: string;
+  colaborador_id: string;
+  papel: EscalaPapel;
+  score_final?: number;
+  gerado_em: string;
+  confirmado: boolean;
+  observacoes?: string;
+  // Joins opcionais
+  colaboradores?: Pick<Colaborador, 'id' | 'nome' | 'funcao' | 'cidade' | 'matricula'>;
+}
+
+// ---------------------------------------------------------------------------
+// VIEWS
+// ---------------------------------------------------------------------------
+export interface ProdutividadeConsolidada {
+  colaborador_id: string;
+  nome: string;
+  funcao: ColaboradorFuncao;
+  cidade: string;
+  ativo: boolean;
+  total_inventarios: number;
+  produtividade_media: number;
+  erro_medio_pct: number;
+  score_base: number;
+  ultimo_inventario?: string;
+}
+
+// ---------------------------------------------------------------------------
+// RESPOSTAS DE RPC
+// ---------------------------------------------------------------------------
+export interface GerarEscalaResult {
+  sucesso: boolean;
+  inventario_id: string;
+  data: string;
+  cliente: string;
+  headcount: number;
+  total_escalados: number;
+  avisos: string[];
+}
+
+export interface ListarEscalaRow {
+  escala_id: string;
+  papel: EscalaPapel;
+  score_final: number;
+  confirmado: boolean;
+  colaborador_id: string;
+  nome: string;
+  funcao: ColaboradorFuncao;
+  cidade: string;
+  matricula?: string;
+}
+
+// ---------------------------------------------------------------------------
+// ERROS DE NEGÓCIO
+// ---------------------------------------------------------------------------
+export class EscalaInsuficienteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EscalaInsuficienteError';
+  }
+}

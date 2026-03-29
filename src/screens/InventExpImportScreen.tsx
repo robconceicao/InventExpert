@@ -34,10 +34,10 @@ import {
 import { parseInventoryCheckersCsv } from "../utils/parsers";
 
 
-const EXAMPLE_INVENTEXP_CSV = `Nome,Qtde,Qtde1a1,Produtividade,Erro
-Ana Souza,3200,2900,950,4
-Bruno Lima,2800,1700,1100,12
-Carlos Silva,1500,1400,780,1`;
+const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
+AMANDA DE OLIVEIRA P...;395,33;752;0;18;1,9;13;1,73%
+ANA CLAUDIA SILVA;802,26;5549;4487;374;6,9;13;0,23%
+CAMILA FERREIRA;1046,31;5573;1190;451;5,3;0;0,00%`;
 
 export default function InventExpImportScreen() {
   const [operationType, setOperationType] =

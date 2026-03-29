@@ -217,9 +217,12 @@ Houve Suporte: ${fmtBool(r.suporteSolicitado)}`;
 };
 
 // Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 5.23 -> 5.23
+// Também lida com strings de percentagem "1,73%" -> 1.73
 const parseNumberBR = (s: string): number => {
-  const v = String(s ?? "").trim();
+  // Remove símbolo de percentagem e espaços
+  const v = String(s ?? "").replace(/%/g, "").trim();
   if (!v) return 0;
+  // Formato BR: pontos como separador de milhar, vírgula como decimal
   if (v.includes(",")) {
     const normal = v.replace(/\./g, "").replace(",", ".");
     const n = parseFloat(normal);
@@ -232,7 +235,25 @@ const parseNumberBR = (s: string): number => {
 // ==========================
 // PARSER INVENTEXP - CONFERENTES (CSV/Excel)
 // ==========================
-/** Colunas: Nome, Qtde, Qtde1a1, Produtividade, Erro. Aceita , ; ou tab. Números BR (1.234,56). */
+/**
+ * Parser robusto para o formato real exportado pelo sistema cliente.
+ *
+ * Formato suportado (separador ; , ou tab, números BR):
+ *   NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
+ *   AMANDA DE OLIVEIRA;395,33;752;0;18;1,9;13;1,73%
+ *
+ * Também aceita o formato simplificado:
+ *   Nome,Qtde,Qtde1a1,Produtividade,Erro
+ *
+ * Lógica:
+ *  - qtde   → coluna "QTDE. VOLUMES" ou "Qtde"
+ *  - qtde1a1 → coluna "1a1"
+ *  - produtividade → coluna "PRODUTIVIDADE"
+ *  - erro   → coluna "ERRO" (quantidade absoluta, não percentagem)
+ *
+ * Nota: o pctBloco é REcalculado pelo sistema como (qtde - qtde1a1) / qtde,
+ * ignorando a coluna "BLOCO" e "% ERRO" do CSV (usadas apenas para auditoria).
+ */
 export const parseInventoryCheckersCsv = (
   text: string,
 ): InventoryCheckerInput[] => {
@@ -242,15 +263,31 @@ export const parseInventoryCheckersCsv = (
     .filter((l) => l.length > 0);
   if (lines.length < 2) return [];
 
+  // Detecta o separador dominante na linha de cabeçalho
+  const detectSeparator = (headerLine: string): RegExp => {
+    const semicolons = (headerLine.match(/;/g) ?? []).length;
+    const tabs       = (headerLine.match(/\t/g) ?? []).length;
+    const commas     = (headerLine.match(/,/g) ?? []).length;
+    if (semicolons >= tabs && semicolons >= commas) return /;/;
+    if (tabs >= commas) return /\t/;
+    return /,/;
+  };
+
+  const sep = detectSeparator(lines[0]);
+
   const parseRow = (row: string): string[] => {
+    // Usa split simples quando não há aspas (mais rápido e correto para este formato)
+    if (!row.includes('"')) {
+      return row.split(sep).map((c) => c.trim());
+    }
+    // Fallback: parser com controlo de aspas
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
-    const separators = /[,\t;]/;
     for (let i = 0; i < row.length; i++) {
       const c = row[i];
-      if (c === '"') inQuotes = !inQuotes;
-      else if (separators.test(c) && !inQuotes) {
+      if (c === '"') { inQuotes = !inQuotes; continue; }
+      if (sep.test(c) && !inQuotes) {
         result.push(current.trim());
         current = "";
       } else {
@@ -261,6 +298,10 @@ export const parseInventoryCheckersCsv = (
     return result;
   };
 
+  const normalizeHeader = (h: string): string =>
+    h.replace(/^"|"$/g, "").trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove acentos
+
   const findCol = (header: string[], patterns: RegExp[]): number => {
     for (const p of patterns) {
       const i = header.findIndex((h) => p.test(h));
@@ -269,40 +310,83 @@ export const parseInventoryCheckersCsv = (
     return -1;
   };
 
-  const header = parseRow(lines[0]).map((h) => h.replace(/^"|"$/g, "").trim());
+  const rawHeader = parseRow(lines[0]);
+  const header    = rawHeader.map(normalizeHeader);
+
   const col = {
-    nome: findCol(header, [/^nome/i, /colaborador/i, /name/i]),
-    qtde: findCol(header, [/^qtde/i, /^qtd/i, /quantidade/i]),
-    qtde1a1: findCol(header, [/^qtde1a1/i, /1\s*a\s*1/i, /^1a1/i, /unit[aá]rio/i]),
-    produtividade: findCol(header, [/^produtividade/i, /prod.*hora/i, /itens.*hora/i, /^(?!horas).*prod/i, /prod/i]),
-    erro: findCol(header, [/^erro/i, /erros/i, /erro.*qtde/i]),
+    // Nome: "nome do conferente", "colaborador", "name", "nome"
+    nome: findCol(header, [
+      /nome\s*(do)?\s*conferente/i,
+      /^nome$/i,
+      /colaborador/i,
+      /name/i,
+    ]),
+    // Quantidade total: "qtde. volumes", "qtde", "quantidade"
+    qtde: findCol(header, [
+      /qtde\.?\s*volu/i,
+      /^qtde\.?/i,
+      /^qtd\.?/i,
+      /quantidade/i,
+      /total.*pecas/i,
+    ]),
+    // Quantidade 1 a 1: "1a1", "qtde1a1", "unitario"
+    qtde1a1: findCol(header, [
+      /^1a1$/i,
+      /^qtde1a1$/i,
+      /1\s*a\s*1/i,
+      /unit[aá]rio/i,
+    ]),
+    // Produtividade: "produtividade", "itens/hora", "prod"
+    produtividade: findCol(header, [
+      /^produtividade/i,
+      /prod.*hora/i,
+      /itens.*hora/i,
+    ]),
+    // Erro: "erro" absoluto — NÃO confundir com "% erro"
+    erro: findCol(header, [
+      /^erro$/i,
+      /^qtde.*erro/i,
+      /^erros$/i,
+    ]),
   };
 
-  if (col.nome < 0 || col.qtde < 0 || col.qtde1a1 < 0 || col.produtividade < 0 || col.erro < 0) {
+  // Diagnóstico: se colunas críticas não foram encontradas, retorna vazio
+  if (
+    col.nome < 0 ||
+    col.qtde < 0 ||
+    col.qtde1a1 < 0 ||
+    col.produtividade < 0 ||
+    col.erro < 0
+  ) {
     return [];
   }
 
   const result: InventoryCheckerInput[] = [];
+
   for (let i = 1; i < lines.length; i++) {
     const cells = parseRow(lines[i]).map((c) =>
       (c ?? "").replace(/^"|"$/g, "").trim(),
     );
+
     const nome = (cells[col.nome] ?? "").trim();
     if (!nome) continue;
+    // Ignora linhas que são claramente de cabeçalho repetido ou totais
+    if (/^(nome|total|soma|media)/i.test(nome)) continue;
 
-    const qtde = parseNumberBR(cells[col.qtde]);
-    const qtde1a1 = parseNumberBR(cells[col.qtde1a1]);
-    const produtividade = parseNumberBR(cells[col.produtividade]);
-    const erro = parseNumberBR(cells[col.erro]);
+    const qtde          = parseNumberBR(cells[col.qtde]         ?? "");
+    const qtde1a1       = Math.max(0, parseNumberBR(cells[col.qtde1a1]      ?? ""));
+    const produtividade = parseNumberBR(cells[col.produtividade] ?? "");
+    const erro          = Math.max(0, parseNumberBR(cells[col.erro]          ?? ""));
 
-    if (qtde <= 0 || produtividade < 0 || erro < 0) continue;
+    // Descarta linhas inválidas: sem quantidade ou produtividade negativa
+    if (qtde <= 0 || produtividade < 0) continue;
 
     result.push({
       nome,
       qtde,
-      qtde1a1,
+      qtde1a1: Math.min(qtde1a1, qtde), // nunca pode ser maior que o total
       produtividade,
-      erro,
+      erro: Math.min(erro, qtde),        // nunca pode ser maior que o total
     });
   }
 
