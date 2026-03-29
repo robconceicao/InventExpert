@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "inventexpert",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.inventexpert.app",
@@ -26,7 +25,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -35,7 +33,7 @@
       ]
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -57,12 +55,10 @@
           "cameraPermission": "Permita o acesso à câmera para digitalizar relatórios."
         }
       ],
-      "expo-notifications",
-      "expo-router"
+      "expo-notifications"
     ],
     "experiments": {
-      "reactCompiler": true,
-      "baseUrl": "/InventExpert"
+      "reactCompiler": true
     },
     "extra": {
       "eas": {
