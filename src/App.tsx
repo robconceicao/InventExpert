@@ -3,36 +3,22 @@ import {
   type LinkingOptions,
 } from '@react-navigation/native';
 import React from 'react';
-import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { WebLayout } from '@/src/components/WebLayout';
 import RootTabs, { type RootTabParamList } from '@/src/navigation/RootTabs';
 
 export default function App() {
-  const linking: LinkingOptions<RootTabParamList> | undefined =
-    Platform.OS === 'web'
-      ? {
-          prefixes: ['https://robconceicao.github.io/InventExpert/', '/InventExpert/'],
-          config: {
-            screens: {
-              ReportA: '',
-              ReportB: 'ReportB',
-              Attendance: 'Attendance',
-              InventExp: 'InventExp',
-              Scanner: 'Scanner',
-            },
-          },
-        }
-      : undefined;
+  // Removed web linking since it aggressively rewrites history and duplicates basePath on Github Pages.
+  const linking: LinkingOptions<RootTabParamList> | undefined = undefined;
 
   return (
-    <SafeAreaProvider>
-      <WebLayout>
+    <WebLayout>
+      <SafeAreaProvider style={{ flex: 1 }}>
         <NavigationContainer linking={linking}>
           <RootTabs />
         </NavigationContainer>
-      </WebLayout>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </WebLayout>
   );
 }
