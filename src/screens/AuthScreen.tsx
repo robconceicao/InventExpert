@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,6 +17,8 @@ import { isSupabaseConfigured, supabase } from "../services/supabase";
 export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const trimmedEmail = useMemo(() => email.trim(), [email]);
@@ -62,11 +65,12 @@ export default function AuthScreen() {
     }
 
     if (!validatePassword(password)) {
-      return Alert.alert(
-        "Senha Inválida",
+      setPasswordError(
         "A senha deve ter no máximo 8 caracteres e conter letras, números e símbolos."
       );
+      return;
     }
+    setPasswordError("");
 
     try {
       setLoading(true);
@@ -150,13 +154,31 @@ export default function AuthScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Senha</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="••••••••"
-              style={styles.input}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (passwordError) setPasswordError("");
+                }}
+                secureTextEntry={!showPassword}
+                placeholder="••••••••"
+                style={styles.inputPassword}
+              />
+              <Pressable
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color="#64748B"
+                />
+              </Pressable>
+            </View>
+            {passwordError ? (
+              <Text style={styles.inputErrorText}>{passwordError}</Text>
+            ) : null}
           </View>
 
           <Pressable
@@ -240,6 +262,29 @@ const styles = StyleSheet.create({
   buttonTextSecondary: { color: "#2563EB", fontWeight: "600" },
   buttonGhost: { marginTop: 16, alignItems: "center" },
   buttonTextGhost: { color: "#64748B", fontSize: 13 },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+  },
+  inputPassword: {
+    flex: 1,
+    padding: 12,
+    fontSize: 16,
+    color: "#1E293B",
+  },
+  eyeButton: {
+    padding: 12,
+  },
+  inputErrorText: {
+    color: "#DC2626",
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: "500",
+  },
   errorText: {
     color: "#DC2626",
     fontSize: 12,
