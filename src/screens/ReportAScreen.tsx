@@ -1,10 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Alert,
-    Image,
     KeyboardAvoidingView,
     Linking,
     Modal,
@@ -22,7 +20,6 @@ import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
-const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:reportA";
 const HISTORY_KEY = "inventexpert:reportA:history";
 
@@ -59,14 +56,9 @@ const initialState: ReportA = {
 };
 
 export default function ReportAScreen() {
-  const navigation = useNavigation();
   const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
 
-  // Remove cabeçalho duplicado
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((res) => {
@@ -190,14 +182,6 @@ export default function ReportAScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
 
-      <View style={styles.header}>
-        <Image
-          source={HeaderIcon}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerTitle}>Acompanhamento</Text>
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}

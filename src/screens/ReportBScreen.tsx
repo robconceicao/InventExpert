@@ -1,17 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import React, {
     useCallback,
     useEffect,
-    useLayoutEffect,
     useState,
 } from "react";
 import {
     ActivityIndicator,
     Alert,
-    Image,
     KeyboardAvoidingView,
     Linking,
     Modal,
@@ -29,7 +27,6 @@ import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportB } from "../types";
 import { formatReportB } from "../utils/parsers";
 
-const HeaderIcon = require("../../assets/images/splash-icon.png");
 const REPORT_B_KEY = "inventexpert:reportB";
 const REPORT_B_HISTORY_KEY = "inventexpert:reportB:history";
 
@@ -71,16 +68,12 @@ const makeInitialState = (): ReportB => ({
 
 
 export default function ReportBScreen() {
-  const navigation = useNavigation();
   const [report, setReport] = useState<ReportB>(makeInitialState);
   const [backupUri, setBackupUri] = useState<string | null>(null);
   const [backupName, setBackupName] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [isSharingBackup, setIsSharingBackup] = useState(false);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -234,14 +227,6 @@ export default function ReportBScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
-      <View style={styles.header}>
-        <Image
-          source={HeaderIcon}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerTitle}>Resumo Final</Text>
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}

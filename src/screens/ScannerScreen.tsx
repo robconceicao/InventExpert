@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -21,19 +20,14 @@ import {
 import DocumentScanner from "react-native-document-scanner-plugin";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const HeaderIcon = require("../../assets/images/splash-icon.png");
 
 export default function ScannerScreen() {
-  const navigation = useNavigation();
   const [scannedImages, setScannedImages] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [pdfName, setPdfName] = useState("");
   const [isSharing, setIsSharing] = useState(false);
 
-  React.useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
 
   const handleScan = async (append = false) => {
     if (Platform.OS === "web") {
@@ -123,14 +117,6 @@ export default function ScannerScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
-      <View style={styles.header}>
-        <Image
-          source={HeaderIcon}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerTitle}>Scanner</Text>
-      </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Scanner de Documentos</Text>

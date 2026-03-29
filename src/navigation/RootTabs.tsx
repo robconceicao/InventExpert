@@ -118,7 +118,7 @@ export default function RootTabs() {
       <Tab.Screen
         name="ReportA"
         component={ReportAScreen}
-        options={{ title: "Andamento" }}
+        options={{ title: "Acompanhamento" }}
       />
       <Tab.Screen
         name="ReportB"

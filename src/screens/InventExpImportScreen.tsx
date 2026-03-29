@@ -1,10 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
-import React, { useLayoutEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
     Alert,
-    Image,
     Linking,
     Platform,
     Pressable,
@@ -35,7 +33,6 @@ import {
 } from "../utils/inventExpReports";
 import { parseInventoryCheckersCsv } from "../utils/parsers";
 
-const HeaderIcon = require("../../assets/images/splash-icon.png");
 
 const EXAMPLE_INVENTEXP_CSV = `Nome,Qtde,Qtde1a1,Produtividade,Erro
 Ana Souza,3200,2900,950,4
@@ -43,7 +40,6 @@ Bruno Lima,2800,1700,1100,12
 Carlos Silva,1500,1400,780,1`;
 
 export default function InventExpImportScreen() {
-  const navigation = useNavigation();
   const [operationType, setOperationType] =
     useState<InventoryOperationType>("FARMACIA");
   const [rawText, setRawText] = useState("");
@@ -51,9 +47,6 @@ export default function InventExpImportScreen() {
     [],
   );
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
 
   const handlePickFile = async () => {
     try {
@@ -221,14 +214,6 @@ export default function InventExpImportScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1d4ed8" />
-      <View style={styles.header}>
-        <Image
-          source={HeaderIcon}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerTitle}>Avaliação - Importar CSV</Text>
-      </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.segmentContainer}>
