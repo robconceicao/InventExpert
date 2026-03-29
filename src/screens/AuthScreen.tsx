@@ -19,6 +19,7 @@ export default function AuthScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const trimmedEmail = useMemo(() => email.trim(), [email]);
@@ -86,10 +87,11 @@ export default function AuthScreen() {
       if (error) {
         Alert.alert("Erro", translateAuthError(error.message));
       } else {
-        Alert.alert(
-          "Sucesso!",
-          "Enviamos um link de ativação para o seu e-mail. Por favor, confirme-o para liberar seu acesso."
+        setSuccessMessage(
+          "E-mail de confirmação enviado! Verifique sua caixa de entrada (e a pasta de spam) para ativar sua conta."
         );
+        // Opcional: Limpar campos
+        setPassword("");
       }
     } finally {
       setLoading(false);
@@ -144,6 +146,19 @@ export default function AuthScreen() {
               Atenção: Supabase não configurado no app.json
             </Text>
           )}
+          
+          {successMessage ? (
+            <View style={styles.successContainer}>
+              <Ionicons name="mail-unread-outline" size={24} color="#059669" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.successTitle}>Verifique seu e-mail</Text>
+                <Text style={styles.successText}>{successMessage}</Text>
+              </View>
+              <Pressable onPress={() => setSuccessMessage("")}>
+                <Ionicons name="close-circle-outline" size={20} color="#059669" />
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>E-mail</Text>
@@ -295,6 +310,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginBottom: 16,
+  },
+  successContainer: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#10B981",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  successTitle: {
+    color: "#065F46",
+    fontWeight: "bold",
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  successText: {
+    color: "#047857",
+    fontSize: 13,
+    lineHeight: 18,
   },
   instructionsContainer: {
     backgroundColor: "#EFF6FF",
