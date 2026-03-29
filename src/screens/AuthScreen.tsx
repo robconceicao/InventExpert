@@ -24,12 +24,17 @@ export default function AuthScreen() {
   const trimmedEmail = useMemo(() => email.trim(), [email]);
 
   const translateAuthError = (message: string) => {
-    if (message.includes("Email not confirmed"))
+    const msg = message.toLowerCase();
+    if (msg.includes("email not confirmed"))
       return "E-mail não confirmado. Verifique seu spam.";
-    if (message.includes("Invalid login credentials"))
+    if (msg.includes("invalid login credentials"))
       return "E-mail ou senha inválidos.";
-    if (message.includes("User already registered"))
-      return "E-mail já cadastrado.";
+    if (msg.includes("user already registered"))
+      return "E-mail já cadastrado. Tente entrar ou recupere a senha.";
+    if (msg.includes("rate limit") || msg.includes("too many requests"))
+      return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
+    if (msg.includes("network error"))
+      return "Erro de conexão. Verifique sua internet.";
     return message;
   };
 
