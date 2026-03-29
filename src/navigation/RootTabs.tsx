@@ -76,9 +76,15 @@ export default function RootTabs() {
             {isSupabaseConfigured && session ? (
               <Pressable
                 onPress={() => void supabase?.auth.signOut()}
-                style={{ paddingHorizontal: 12 }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 12,
+                  gap: 4,
+                }}
               >
-                <Ionicons name="log-out-outline" size={20} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "500" }}>Sair</Text>
+                <Ionicons name="log-out-outline" size={18} color="#fff" />
               </Pressable>
             ) : null}
           </View>
