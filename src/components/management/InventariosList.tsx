@@ -19,12 +19,14 @@ import { InventariosService, useInventariosCrud } from '../../modules/inventario
 import { ClientesService } from '../../modules/clientes';
 import type { IInventario, IInventarioInput } from '../../modules/inventarios';
 import type { ICliente } from '../../modules/clientes';
+import { pickAndParseExcel } from '../../utils/excelParser';
 
 const invService = new InventariosService(supabase!);
 const cliService = new ClientesService(supabase!);
 
 export default function InventariosList() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState<Partial<IInventario>>({});
 
   // Para o dropdown de clientes
@@ -32,7 +34,7 @@ export default function InventariosList() {
   const [loadingClientes, setLoadingClientes] = useState(false);
 
   const filtros = useMemo(() => ({}), []);
-  const { inventarios, loading, recarregar, criar, atualizar, cancelar } =
+  const { inventarios, loading, recarregar, criar, atualizar, cancelar, inserirLoteExcel } =
     useInventariosCrud(invService, filtros, false);
 
   useEffect(() => {
@@ -58,6 +60,25 @@ export default function InventariosList() {
       setForm({});
     } catch (e) {
       Alert.alert('Erro', e instanceof Error ? e.message : 'Erro ao guardar.');
+    }
+  };
+
+  const handleImportarProgramacao = async () => {
+    setImporting(true);
+    try {
+      const { dados, erro } = await pickAndParseExcel();
+      if (erro) {
+        Alert.alert('Erro', erro);
+        return;
+      }
+      if (dados.length === 0) return;
+
+      const total = await inserirLoteExcel(dados);
+      Alert.alert('Sucesso', `Programação carregada! ${total} inventários agendados.`);
+    } catch (e) {
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Falha na importação.');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -120,6 +141,17 @@ export default function InventariosList() {
           <Text style={{ fontSize: 16, fontWeight: '600', color: '#334155' }}>Agenda Activa</Text>
           <Text style={{ fontSize: 13, color: '#94A3B8' }}>{inventarios.length} previstos</Text>
         </View>
+        <Pressable
+          style={[styles.addBtn, { backgroundColor: '#8B5CF6', marginRight: 8 }]}
+          onPress={handleImportarProgramacao}
+          disabled={importing}
+        >
+          {importing ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
+          )}
+        </Pressable>
         <Pressable
           style={styles.addBtn}
           onPress={() => {

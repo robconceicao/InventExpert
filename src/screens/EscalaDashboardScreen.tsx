@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Pressable,
   FlatList,
-  Platform,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,18 +18,24 @@ import {
   useInventarios,
   usePreviewComposicao,
 } from '../modules/escala/controller';
+import { InventariosService, useInventariosCrud } from '../modules/inventarios';
 import type { Inventario } from '../types';
 
 import EscalaList from '../components/escala/EscalaList';
+import { pickAndParseExcel } from '../utils/excelParser';
 
 const escalaService = new EscalaService(supabase!);
+const invService = new InventariosService(supabase!);
 
 export default function EscalaDashboardScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
-  // Hook para listar inventários que estão AGENDADOS
   const { inventarios, loading: loadingInv, recarregar: recarregarInv } =
     useInventarios(escalaService, 'AGENDADO');
+
+  // Hook extra apenas para a função de importação
+  const { inserirLoteExcel } = useInventariosCrud(invService, {}, false);
 
   // Hooks para a escala do inventário selecionado
   const {
@@ -53,6 +58,26 @@ export default function EscalaDashboardScreen() {
         { text: 'Gerar', onPress: () => void gerarEscala() },
       ]
     );
+  };
+
+  const handleImportar = async () => {
+    setImporting(true);
+    try {
+      const { dados, erro } = await pickAndParseExcel();
+      if (erro) {
+        Alert.alert('Erro', erro);
+        return;
+      }
+      if (dados.length === 0) return;
+
+      const total = await inserirLoteExcel(dados);
+      Alert.alert('Sucesso', `Programação carregada! ${total} inventários agendados.`);
+      void recarregarInv();
+    } catch (e) {
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Falha na importação.');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const renderInventarioCard = ({ item }: { item: Inventario }) => {
@@ -85,8 +110,26 @@ export default function EscalaDashboardScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header Selector */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Motor de Escalas</Text>
-        <Text style={styles.headerSub}>Selecione um inventário para planear</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Text style={styles.headerTitle}>Motor de Escalas</Text>
+            <Text style={styles.headerSub}>Selecione um inventário para planear</Text>
+          </View>
+          <Pressable 
+            style={[styles.btnImport, importing && { opacity: 0.7 }]} 
+            onPress={handleImportar}
+            disabled={importing}
+          >
+            {importing ? (
+              <ActivityIndicator size="small" color="#7C3AED" />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload" size={18} color="#7C3AED" />
+                <Text style={styles.btnImportText}>Carregar Mês</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.invListContainer}>
@@ -102,7 +145,7 @@ export default function EscalaDashboardScreen() {
             contentContainerStyle={styles.invList}
             ListEmptyComponent={
               <Text style={{ margin: 16, color: '#64748B' }}>
-                Nenhum inventário "AGENDADO" encontrado.
+                Nenhum inventário &quot;AGENDADO&quot; encontrado.
               </Text>
             }
           />
@@ -141,20 +184,20 @@ export default function EscalaDashboardScreen() {
                   {preview && (
                     <View style={styles.statsBox}>
                       <View style={styles.stat}>
-                        <Text style={styles.statValue}>{preview.total_necessario}</Text>
+                        <Text style={styles.statValue}>{preview.composicao.total}</Text>
                         <Text style={styles.statLabel}>Necessário</Text>
                       </View>
                       <View style={styles.statDivider} />
                       <View style={styles.stat}>
-                        <Text style={[styles.statValue, preview.disponiveis < preview.total_necessario ? {color: '#DC2626'} : {}]}>
-                          {preview.disponiveis}
+                        <Text style={[styles.statValue, preview.conferentes_disponiveis < preview.composicao.total ? {color: '#DC2626'} : {}]}>
+                          {preview.conferentes_disponiveis}
                         </Text>
                         <Text style={styles.statLabel}>Disponíveis</Text>
                       </View>
                       <View style={styles.statDivider} />
                       <View style={styles.stat}>
-                        <Text style={styles.statValue}>{preview.na_cidade}</Text>
-                        <Text style={styles.statLabel}>Na Cidade</Text>
+                        <Text style={styles.statValue}>{preview.lideres_disponiveis}</Text>
+                        <Text style={styles.statLabel}>Líderes</Text>
                       </View>
                     </View>
                   )}
@@ -243,4 +286,20 @@ const styles = StyleSheet.create({
   escalaTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B' },
   btnRegerate: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: '#F1F5F9', borderRadius: 6, gap: 4 },
   btnRegenText: { fontSize: 12, color: '#475569', fontWeight: '500' },
+  btnImport: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F5F3FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  btnImportText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#7C3AED',
+  },
 });

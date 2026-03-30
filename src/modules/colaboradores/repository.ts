@@ -125,6 +125,26 @@ export class ColaboradoresRepository {
   }
 
   // -------------------------------------------------------------------------
+  // CREATE LOTE
+  // -------------------------------------------------------------------------
+  async inserirLote(inputs: IColaboradorInput[]): Promise<IColaborador[]> {
+    const payloads = inputs.map(input => ({
+      ...input,
+      estado: input.estado.toUpperCase().substring(0, 2),
+      matricula: input.matricula ? String(input.matricula).trim() : null,
+      ativo: true,
+    }));
+
+    const { data, error } = await this.db
+      .from(TABELA)
+      .upsert(payloads, { onConflict: 'matricula', ignoreDuplicates: false })
+      .select();
+
+    if (error) throw new Error(`Erro ao cadastrar lote de colaboradores: ${error.message}`);
+    return data as IColaborador[];
+  }
+
+  // -------------------------------------------------------------------------
   // UPDATE — Actualização parcial
   // -------------------------------------------------------------------------
   async actualizar(id: string, input: IColaboradorUpdate): Promise<IColaborador> {

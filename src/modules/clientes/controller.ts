@@ -57,6 +57,13 @@ export function useClientes(
     await carregar();
   };
 
+  const inserirLote = async (inputs: IClienteInput[]) => {
+    const result = await service.inserirLote(inputs);
+    if (!result.sucesso) throw new Error(result.erro);
+    await carregar();
+    return result.dados!;
+  };
+
   return {
     clientes,
     loading,
@@ -65,5 +72,6 @@ export function useClientes(
     criar,
     atualizar,
     desativar,
+    inserirLote,
   };
 }

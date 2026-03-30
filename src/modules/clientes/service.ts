@@ -149,6 +149,34 @@ export class ClientesService {
   }
 
   // -------------------------------------------------------------------------
+  // CREATE LOTE
+  // -------------------------------------------------------------------------
+  async inserirLote(inputs: IClienteInput[]): Promise<ICrudResult<number>> {
+    try {
+      if (!inputs || inputs.length === 0) {
+        return { sucesso: false, erro: 'Nenhum dado para importar.' };
+      }
+
+      const validos: IClienteInput[] = [];
+      for (const input of inputs) {
+        if (!input.nome?.trim() || !input.cidade?.trim() || !validarUF(input.estado ?? '')) {
+          continue; // Pular inválidos silenciosamente
+        }
+        validos.push(input);
+      }
+
+      if (validos.length === 0) {
+        return { sucesso: false, erro: 'Nenhum registro válido encontrado na planilha.' };
+      }
+
+      const dados = await this.repo.inserirLote(validos);
+      return { sucesso: true, dados: dados.length };
+    } catch (e) {
+      return { sucesso: false, erro: e instanceof Error ? e.message : 'Erro na importação em lote.' };
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // ACTUALIZAR
   // -------------------------------------------------------------------------
   async actualizar(id: string, input: IClienteUpdate): Promise<ICrudResult<ICliente>> {

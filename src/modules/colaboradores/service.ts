@@ -173,6 +173,36 @@ export class ColaboradoresService {
   }
 
   // -------------------------------------------------------------------------
+  // CREATE LOTE
+  // -------------------------------------------------------------------------
+  async inserirLote(inputs: IColaboradorInput[]): Promise<ICrudResult<number>> {
+    try {
+      if (!inputs || inputs.length === 0) {
+        return { sucesso: false, erro: 'Nenhum dado para importar.' };
+      }
+
+      const validos: IColaboradorInput[] = [];
+      for (const input of inputs) {
+        if (!input.nome?.trim() || !input.cidade?.trim() || 
+            validarFuncao(input.funcao) || validarUF(input.estado) || 
+            validarTelefone(input.telefone)) {
+          continue; // Pular inválidos silenciosamente
+        }
+        validos.push(input);
+      }
+
+      if (validos.length === 0) {
+        return { sucesso: false, erro: 'Nenhum registro válido encontrado na planilha. Verifique se as colunas estão preenchidas corretamente.' };
+      }
+
+      const dados = await this.repo.inserirLote(validos);
+      return { sucesso: true, dados: dados.length };
+    } catch (e) {
+      return { sucesso: false, erro: e instanceof Error ? e.message : 'Erro na importação em lote.' };
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // ACTUALIZAR
   // -------------------------------------------------------------------------
   async actualizar(

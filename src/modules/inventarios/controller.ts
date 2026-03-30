@@ -64,6 +64,13 @@ export function useInventariosCrud(
     await carregar();
   };
 
+  const inserirLoteExcel = async (linhas: any[]) => {
+    const result = await service.inserirLoteExcel(linhas);
+    if (!result.sucesso) throw new Error(result.erro);
+    await carregar();
+    return result.dados!;
+  };
+
   return {
     inventarios,
     loading,
@@ -73,5 +80,6 @@ export function useInventariosCrud(
     atualizar,
     atualizarStatus,
     cancelar,
+    inserirLoteExcel,
   };
 }

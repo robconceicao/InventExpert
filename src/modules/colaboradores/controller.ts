@@ -57,6 +57,13 @@ export function useColaboradores(
     await carregar();
   };
 
+  const inserirLote = async (inputs: IColaboradorInput[]) => {
+    const result = await service.inserirLote(inputs);
+    if (!result.sucesso) throw new Error(result.erro);
+    await carregar();
+    return result.dados!;
+  };
+
   return {
     colaboradores,
     loading,
@@ -65,5 +72,6 @@ export function useColaboradores(
     criar,
     atualizar,
     desativar,
+    inserirLote,
   };
 }

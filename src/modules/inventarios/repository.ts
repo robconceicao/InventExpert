@@ -138,6 +138,24 @@ export class InventariosRepository {
   }
 
   // -------------------------------------------------------------------------
+  // CREATE LOTE
+  // -------------------------------------------------------------------------
+  async inserirLote(payloads: (IInventarioInput & { observacoes?: string })[]): Promise<IInventario[]> {
+    const list = payloads.map(p => ({
+      ...p,
+      status: 'AGENDADO',
+    }));
+
+    const { data, error } = await this.db
+      .from(TABELA)
+      .insert(list)
+      .select(SELECT_COMPLETO);
+
+    if (error) throw new Error(`Erro ao cadastrar lote de inventários: ${error.message}`);
+    return data as IInventario[];
+  }
+
+  // -------------------------------------------------------------------------
   // UPDATE — Actualização parcial (campos editáveis)
   // -------------------------------------------------------------------------
   async actualizar(id: string, input: IInventarioUpdate): Promise<IInventario> {

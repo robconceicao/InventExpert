@@ -17,17 +17,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../services/supabase';
 import { ClientesService, useClientes } from '../../modules/clientes';
 import type { ICliente, IClienteInput } from '../../modules/clientes';
+import { pickAndParseExcel } from '../../utils/excelParser';
 
 const clientesService = new ClientesService(supabase!);
 
 export default function ClientesList() {
   const [busca, setBusca] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState<Partial<ICliente>>({});
 
   // Usa o hook com o filtro da caixa de busca
   const filtros = useMemo(() => ({ busca }), [busca]);
-  const { clientes, loading, recarregar, criar, atualizar, desativar } = useClientes(clientesService, filtros, true);
+  const { clientes, loading, recarregar, criar, atualizar, desativar, inserirLote } = useClientes(clientesService, filtros, true);
 
   const handleSalvar = async () => {
     try {
@@ -42,6 +44,25 @@ export default function ClientesList() {
       setForm({});
     } catch (e) {
       Alert.alert('Erro', e instanceof Error ? e.message : 'Erro ao guardar.');
+    }
+  };
+
+  const handleImportar = async () => {
+    setImporting(true);
+    try {
+      const { dados, erro } = await pickAndParseExcel<IClienteInput>();
+      if (erro) {
+        Alert.alert('Erro', erro);
+        return;
+      }
+      if (dados.length === 0) return;
+
+      const total = await inserirLote(dados);
+      Alert.alert('Sucesso', `Importados ${total} clientes com sucesso!`);
+    } catch (e) {
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Falha na importação.');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -104,6 +125,17 @@ export default function ClientesList() {
             autoCapitalize="none"
           />
         </View>
+        <Pressable
+          style={[styles.addBtn, { backgroundColor: '#10B981', marginRight: 8 }]}
+          onPress={handleImportar}
+          disabled={importing}
+        >
+          {importing ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <Ionicons name="download-outline" size={20} color="#FFF" />
+          )}
+        </Pressable>
         <Pressable
           style={styles.addBtn}
           onPress={() => {

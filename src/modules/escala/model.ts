@@ -107,14 +107,14 @@ export function calcularComposicaoEscala(headcount: number): {
  * Agrupa os itens da escala por papel para exibição na UI.
  */
 export function agruparEscalaPorPapel(escala: ListarEscalaRow[]): {
-  lider?: ListarEscalaRow;
+  lideres: ListarEscalaRow[];
   conferentes: ListarEscalaRow[];
   reservas: ListarEscalaRow[];
 } {
   return {
-    lider: escala.find((e) => e.papel === 'LIDER'),
+    lideres:     escala.filter((e) => e.papel === 'LIDER'),
     conferentes: escala.filter((e) => e.papel === 'CONFERENTE'),
-    reservas: escala.filter((e) => e.papel === 'RESERVA'),
+    reservas:    escala.filter((e) => e.papel === 'RESERVA'),
   };
 }
 

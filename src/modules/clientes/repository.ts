@@ -99,6 +99,28 @@ export class ClientesRepository {
   }
 
   // -------------------------------------------------------------------------
+  // CREATE LOTE — Insere múltiplos clientes (upsert baseado no codigo_loja)
+  // -------------------------------------------------------------------------
+  async inserirLote(inputs: IClienteInput[]): Promise<ICliente[]> {
+    const payloads = inputs.map(input => ({
+      ...input,
+      nome: input.nome.trim(),
+      cidade: input.cidade.trim(),
+      estado: input.estado.toUpperCase(),
+      codigo_loja: input.codigo_loja ? String(input.codigo_loja).trim() : null,
+      ativo: true,
+    }));
+
+    const { data, error } = await this.db
+      .from(TABELA)
+      .upsert(payloads, { onConflict: 'codigo_loja', ignoreDuplicates: false })
+      .select();
+
+    if (error) throw new Error(`Erro ao cadastrar lote de clientes: ${error.message}`);
+    return data as ICliente[];
+  }
+
+  // -------------------------------------------------------------------------
   // UPDATE — Actualização parcial
   // -------------------------------------------------------------------------
   async actualizar(id: string, input: IClienteUpdate): Promise<ICliente> {

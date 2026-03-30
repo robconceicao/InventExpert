@@ -240,6 +240,83 @@ export class InventariosService {
   }
 
   // -------------------------------------------------------------------------
+  // CREATE LOTE (IMPORTAÇÃO VIA EXCEL)
+  // -------------------------------------------------------------------------
+  async inserirLoteExcel(
+    linhas: { codigo_loja?: string; data?: string; headcount?: number; piv?: number; hora_inicio?: string; observacoes?: string }[]
+  ): Promise<ICrudResult<number>> {
+    try {
+      if (!linhas || linhas.length === 0) {
+        return { sucesso: false, erro: 'A planilha parece estar vazia.' };
+      }
+
+      // 1. Extrair os códigos únicos
+      const codigos = [...new Set(linhas.map(L => String(L.codigo_loja || '').trim()).filter(Boolean))];
+      if (codigos.length === 0) {
+        return { sucesso: false, erro: 'Nenhuma coluna "codigo_loja" encontrada.' };
+      }
+
+      // 2. Buscar na base (usando o objeto db exposto temporariamente via cast, seguro pois repo encapsula a mesmância)
+      const db = (this.repo as any).db as SupabaseClient;
+      const { data: clientesData, error: cliError } = await db
+        .from('clientes')
+        .select('id, codigo_loja')
+        .in('codigo_loja', codigos)
+        .eq('ativo', true);
+
+      if (cliError) throw new Error('Erro ao validar lojas: ' + cliError.message);
+
+      const mapaClientes = new Map<string, string>();
+      (clientesData || []).forEach(c => {
+        if (c.codigo_loja) mapaClientes.set(String(c.codigo_loja).trim(), c.id);
+      });
+
+      // 3. Montar payloads válidos
+      const payloads: (IInventarioInput & { observacoes?: string })[] = [];
+      let ignorados = 0;
+
+      for (const linha of linhas) {
+        const codigo = String(linha.codigo_loja || '').trim();
+        const clienteId = mapaClientes.get(codigo);
+        if (!clienteId) { ignorados++; continue; } // Loja não cadastrada
+
+        const dataInv = linha.data || '';
+        if (validarData(dataInv)) { ignorados++; continue; }
+
+        const hc = Number(linha.headcount) || Number(linha.piv) || 0;
+        if (validarHeadcount(hc)) { ignorados++; continue; }
+
+        const tipoAgendamento = calcularTipoAgendamento(dataInv);
+        const obs = prefixarObservacoes(tipoAgendamento, linha.observacoes);
+
+        payloads.push({
+          cliente_id: clienteId,
+          data: dataInv,
+          headcount: hc,
+          tipo_operacao: 'FARMACIA', // Padrão
+          hora_inicio: linha.hora_inicio || undefined,
+          observacoes: obs,
+        });
+      }
+
+      if (payloads.length === 0) {
+        return { sucesso: false, erro: 'Nenhum registro válido. Lojas não cadastradas ou datas inválidas/retroativas.' };
+      }
+
+      const dados = await this.repo.inserirLote(payloads);
+      
+      return { 
+        sucesso: true, 
+        dados: dados.length, 
+        // Se houve ignorados, passamos via mensagem de erro amigável na UI
+        ...(ignorados > 0 && { erro: `Importados ${dados.length}. Porém, ${ignorados} linhas foram ignoradas (Loja não cadastrada ou dados incorretos).` })
+      };
+    } catch (e) {
+      return { sucesso: false, erro: e instanceof Error ? e.message : 'Erro na importação.' };
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // ACTUALIZAR
   // -------------------------------------------------------------------------
   async actualizar(
