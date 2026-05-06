@@ -16,6 +16,7 @@ import type {
   IColaboradorInput,
   IColaboradorUpdate,
 } from './types';
+import type { ProdutividadeConsolidada } from '../../types';
 
 const TABELA = 'colaboradores' as const;
 
@@ -214,5 +215,18 @@ export class ColaboradoresRepository {
     const { count, error } = await query;
     if (error) throw new Error(`Erro ao contar colaboradores: ${error.message}`);
     return count ?? 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // CONSOLIDADO — Para ranking e motor de escalas
+  // -------------------------------------------------------------------------
+  async listarConsolidado(): Promise<ProdutividadeConsolidada[]> {
+    const { data, error } = await this.db
+      .from('vw_produtividade_consolidada')
+      .select('*')
+      .order('score_base', { ascending: false });
+
+    if (error) throw new Error(`Erro ao buscar consolidado: ${error.message}`);
+    return (data ?? []) as ProdutividadeConsolidada[];
   }
 }

@@ -7,7 +7,7 @@
  *       supabase/migrations/add_clientes_extra_fields.sql
  */
 
-import type { Cliente, ClienteInput } from '../../types';
+import type { Cliente, ClienteInput, ICrudResult } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Extensão com campos adicionais (requerem migration)
@@ -24,7 +24,7 @@ export interface ICliente extends Cliente {
 }
 
 /** Input para criação — omite campos gerados automaticamente */
-export interface IClienteInput extends Omit<ClienteInput, never> {
+export interface IClienteInput extends Omit<ClienteInput, 'ativo'> {
   nome: string;
   cidade: string;
   estado: string;
@@ -48,8 +48,4 @@ export interface IClienteFilter {
 }
 
 /** Resposta padronizada de todas as operações */
-export interface ICrudResult<T = void> {
-  sucesso: boolean;
-  dados?: T;
-  erro?: string;
-}
+export type { ICrudResult };

@@ -7,7 +7,7 @@
  *       supabase/migrations/add_colaboradores_extra_fields.sql
  */
 
-import type { Colaborador, ColaboradorFuncao, ColaboradorInput } from '../../types';
+import type { Colaborador, ColaboradorFuncao, ColaboradorInput, ICrudResult } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Re-exporta do domínio para conveniência interna
@@ -23,17 +23,7 @@ export interface IColaborador extends Colaborador {
 }
 
 /** Input para criação — campos obrigatórios de negócio */
-export interface IColaboradorInput {
-  /** Nome completo (obrigatório) */
-  nome: string;
-  /** Função na equipa (obrigatório) */
-  funcao: ColaboradorFuncao;
-  /** Cidade de residência — usado no fator logístico (obrigatório) */
-  cidade: string;
-  /** Estado (UF, 2 letras — obrigatório) */
-  estado: string;
-  /** Matrícula única (opcional) */
-  matricula?: string;
+export interface IColaboradorInput extends Omit<ColaboradorInput, 'ativo'> {
   /** Telefone / WhatsApp (obrigatório por regra de negócio) */
   telefone?: string;
   /** Data de nascimento ISO (opcional) */
@@ -56,8 +46,4 @@ export interface IColaboradorFilter {
 }
 
 /** Resposta padronizada */
-export interface ICrudResult<T = void> {
-  sucesso: boolean;
-  dados?: T;
-  erro?: string;
-}
+export type { ICrudResult };

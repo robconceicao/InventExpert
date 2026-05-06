@@ -53,7 +53,7 @@ export interface ReportB {
   qtdNaoContados: number | "";
   qtdEncontradosNaoContados: number | "";
   totalPecas: number | "";
-  valorFinanceiro: number | "";
+  valorTotal: number | "";
   envioArquivo1: string;
   envioArquivo2: string;
   envioArquivo3: string;
@@ -64,6 +64,54 @@ export interface ReportB {
   satisfacao: number | string;
   responsavel: string;
   suporteSolicitado: boolean | null;
+  phCalculado?: number | "";
+  terminoInventario: string;
+}
+
+export interface ReportC {
+  inventario_ref: string; // ex: "12/12/2023"
+  cliente: string;
+  filial: string;
+  lider: string;
+  qtdEquipe: number | "";
+  qtdFaltas: number | "";
+  inicioContagemGeral: string;
+  fimContagemGeral: string;
+  pctInventario: number | "";
+  naoContadosInicio: string;
+  naoContadosTotal: number | "";
+  naoContadosFim: string;
+  div1Inicio: string;
+  div1Controlados: number | "";
+  div1Negativos: number | "";
+  div1Positivos: number | "";
+  div1Total: number | "";
+  div1Fim: string;
+  div2Inicio: string;
+  div2Negativos: number | "";
+  div2Positivos: number | "";
+  div2Total: number | "";
+  div2Fim: string;
+}
+
+export interface ReportD {
+  loja: string;
+  lojaNum: string;
+  lider: string;
+  qtdPessoas: number | "";
+  qtdPecas: number | "";
+  pctInv: number | "";
+  chegada: string;
+  inicioContagemEstoque: string;
+  terminoContagemEstoque: string;
+  inicioContagemLoja: string;
+  terminoContagemLoja: string;
+  inicioAuditoria: string;
+  terminoAuditoria: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  avalEstoque: number | "";
+  avalLoja: number | "";
   terminoInventario: string;
 }
 
@@ -251,6 +299,13 @@ export interface ListarEscalaRow {
   funcao: ColaboradorFuncao;
   cidade: string;
   matricula?: string;
+}
+
+/** Resposta padronizada para operações de CRUD em todos os módulos */
+export interface ICrudResult<T = void> {
+  sucesso: boolean;
+  dados?: T;
+  erro?: string;
 }
 
 // ---------------------------------------------------------------------------

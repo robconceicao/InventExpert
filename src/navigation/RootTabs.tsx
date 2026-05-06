@@ -10,6 +10,8 @@ import AttendanceScreen from "../screens/AttendanceScreen";
 import InventExpImportScreen from "../screens/InventExpImportScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
+import ReportCScreen from "../screens/ReportCScreen";
+import ReportDScreen from "../screens/ReportDScreen";
 import AuthScreen from "../screens/AuthScreen";
 import ManagementScreen from "../screens/ManagementScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
@@ -22,6 +24,8 @@ import ScannerScreen from "../screens/ScannerScreen";
 export type RootTabParamList = {
   ReportA: undefined;
   ReportB: undefined;
+  ReportC: undefined;
+  ReportD: undefined;
   Attendance: undefined;
   Escala: undefined;
   InventExp: undefined;
@@ -109,6 +113,8 @@ export default function RootTabs() {
           > = {
             ReportA: "clipboard",
             ReportB: "document-text",
+            ReportC: "document-attach",
+            ReportD: "journal",
             Attendance: "checkmark-circle-outline",
             Escala: "calendar",
             InventExp: "analytics",
@@ -130,6 +136,16 @@ export default function RootTabs() {
         name="ReportB"
         component={ReportBScreen}
         options={{ title: "Resumo" }}
+      />
+      <Tab.Screen
+        name="ReportC"
+        component={ReportCScreen}
+        options={{ title: "Farmaconde" }}
+      />
+      <Tab.Screen
+        name="ReportD"
+        component={ReportDScreen}
+        options={{ title: "Modelo D" }}
       />
       <Tab.Screen
         name="Attendance"

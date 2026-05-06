@@ -13,6 +13,7 @@ import type {
   InventarioInput,
   InventarioStatus,
   InventoryOperationType,
+  ICrudResult,
 } from '../../types';
 
 // ---------------------------------------------------------------------------
@@ -38,15 +39,7 @@ export interface IInventario extends Inventario {
 }
 
 /** Input para criação */
-export interface IInventarioInput {
-  cliente_id: string;
-  /** Data do inventário no formato ISO (YYYY-MM-DD) */
-  data: string;
-  hora_inicio?: string;
-  tipo_operacao: InventoryOperationType;
-  /** Número de conferentes necessários (mín. 1, máx. 100) */
-  headcount: number;
-  observacoes?: string;
+export interface IInventarioInput extends Omit<InventarioInput, 'status'> {
   /** Gerado pelo backend auth context se omitido */
   created_by?: string;
 }
@@ -73,8 +66,4 @@ export interface IInventarioFilter {
 }
 
 /** Resposta padronizada */
-export interface ICrudResult<T = void> {
-  sucesso: boolean;
-  dados?: T;
-  erro?: string;
-}
+export type { ICrudResult };

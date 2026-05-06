@@ -66,9 +66,9 @@ export class EscalaService {
    * @throws Error para outros erros de banco ou rede
    */
   async processarGeracao(inventarioId: string): Promise<GerarEscalaResult> {
-    const { data, error } = await this.escalaRepo.gerarViaRpc(inventarioId);
-
-    if (error) {
+    try {
+      return await this.escalaRepo.gerarViaRpc(inventarioId);
+    } catch (error: any) {
       // Mapeia erros conhecidos do PostgreSQL para erros de negócio tipados
       if (
         error.message.includes('Headcount insuficiente') ||
@@ -78,8 +78,6 @@ export class EscalaService {
       }
       throw error;
     }
-
-    return data;
   }
 
   // -------------------------------------------------------------------------
@@ -89,8 +87,7 @@ export class EscalaService {
     itens: ListarEscalaRow[];
     agrupado: ReturnType<typeof agruparEscalaPorPapel>;
   }> {
-    const { data, error } = await this.escalaRepo.listarPorInventario(inventarioId);
-    if (error) throw error;
+    const data = await this.escalaRepo.listarPorInventario(inventarioId);
 
     return {
       itens: data,
@@ -102,22 +99,19 @@ export class EscalaService {
   // CASO DE USO: Confirmar colaborador (check-in)
   // -------------------------------------------------------------------------
   async confirmarColaborador(escalaId: string, confirmado = true): Promise<void> {
-    const { error } = await this.escalaRepo.confirmar(escalaId, confirmado);
-    if (error) throw error;
+    await this.escalaRepo.confirmar(escalaId, confirmado);
   }
 
   // -------------------------------------------------------------------------
   // CASO DE USO: Buscar inventários
   // -------------------------------------------------------------------------
-  async listarInventarios(status?: string): Promise<Inventario[]> {
-    const { data, error } = await this.inventariosRepo.listar(status);
-    if (error) throw error;
-    return data;
+  async listarInventarios(status?: any): Promise<Inventario[]> {
+    return await this.inventariosRepo.listar({ status });
   }
 
   async buscarInventario(inventarioId: string): Promise<Inventario> {
-    const { data, error } = await this.inventariosRepo.buscarPorId(inventarioId);
-    if (error) throw error;
+    const data = await this.inventariosRepo.buscarPorId(inventarioId);
+    if (!data) throw new Error('Inventário não encontrado');
     return data;
   }
 
@@ -132,9 +126,7 @@ export class EscalaService {
       throw new Error('Headcount inválido: máximo de 100 conferentes por inventário.');
     }
 
-    const { data, error } = await this.inventariosRepo.criar(input);
-    if (error) throw error;
-    return data;
+    return await this.inventariosRepo.inserir(input);
   }
 
   // -------------------------------------------------------------------------
@@ -154,13 +146,12 @@ export class EscalaService {
     const inventario = await this.buscarInventario(inventarioId);
     const composicao = calcularComposicaoEscala(inventario.headcount);
 
-    const { data: consolidado, error } = await this.colaboradoresRepo.listarConsolidado();
-    if (error) throw error;
+    const consolidado = await this.colaboradoresRepo.listarConsolidado();
 
     // Nota: esta verificação é simplificada (sem filtro de data).
     // O filtro real de conflito é feito na RPC do banco.
-    const lidersDisp    = consolidado.filter((c) => c.funcao === 'LIDER').length;
-    const confDisp      = consolidado.filter((c) => c.funcao === 'CONFERENTE').length;
+    const lidersDisp    = consolidado.filter((c: ProdutividadeConsolidada) => c.funcao === 'LIDER').length;
+    const confDisp      = consolidado.filter((c: ProdutividadeConsolidada) => c.funcao === 'CONFERENTE').length;
     const necessarios   = inventario.headcount + ESCALA_CONFIG.NUM_RESERVAS;
     const suficiente    = lidersDisp >= 1 && confDisp >= necessarios;
 
@@ -205,10 +196,8 @@ export class EscalaService {
       return { importados: 0, erros };
     }
 
-    const { data: count, error } = await this.produtividadeRepo.inserirLote(validos);
-    if (error) throw error;
-
-    return { importados: count ?? 0, erros };
+    const count = await this.produtividadeRepo.inserirLote(validos);
+    return { importados: count, erros };
   }
 
   // -------------------------------------------------------------------------
@@ -217,11 +206,10 @@ export class EscalaService {
   async rankingColaboradores(cidadeClienteFiltro?: string): Promise<
     (ProdutividadeConsolidada & { score_final_calculado: number })[]
   > {
-    const { data, error } = await this.colaboradoresRepo.listarConsolidado();
-    if (error) throw error;
+    const data = await this.colaboradoresRepo.listarConsolidado();
 
     return data
-      .map((c) => ({
+      .map((c: ProdutividadeConsolidada) => ({
         ...c,
         score_final_calculado: calcularScoreFinal(
           c.produtividade_media,
@@ -230,25 +218,25 @@ export class EscalaService {
           cidadeClienteFiltro ?? '',
         ),
       }))
-      .sort((a, b) => b.score_final_calculado - a.score_final_calculado);
+      .sort((a: any, b: any) => b.score_final_calculado - a.score_final_calculado);
   }
 
   // -------------------------------------------------------------------------
   // Delegates diretos (para CRUD simples via Controller)
   // -------------------------------------------------------------------------
   readonly clientes = {
-    listar: (apenasAtivos?: boolean) => this.clientesRepo.listar(apenasAtivos),
+    listar: (apenasAtivos?: boolean) => this.clientesRepo.listar({}, apenasAtivos),
     buscarPorId: (id: string) => this.clientesRepo.buscarPorId(id),
-    criar: (input: ClienteInput) => this.clientesRepo.criar(input),
-    atualizar: (id: string, input: Partial<ClienteInput>) => this.clientesRepo.atualizar(id, input),
+    criar: (input: any) => this.clientesRepo.inserir(input),
+    atualizar: (id: string, input: any) => this.clientesRepo.actualizar(id, input),
   };
 
   readonly colaboradores = {
-    listar: (apenasAtivos?: boolean) => this.colaboradoresRepo.listar(apenasAtivos),
+    listar: (apenasAtivos?: boolean) => this.colaboradoresRepo.listar({}, apenasAtivos),
     buscarPorId: (id: string) => this.colaboradoresRepo.buscarPorId(id),
-    criar: (input: ColaboradorInput) => this.colaboradoresRepo.criar(input),
-    atualizar: (id: string, input: Partial<ColaboradorInput>) =>
-      this.colaboradoresRepo.atualizar(id, input),
+    criar: (input: any) => this.colaboradoresRepo.inserir(input),
+    atualizar: (id: string, input: any) =>
+      this.colaboradoresRepo.actualizar(id, input),
     listarConsolidado: () => this.colaboradoresRepo.listarConsolidado(),
   };
 

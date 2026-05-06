@@ -4,6 +4,8 @@ import type {
   InventoryCheckerInput,
   ReportA,
   ReportB,
+  ReportC,
+  ReportD,
 } from "../types";
 
 // ==========================
@@ -173,12 +175,12 @@ Aval. Loja: ${fmtPct(r.avalLoja)}
 Envio 1º Arq.: ${fmtTime(r.envioArquivo1)}
 Envio 2º Arq.: ${fmtTime(r.envioArquivo2)}
 Envio 3º Arq.: ${fmtTime(r.envioArquivo3)}
-Fim Inventário: ${fmtTime(r.terminoInventario)}
 Cont. Antecipada: ${fmtBool(r.contagemAntecipada)}
 Satisfação: ${fmtVal(r.satisfacao)}
 Acuracidade: ${fmtPct(r.acuracidade)}
 % Auditoria: ${fmtPct(r.percentualAuditoria)}
-Produtividade (PH): ${fmtIntBr(r.ph)}`;
+Produtividade (PH): ${fmtIntBr(r.ph)}
+Fim Inventário: ${fmtTime(r.terminoInventario)}`;
 };
 
 export const formatReportB = (r: ReportB): string => {
@@ -204,16 +206,78 @@ Fim Ñ contados: ${fmtTime(r.terminoNaoContados)}
 Itens Alt. Diverg.: ${fmtVal(r.qtdAlterados)}
 Itens Ñ Cont.: ${fmtVal(r.qtdNaoContados)}
 Enc. no Não Cont.: ${fmtVal(r.qtdEncontradosNaoContados)}
-Fim Inventário: ${fmtTime(r.terminoInventario)}
+Envio 1º Arq.: ${fmtTime(r.envioArquivo1)}
+Envio 2º Arq.: ${fmtTime(r.envioArquivo2)}
+Envio 3º Arq.: ${fmtTime(r.envioArquivo3)}
 Total Peças: ${fmtIntBr(r.totalPecas)}
-Val. Fin.: ${fmtMoeda(r.valorFinanceiro)}
+Valor Total: ${fmtMoeda(r.valorTotal)}
 Aval. Prep. Dep.: ${fmtPct(r.avalPrepDeposito)}
 Aval. Prep. Loja: ${fmtPct(r.avalPrepLoja)}
 Satisfação: ${fmtVal(r.satisfacao)}
 Responsável: ${fmtVal(r.responsavel)}
 Acurac. Cliente: ${fmtPct(r.acuracidadeCliente)}
 Acurac. Terc.: ${fmtPct(r.acuracidadeTerceirizada)}
-Houve Suporte: ${fmtBool(r.suporteSolicitado)}`;
+Houve Suporte?: ${fmtBool(r.suporteSolicitado)}
+PH Calculado: ${fmtIntBr(r.phCalculado ?? "")}
+Fim Inventário: ${fmtTime(r.terminoInventario)}`;
+};
+
+export const formatReportC = (r: ReportC): string => {
+  return `*INVENTÁRIO: ${r.inventario_ref}*
+
+Loja/Cliente: ${fmtVal(r.cliente)}
+Filial da loja: ${fmtVal(r.filial)}
+Líder: ${fmtVal(r.lider)}
+Quantidade Equipe: ${fmtVal(r.qtdEquipe)}
+Quantidade de faltas: ${fmtVal(r.qtdFaltas)}
+
+*Mapeamento*
+Início Contagem (Geral): ${fmtTime(r.inicioContagemGeral)}
+Fim Contagem (Geral): ${fmtTime(r.fimContagemGeral)}
+% do Inventário: ${fmtPct(r.pctInventario)}
+
+*Não Contados*
+Início (zerados): ${fmtTime(r.naoContadosInicio)}
+Total de Itens: ${fmtVal(r.naoContadosTotal)}
+Fim (zerados): ${fmtTime(r.naoContadosFim)}
+
+*1º Divergência*
+Início da divergência: ${fmtTime(r.div1Inicio)}
+Itens Controlados: ${fmtVal(r.div1Controlados)}
+Itens Negativos (perdas): ${fmtVal(r.div1Negativos)}
+Itens Positivos (sobras): ${fmtVal(r.div1Positivos)}
+Total de Itens: ${fmtVal(r.div1Total)}
+Fim da divergência: ${fmtTime(r.div1Fim)}
+
+*2º Divergência*
+Início da divergência: ${fmtTime(r.div2Inicio)}
+Itens Negativos (perdas): ${fmtVal(r.div2Negativos)}
+Itens Positivos (sobras): ${fmtVal(r.div2Positivos)}
+Total de Itens: ${fmtVal(r.div2Total)}
+Fim da divergência: ${fmtTime(r.div2Fim)}`;
+};
+
+export const formatReportD = (r: ReportD): string => {
+  return `*Acompanhamento de Inventário*
+
+Loja: ${fmtVal(r.loja)}
+Nº Loja: ${fmtVal(r.lojaNum)}
+Líder: ${fmtVal(r.lider)}
+Qtd. Pessoas: ${fmtVal(r.qtdPessoas)}
+Qtd. Peças: ${fmtVal(r.qtdPecas)}
+% Inv.: ${fmtPct(r.pctInv)}
+Chegada: ${fmtTime(r.chegada)}
+Ini. Cont. Est.: ${fmtTime(r.inicioContagemEstoque)}
+Fim Cont. Est.: ${fmtTime(r.terminoContagemEstoque)}
+Ini. Cont. Loja: ${fmtTime(r.inicioContagemLoja)}
+Fim Cont. Loja: ${fmtTime(r.terminoContagemLoja)}
+Ini. Audit.: ${fmtTime(r.inicioAuditoria)}
+Fim Audit.: ${fmtTime(r.terminoAuditoria)}
+Ini. Diverg.: ${fmtTime(r.inicioDivergencia)}
+Fim Diverg.: ${fmtTime(r.terminoDivergencia)}
+Aval. Est.: ${fmtPct(r.avalEstoque)}
+Aval. Loja: ${fmtPct(r.avalLoja)}
+Fim Inventário: ${fmtTime(r.terminoInventario)}`;
 };
 
 // Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 5.23 -> 5.23

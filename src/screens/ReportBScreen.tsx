@@ -52,7 +52,7 @@ const makeInitialState = (): ReportB => ({
   qtdNaoContados: "",
   qtdEncontradosNaoContados: "",
   totalPecas: "",
-  valorFinanceiro: "",
+  valorTotal: "",
   envioArquivo1: "",
   envioArquivo2: "",
   envioArquivo3: "",
@@ -63,6 +63,7 @@ const makeInitialState = (): ReportB => ({
   satisfacao: "",
   responsavel: "",
   suporteSolicitado: null,
+  phCalculado: "",
   terminoInventario: "",
 });
 
@@ -347,11 +348,11 @@ export default function ReportBScreen() {
               keyboardType="numeric"
               placeholder="0"
             />
-            <Text style={styles.label}>Valor Financeiro (R$)</Text>
+            <Text style={styles.label}>Valor Total (R$)</Text>
             <TextInput
               style={styles.input}
-              value={String(report.valorFinanceiro)}
-              onChangeText={(t) => setField("valorFinanceiro", t === "" ? "" : Number(t))}
+              value={String(report.valorTotal)}
+              onChangeText={(t) => setField("valorTotal", t === "" ? "" : Number(t))}
               keyboardType="numeric"
             />
             <View style={styles.row}>
@@ -468,6 +469,14 @@ export default function ReportBScreen() {
               style={styles.input}
               value={report.responsavel}
               onChangeText={(t) => setField("responsavel", t)}
+            />
+            <Text style={styles.label}>PH Calculado</Text>
+            <TextInput
+              style={styles.input}
+              value={String(report.phCalculado)}
+              onChangeText={(t) => setField("phCalculado", t === "" ? "" : Number(t))}
+              keyboardType="numeric"
+              placeholder="0"
             />
             {renderTimeField("Fim Inventário", "terminoInventario")}
             <Text style={styles.label}>Houve solicitação de Suporte?</Text>
