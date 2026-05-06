@@ -9,8 +9,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type {
-  ClienteInput,
-  ColaboradorInput,
   GerarEscalaResult,
   Inventario,
   InventarioInput,
