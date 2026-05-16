@@ -365,7 +365,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco22h)}
-                  onChangeText={(t) => setField("avanco22h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avanco22h", t)}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -375,7 +375,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco00h)}
-                  onChangeText={(t) => setField("avanco00h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avanco00h", t)}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -387,7 +387,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco01h)}
-                  onChangeText={(t) => setField("avanco01h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avanco01h", t)}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -397,7 +397,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco03h)}
-                  onChangeText={(t) => setField("avanco03h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avanco03h", t)}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -409,14 +409,14 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco04h)}
-                  onChangeText={(t) => setField("avanco04h", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avanco04h", t)}
                   keyboardType="numeric"
                   placeholder="%"
                 />
               </View>
             </View>
             <View style={styles.customTimeBox}>
-              <Text style={styles.customTimeTitle}>Incluir novo horário (opcional)</Text>
+              <Text style={styles.customTimeTitle}>Incluir novo horário</Text>
               <View style={styles.row}>
                 <View style={styles.half}>{renderTimeField("Hora", "avancoExtraHora")}</View>
                 <View style={styles.half}>
@@ -424,7 +424,7 @@ export default function ReportAScreen() {
                   <TextInput
                     style={styles.input}
                     value={String(report.avancoExtraValor)}
-                    onChangeText={(t) => setField("avancoExtraValor", t === "" ? "" : Number(t))}
+                    onChangeText={(t) => setField("avancoExtraValor", t)}
                     keyboardType="numeric"
                     placeholder="%"
                   />
@@ -448,7 +448,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avalEstoque)}
-                  onChangeText={(t) => setField("avalEstoque", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avalEstoque", t)}
                   keyboardType="numeric"
                 />
               </View>
@@ -457,7 +457,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avalLoja)}
-                  onChangeText={(t) => setField("avalLoja", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("avalLoja", t)}
                   keyboardType="numeric"
                 />
               </View>
@@ -468,7 +468,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.acuracidade)}
-                  onChangeText={(t) => setField("acuracidade", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("acuracidade", t)}
                   keyboardType="numeric"
                 />
               </View>
@@ -477,7 +477,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.percentualAuditoria)}
-                  onChangeText={(t) => setField("percentualAuditoria", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("percentualAuditoria", t)}
                   keyboardType="numeric"
                 />
               </View>
@@ -488,7 +488,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.ph)}
-                  onChangeText={(t) => setField("ph", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("ph", t)}
                   keyboardType="numeric"
                 />
               </View>

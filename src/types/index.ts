@@ -2,7 +2,7 @@ export interface ReportA {
   lojaNum: string;
   lojaNome: string;
   enderecoLoja?: string;
-  qtdColaboradores: number | "";
+  qtdColaboradores: string;
   lider: string;
   hrChegada: string;
   inicioContagemEstoque: string;
@@ -12,22 +12,22 @@ export interface ReportA {
   inicioDivergencia: string;
   terminoDivergencia: string;
   terminoInventario: string;
-  avanco22h: number | "";
-  avanco00h: number | "";
-  avanco01h: number | "";
-  avanco03h: number | "";
-  avanco04h: number | "";
+  avanco22h: string;
+  avanco00h: string;
+  avanco01h: string;
+  avanco03h: string;
+  avanco04h: string;
   avancoExtraHora: string; // opcional: incluir novo horário
-  avancoExtraValor: number | "";
+  avancoExtraValor: string;
   envioArquivo1: string;
   envioArquivo2: string;
   envioArquivo3: string;
-  avalEstoque: number | "";
-  avalLoja: number | "";
-  acuracidade: number | "";
-  percentualAuditoria: number | "";
-  ph: number | "";
-  satisfacao: number | string;
+  avalEstoque: string;
+  avalLoja: string;
+  acuracidade: string;
+  percentualAuditoria: string;
+  ph: string;
+  satisfacao: string;
   contagemAntecipada: boolean | null;
 }
 
