@@ -416,8 +416,17 @@ export const parseInventoryCheckersCsv = (
         qtde: cQtde, 
         qtde1a1: cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1, 
         produtividade: cProdutividade >= 0 && cProdutividade !== cQtde ? cProdutividade : -1, 
-        erro: cErro >= 0 ? cErro : cPctErro // Se não achou absoluto, guarda o índice do %
+        erro: cErro >= 0 ? cErro : cPctErro 
       };
+
+      // HARDCODE FALLBACK: Se o Excel exportado for o do sistema do cliente (onde o Nome está no index 7 e Qtde no 12)
+      // Como as outras colunas estão em linhas quebradas, ignoramos os cabeçalhos e forçamos o índice absoluto.
+      if (col.nome === 7 && col.qtde === 12) {
+        if (col.produtividade === -1) col.produtividade = 24;
+        if (col.erro === -1) col.erro = 27;
+        if (col.qtde1a1 === -1) col.qtde1a1 = 40;
+      }
+
       headerRowIndex = r;
       break;
     }

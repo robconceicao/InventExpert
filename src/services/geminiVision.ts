@@ -11,7 +11,7 @@
  */
 
 const GEMINI_API_KEY = "AIzaSyCJE8Hb-Weem_3C-q5F5LGZvZIRwzgvkyY";
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-1.5-flash";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 export type GeminiEraseResult =
@@ -60,7 +60,7 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
         },
       ],
       generationConfig: {
-        temperature: 0.1,         // baixa temperatura = mais determinístico
+        temperature: 0.1,
         topP: 0.8,
         maxOutputTokens: 8192,
         responseMimeType: "text/plain", // Pede retorno em texto (HTML)
@@ -86,14 +86,11 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
     
     if (textPart?.text) {
       let html = textPart.text.trim();
-      // Limpa marcação Markdown se o Gemini teimar em colocar
-      if (html.startsWith("```html")) html = html.replace(/^```html\n/, "");
-      if (html.startsWith("```")) html = html.replace(/^```\n/, "");
-      if (html.endsWith("```")) html = html.replace(/```$/, "");
+      html = html.replace(/```html/ig, "").replace(/```/g, "").trim();
 
       return {
         success: true,
-        html: html.trim(),
+        html: html,
       };
     }
 
