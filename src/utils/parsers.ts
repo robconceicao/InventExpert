@@ -144,7 +144,7 @@ const timeToMinutes = (t: string): number => {
 
 export const formatReportA = (r: ReportA): string => {
   // Monta os avanços padrão como pares [hora_str, minutos, valor]
-  const avancos: { label: string; mins: number; val: number | "" }[] = [
+  const avancos: { label: string; mins: number; val: string | number | "" }[] = [
     { label: "22h00", mins: timeToMinutes("22:00"), val: r.avanco22h },
     { label: "00h00", mins: timeToMinutes("00:00"), val: r.avanco00h },
     { label: "01h00", mins: timeToMinutes("01:00"), val: r.avanco01h },
@@ -348,24 +348,20 @@ export const parseInventoryCheckersCsv = (
     .filter((l) => l.length > 0);
   if (lines.length < 2) return [];
 
-  // Detecta o separador dominante na linha de cabeçalho
-  const detectSeparator = (headerLine: string): RegExp => {
-    const semicolons = (headerLine.match(/;/g) ?? []).length;
-    const tabs       = (headerLine.match(/\t/g) ?? []).length;
-    const commas     = (headerLine.match(/,/g) ?? []).length;
+  // Detecta o separador dominante numa linha
+  const detectSeparator = (line: string): RegExp => {
+    const semicolons = (line.match(/;/g) ?? []).length;
+    const tabs       = (line.match(/\t/g) ?? []).length;
+    const commas     = (line.match(/,/g) ?? []).length;
     if (semicolons >= tabs && semicolons >= commas) return /;/;
     if (tabs >= commas) return /\t/;
     return /,/;
   };
 
-  const sep = detectSeparator(lines[0]);
-
-  const parseRow = (row: string): string[] => {
-    // Usa split simples quando não há aspas (mais rápido e correto para este formato)
+  const parseRow = (row: string, sep: RegExp): string[] => {
     if (!row.includes('"')) {
       return row.split(sep).map((c) => c.trim());
     }
-    // Fallback: parser com controlo de aspas
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
@@ -385,7 +381,7 @@ export const parseInventoryCheckersCsv = (
 
   const normalizeHeader = (h: string): string =>
     h.replace(/^"|"$/g, "").trim().toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove acentos
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const findCol = (header: string[], patterns: RegExp[]): number => {
     for (const p of patterns) {
@@ -395,61 +391,38 @@ export const parseInventoryCheckersCsv = (
     return -1;
   };
 
-  const rawHeader = parseRow(lines[0]);
-  const header    = rawHeader.map(normalizeHeader);
+  let headerRowIndex = -1;
+  let sep = /,/;
+  let col = { nome: -1, qtde: -1, qtde1a1: -1, produtividade: -1, erro: -1 };
 
-  const col = {
-    // Nome: "nome do conferente", "colaborador", "name", "nome"
-    nome: findCol(header, [
-      /nome\s*(do)?\s*conferente/i,
-      /^nome$/i,
-      /colaborador/i,
-      /name/i,
-    ]),
-    // Quantidade total: "qtde. volumes", "qtde", "quantidade"
-    qtde: findCol(header, [
-      /qtde\.?\s*volu/i,
-      /^qtde\.?/i,
-      /^qtd\.?/i,
-      /quantidade/i,
-      /total.*pecas/i,
-    ]),
-    // Quantidade 1 a 1: "1a1", "qtde1a1", "unitario"
-    qtde1a1: findCol(header, [
-      /^1a1$/i,
-      /^qtde1a1$/i,
-      /1\s*a\s*1/i,
-      /unit[aá]rio/i,
-    ]),
-    // Produtividade: "produtividade", "itens/hora", "prod"
-    produtividade: findCol(header, [
-      /^produtividade/i,
-      /prod.*hora/i,
-      /itens.*hora/i,
-    ]),
-    // Erro: "erro" absoluto — NÃO confundir com "% erro"
-    erro: findCol(header, [
-      /^erro$/i,
-      /^qtde.*erro/i,
-      /^erros$/i,
-    ]),
-  };
+  // Scan the first 30 lines to find the header row
+  for (let r = 0; r < Math.min(lines.length, 30); r++) {
+    sep = detectSeparator(lines[r]);
+    const rawHeader = parseRow(lines[r], sep);
+    const header = rawHeader.map(normalizeHeader);
 
-  // Diagnóstico: se colunas críticas não foram encontradas, retorna vazio
-  if (
-    col.nome < 0 ||
-    col.qtde < 0 ||
-    col.qtde1a1 < 0 ||
-    col.produtividade < 0 ||
-    col.erro < 0
-  ) {
+    const cNome = findCol(header, [/nome\s*(do)?\s*conferente/i, /^nome$/i, /colaborador/i, /name/i]);
+    const cQtde = findCol(header, [/qtde\.?\s*volu/i, /^qtde\.?/i, /^qtd\.?/i, /quantidade/i, /total.*pecas/i]);
+    const cQtde1a1 = findCol(header, [/^1a1$/i, /^qtde1a1$/i, /1\s*a\s*1/i, /unit[aá]rio/i]);
+    const cProdutividade = findCol(header, [/^produtividade/i, /prod.*hora/i, /itens.*hora/i]);
+    const cErro = findCol(header, [/^erro$/i, /^qtde.*erro/i, /^erros$/i]);
+
+    // Pelo menos Nome, Qtde e Produtividade são estritamente obrigatórios para identificar o cabeçalho
+    if (cNome >= 0 && cQtde >= 0 && cProdutividade >= 0) {
+      col = { nome: cNome, qtde: cQtde, qtde1a1: cQtde1a1, produtividade: cProdutividade, erro: cErro };
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  if (headerRowIndex < 0) {
     return [];
   }
 
   const result: InventoryCheckerInput[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const cells = parseRow(lines[i]).map((c) =>
+  for (let i = headerRowIndex + 1; i < lines.length; i++) {
+    const cells = parseRow(lines[i], sep).map((c) =>
       (c ?? "").replace(/^"|"$/g, "").trim(),
     );
 
