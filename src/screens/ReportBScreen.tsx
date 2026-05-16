@@ -7,6 +7,8 @@ import {
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as DocumentPicker from "expo-document-picker";
+import Share from "react-native-share";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportBFarmacias, ReportBMercados, ReportBOutros, ReportBMode } from "../types";
 import {
@@ -64,6 +66,7 @@ export default function ReportBScreen() {
   const [rm, setRm] = useState<ReportBMercados>(initM);
   const [ro, setRo] = useState<ReportBOutros>(initO);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [attachment, setAttachment] = useState<{ uri: string; name: string } | null>(null);
 
   useFocusEffect(useCallback(() => {
     AsyncStorage.multiGet([KEY_MODE, KEY_F, KEY_M, KEY_O]).then(pairs => {
@@ -149,12 +152,39 @@ export default function ReportBScreen() {
     return formatReportBOutros(ro);
   };
 
-  const handleSend = () => {
+  const handleSendWhatsApp = () => {
     const msg = getPreview();
     const url = Platform.OS==="web"
       ? `https://wa.me/?text=${encodeURIComponent(msg)}`
       : `whatsapp://send?text=${encodeURIComponent(msg)}`;
     Linking.openURL(url).catch(()=>Alert.alert("Erro","Não foi possível abrir o WhatsApp"));
+  };
+
+  const pickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        setAttachment({ uri: res.assets[0].uri, name: res.assets[0].name });
+      }
+    } catch {
+      Alert.alert("Erro", "Falha ao anexar arquivo.");
+    }
+  };
+
+  const handleNativeShare = async () => {
+    const msg = getPreview();
+    const options: any = { message: msg, subject: "Relatório de Inventário" };
+    if (attachment) {
+      options.url = attachment.uri;
+    }
+    try {
+      await Share.open(options);
+    } catch (err: any) {
+      if (err.message !== "User did not share") console.log(err);
+    }
   };
 
   const handleArchive = async (clear: boolean) => {
@@ -342,12 +372,33 @@ export default function ReportBScreen() {
             <ScrollView style={s.previewBox}>
               <Text>{getPreview()}</Text>
             </ScrollView>
+
+            {/* Anexos */}
+            <View style={s.attachBox}>
+              <View style={{flex:1}}>
+                <Text style={s.label} numberOfLines={1}>
+                  {attachment ? `📎 ${attachment.name}` : "Nenhum arquivo anexado (ex: .zip)"}
+                </Text>
+              </View>
+              <Pressable style={s.btnAttach} onPress={pickDocument}>
+                <Text style={s.btnAttachTxt}>{attachment ? "Trocar" : "Anexar"}</Text>
+              </Pressable>
+              {attachment && (
+                <Pressable style={[s.btnAttach, {backgroundColor: "#FEE2E2", marginLeft: 8}]} onPress={() => setAttachment(null)}>
+                  <Ionicons name="trash" size={14} color="#DC2626" />
+                </Pressable>
+              )}
+            </View>
+
             <View style={s.row}>
               <Pressable style={s.btnBack} onPress={()=>setPreviewVisible(false)}>
                 <Text>Voltar</Text>
               </Pressable>
-              <Pressable style={s.btnPrimary} onPress={handleSend}>
-                <Text style={s.btnTxt}>Enviar</Text>
+              <Pressable style={[s.btnPrimary, { flex: 1, backgroundColor: "#25D366", marginTop: 0 }]} onPress={handleSendWhatsApp}>
+                <Text style={s.btnTxt}>WhatsApp</Text>
+              </Pressable>
+              <Pressable style={[s.btnPrimary, { flex: 1, backgroundColor: "#DB4437", marginTop: 0 }]} onPress={handleNativeShare}>
+                <Text style={s.btnTxt}>Email / Mais</Text>
               </Pressable>
             </View>
           </View>
@@ -385,5 +436,8 @@ const s = StyleSheet.create({
   overlay:{flex:1,backgroundColor:"rgba(0,0,0,0.5)",justifyContent:"center",padding:20},
   modalBox:{backgroundColor:"#fff",borderRadius:16,padding:20,maxHeight:"85%"},
   previewBox:{backgroundColor:"#F1F5F9",padding:12,borderRadius:8,marginVertical:10},
-  btnBack:{flex:1,padding:13,alignItems:"center",backgroundColor:"#E2E8F0",borderRadius:12},
+  btnBack:{padding:13,alignItems:"center",backgroundColor:"#E2E8F0",borderRadius:12},
+  attachBox:{flexDirection:"row",alignItems:"center",backgroundColor:"#F8FAFC",padding:10,borderRadius:8,marginBottom:15,borderWidth:1,borderColor:"#E2E8F0"},
+  btnAttach:{paddingVertical:6,paddingHorizontal:12,backgroundColor:"#E2E8F0",borderRadius:6},
+  btnAttachTxt:{fontSize:12,fontWeight:"bold",color:"#334155"},
 });
