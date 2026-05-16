@@ -110,13 +110,12 @@ export const formatAttendanceMessage = (data: AttendanceData): string => {
   const icon = (c: AttendanceCollaborator) =>
     c.status === "PRESENTE" ? " ✅" : c.status === "AUSENTE" ? " ❌" : "";
   const linhas: string[] = [];
+  let currentNum = 1;
   for (let i = 0; i < data.colaboradores.length; i++) {
     const c = data.colaboradores[i];
-    if (c.ehBkp) {
-      linhas.push(`BKP ${c.nome}${icon(c)}`);
-      continue;
-    }
-    const num = c.numero ?? i + 1;
+    const num = c.numero ?? currentNum;
+    currentNum = num + 1;
+    
     const sub = (c.substituto ?? "").trim();
     if (sub) {
       linhas.push(`${num} ${c.nome} ❌`);
@@ -383,13 +382,6 @@ export const parseInventoryCheckersCsv = (
     h.replace(/^"|"$/g, "").trim().toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  const findCol = (header: string[], patterns: RegExp[]): number => {
-    for (const p of patterns) {
-      const i = header.findIndex((h) => p.test(h));
-      if (i >= 0) return i;
-    }
-    return -1;
-  };
 
   let headerRowIndex = -1;
   let sep = /,/;

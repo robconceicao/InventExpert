@@ -215,19 +215,11 @@ export default function ScannerScreen() {
       const geminiResult = await eraseHandwritingWithGemini(jpegBase64, "image/jpeg");
 
       if (geminiResult.success) {
-        // ── Gemini retornou imagem processada — converte para PDF
-        setEraserStatus("✅ IA processou! Gerando PDF...");
+        // ── Gemini retornou o HTML do formulário limpo — converte para PDF nativo
+        setEraserStatus("✅ IA processou! Gerando PDF Digital...");
         setEraserUsedAI(true);
 
-        const imgMime = geminiResult.mimeType.includes("png") ? "image/png" : "image/jpeg";
-        const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
-<style>
-  @page { size: A4 portrait; margin: 0; }
-  body { margin:0; padding:0; background:#fff; }
-  img { display:block; width:100%; height:auto; }
-</style></head>
-<body><img src="data:${imgMime};base64,${geminiResult.base64}" /></body></html>`;
+        const html = geminiResult.html;
 
         const printed = await Print.printToFileAsync({ html });
         finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_gemini_${Date.now()}.pdf`;
