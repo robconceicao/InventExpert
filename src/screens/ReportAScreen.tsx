@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from "react";
+import * as Notifications from "expo-notifications";
+import * as Speech from "expo-speech";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Alert,
     KeyboardAvoidingView,
@@ -20,8 +22,23 @@ import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
+// ---------------------------------------------------------------------------
+// Notificações locais
+// ---------------------------------------------------------------------------
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 const STORAGE_KEY = "inventexpert:reportA";
 const HISTORY_KEY = "inventexpert:reportA:history";
+const ALARM_VOICE_MSG =
+  "Solicitar conferentes que exportem os dados dos coletores.";
 
 const initialState: ReportA = {
   lojaNum: "",
@@ -55,21 +72,48 @@ const initialState: ReportA = {
   contagemAntecipada: null,
 };
 
+// Horários monitorados para aviso (15 min antes)
+const MONITORED_ADVANCES = [
+  { label: "00h00", hour: 0, minute: 0 },
+  { label: "01h00", hour: 1, minute: 0 },
+  { label: "03h00", hour: 3, minute: 0 },
+  { label: "04h00", hour: 4, minute: 0 },
+];
+
+// Retorna true se agora está entre 14-15 min antes do horário alvo
+const isWarningTime = (targetHour: number, targetMin: number): boolean => {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  // alvo em minutos do dia
+  let targetMins = targetHour * 60 + targetMin;
+  // Ajuste: horários noturnos (0-5h) considerados como "dia seguinte"
+  if (targetHour < 18 && now.getHours() >= 18) {
+    targetMins += 1440;
+  }
+  const diff = targetMins - nowMins;
+  return diff >= 14 && diff < 15;
+};
+
 export default function ReportAScreen() {
   const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [alarmActive, setAlarmActive] = useState(false);
+  const [alarmLabel, setAlarmLabel] = useState("");
+  const alarmTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const monitorTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const firedRef = useRef<Set<string>>(new Set());
 
-
+  // ── Carrega dados salvos (apenas na montagem, sem auto-save no mount)
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((res) => {
       if (res) setReport(JSON.parse(res));
     });
   }, []);
 
+  // ── Auto-save sempre que report muda, e sincroniza com ReportB
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
 
-    // Auto-fill ReportB when ReportA changes
     AsyncStorage.getItem("inventexpert:reportB").then((res) => {
       const bReport = res ? JSON.parse(res) : {};
       const updatedB = {
@@ -77,14 +121,11 @@ export default function ReportAScreen() {
         cliente: report.lojaNome || bReport.cliente || "",
         lojaNum: report.lojaNum || bReport.lojaNum || "",
         chegadaEquipe: report.hrChegada || bReport.chegadaEquipe || "",
-        inicioDeposito:
-          report.inicioContagemEstoque || bReport.inicioDeposito || "",
-        terminoDeposito:
-          report.terminoContagemEstoque || bReport.terminoDeposito || "",
+        inicioDeposito: report.inicioContagemEstoque || bReport.inicioDeposito || "",
+        terminoDeposito: report.terminoContagemEstoque || bReport.terminoDeposito || "",
         inicioLoja: report.inicioContagemLoja || bReport.inicioLoja || "",
         terminoLoja: report.terminoContagemLoja || bReport.terminoLoja || "",
-        inicioDivergencia:
-          report.inicioDivergencia || bReport.inicioDivergencia || "",
+        inicioDivergencia: report.inicioDivergencia || bReport.inicioDivergencia || "",
         envioArquivo1: report.envioArquivo1 || bReport.envioArquivo1 || "",
         envioArquivo2: report.envioArquivo2 || bReport.envioArquivo2 || "",
         envioArquivo3: report.envioArquivo3 || bReport.envioArquivo3 || "",
@@ -92,16 +133,87 @@ export default function ReportAScreen() {
         avalPrepLoja: report.avalLoja || bReport.avalPrepLoja || "",
         satisfacao: report.satisfacao || bReport.satisfacao || "",
         responsavel: report.lider || bReport.responsavel || "",
-        terminoInventario:
-          report.terminoInventario || bReport.terminoInventario || "",
+        terminoInventario: report.terminoInventario || bReport.terminoInventario || "",
       };
-
-      AsyncStorage.setItem(
-        "inventexpert:reportB",
-        JSON.stringify(updatedB),
-      ).catch(() => null);
+      AsyncStorage.setItem("inventexpert:reportB", JSON.stringify(updatedB)).catch(() => null);
     });
   }, [report]);
+
+  // ── Monitor de avanços: verifica a cada 30s
+  useEffect(() => {
+    const requestPermission = async () => {
+      if (Platform.OS !== "web") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== "granted") {
+          console.warn("[ReportA] Permissão de notificação negada.");
+        }
+      }
+    };
+    void requestPermission();
+
+    monitorTimerRef.current = setInterval(() => {
+      for (const adv of MONITORED_ADVANCES) {
+        if (!firedRef.current.has(adv.label) && isWarningTime(adv.hour, adv.minute)) {
+          firedRef.current.add(adv.label);
+          triggerAlarm(adv.label);
+          break;
+        }
+      }
+    }, 30_000);
+
+    return () => {
+      if (monitorTimerRef.current) clearInterval(monitorTimerRef.current);
+      stopAlarm();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const triggerAlarm = (label: string) => {
+    setAlarmLabel(label);
+    setAlarmActive(true);
+
+    // Notificação local (bipe do sistema)
+    if (Platform.OS !== "web") {
+      void Notifications.scheduleNotificationAsync({
+        content: {
+          title: `⏰ Avanço ${label} em 15 minutos`,
+          body: ALARM_VOICE_MSG,
+          sound: true,
+        },
+        trigger: null,
+      });
+    }
+
+    // Voz repetitiva a cada 30s enquanto alarme ativo
+    speakWarning();
+    alarmTimerRef.current = setInterval(() => {
+      speakWarning();
+    }, 30_000);
+  };
+
+  const speakWarning = () => {
+    if (Platform.OS !== "web") {
+      void Speech.stop().then(() => {
+        Speech.speak(ALARM_VOICE_MSG, {
+          language: "pt-BR",
+          rate: 0.9,
+          pitch: 1.0,
+        });
+      });
+    }
+  };
+
+  const stopAlarm = () => {
+    if (alarmTimerRef.current) {
+      clearInterval(alarmTimerRef.current);
+      alarmTimerRef.current = null;
+    }
+    if (Platform.OS !== "web") {
+      void Speech.stop();
+    }
+    setAlarmActive(false);
+    setAlarmLabel("");
+  };
 
   const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
     setReport((prev) => ({ ...prev, [key]: value }));
@@ -109,10 +221,7 @@ export default function ReportAScreen() {
 
   const setTimeNow = (key: keyof ReportA) => {
     const now = new Date();
-    const time = now.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     setField(key, time);
   };
 
@@ -149,10 +258,7 @@ export default function ReportAScreen() {
       const history = stored
         ? (JSON.parse(stored) as { savedAt: string; report: ReportA }[])
         : [];
-      history.push({
-        savedAt: new Date().toISOString(),
-        report: { ...report },
-      });
+      history.push({ savedAt: new Date().toISOString(), report: { ...report } });
       await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
       await enqueueSyncItem("reportA", { report });
       void syncQueue();
@@ -170,11 +276,7 @@ export default function ReportAScreen() {
   const handleClearOnly = () => {
     Alert.alert("Limpar Tudo?", "Isso apagará os dados atuais sem salvar.", [
       { text: "Cancelar", style: "cancel" },
-      {
-        text: "Limpar",
-        style: "destructive",
-        onPress: () => setReport(initialState),
-      },
+      { text: "Limpar", style: "destructive", onPress: () => setReport(initialState) },
     ]);
   };
 
@@ -182,6 +284,19 @@ export default function ReportAScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
 
+      {/* Banner de alarme ativo */}
+      {alarmActive && (
+        <View style={styles.alarmBanner}>
+          <View style={styles.alarmTextBlock}>
+            <Text style={styles.alarmTitle}>⏰ Avanço {alarmLabel} em 15 min</Text>
+            <Text style={styles.alarmMsg}>{ALARM_VOICE_MSG}</Text>
+          </View>
+          <Pressable style={styles.alarmStopBtn} onPress={stopAlarm}>
+            <Ionicons name="stop-circle" size={28} color="#fff" />
+            <Text style={styles.alarmStopTxt}>Parar</Text>
+          </Pressable>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -205,9 +320,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.qtdColaboradores)}
-                  onChangeText={(t) =>
-                    setField("qtdColaboradores", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("qtdColaboradores", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                 />
               </View>
@@ -230,28 +343,16 @@ export default function ReportAScreen() {
             <Text style={styles.sectionTitle}>2. Cronograma</Text>
             {renderTimeField("Chegada", "hrChegada")}
             <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Ini. Estoque", "inicioContagemEstoque")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Estoque", "terminoContagemEstoque")}
-              </View>
+              <View style={styles.half}>{renderTimeField("Ini. Estoque", "inicioContagemEstoque")}</View>
+              <View style={styles.half}>{renderTimeField("Fim Estoque", "terminoContagemEstoque")}</View>
             </View>
             <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Ini. Loja", "inicioContagemLoja")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Loja", "terminoContagemLoja")}
-              </View>
+              <View style={styles.half}>{renderTimeField("Ini. Loja", "inicioContagemLoja")}</View>
+              <View style={styles.half}>{renderTimeField("Fim Loja", "terminoContagemLoja")}</View>
             </View>
             <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Ini. Diverg.", "inicioDivergencia")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Diverg.", "terminoDivergencia")}
-              </View>
+              <View style={styles.half}>{renderTimeField("Ini. Diverg.", "inicioDivergencia")}</View>
+              <View style={styles.half}>{renderTimeField("Fim Diverg.", "terminoDivergencia")}</View>
             </View>
             {renderTimeField("Fim Inventário", "terminoInventario")}
           </View>
@@ -264,9 +365,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco22h)}
-                  onChangeText={(t) =>
-                    setField("avanco22h", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("avanco22h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -276,9 +375,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco00h)}
-                  onChangeText={(t) =>
-                    setField("avanco00h", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("avanco00h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -290,9 +387,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco01h)}
-                  onChangeText={(t) =>
-                    setField("avanco01h", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("avanco01h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -302,9 +397,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco03h)}
-                  onChangeText={(t) =>
-                    setField("avanco03h", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("avanco03h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
@@ -316,30 +409,22 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.avanco04h)}
-                  onChangeText={(t) =>
-                    setField("avanco04h", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("avanco04h", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                   placeholder="%"
                 />
               </View>
             </View>
             <View style={styles.customTimeBox}>
-              <Text style={styles.customTimeTitle}>
-                Incluir novo horário (opcional)
-              </Text>
+              <Text style={styles.customTimeTitle}>Incluir novo horário (opcional)</Text>
               <View style={styles.row}>
-                <View style={styles.half}>
-                  {renderTimeField("Hora", "avancoExtraHora")}
-                </View>
+                <View style={styles.half}>{renderTimeField("Hora", "avancoExtraHora")}</View>
                 <View style={styles.half}>
                   <Text style={styles.label}>Avanço (%)</Text>
                   <TextInput
                     style={styles.input}
                     value={String(report.avancoExtraValor)}
-                    onChangeText={(t) =>
-                      setField("avancoExtraValor", t === "" ? "" : Number(t))
-                    }
+                    onChangeText={(t) => setField("avancoExtraValor", t === "" ? "" : Number(t))}
                     keyboardType="numeric"
                     placeholder="%"
                   />
@@ -392,9 +477,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.percentualAuditoria)}
-                  onChangeText={(t) =>
-                    setField("percentualAuditoria", t === "" ? "" : Number(t))
-                  }
+                  onChangeText={(t) => setField("percentualAuditoria", t === "" ? "" : Number(t))}
                   keyboardType="numeric"
                 />
               </View>
@@ -414,10 +497,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.satisfacao)}
-                  onChangeText={(t) => {
-                    const v = t.replace(",", ".").trim();
-                    setField("satisfacao", v);
-                  }}
+                  onChangeText={(t) => setField("satisfacao", t.replace(",", ".").trim())}
                   keyboardType="numeric"
                   placeholder="ex: 4.5"
                 />
@@ -431,66 +511,36 @@ export default function ReportAScreen() {
             <View style={styles.row}>
               <Pressable
                 onPress={() => setField("contagemAntecipada", true)}
-                style={[
-                  styles.radioBtn,
-                  report.contagemAntecipada === true && styles.radioBtnSelected,
-                ]}
+                style={[styles.radioBtn, report.contagemAntecipada === true && styles.radioBtnSelected]}
               >
-                <Text
-                  style={[
-                    styles.radioTxt,
-                    report.contagemAntecipada === true &&
-                      styles.radioTxtSelected,
-                  ]}
-                >
+                <Text style={[styles.radioTxt, report.contagemAntecipada === true && styles.radioTxtSelected]}>
                   Sim
                 </Text>
               </Pressable>
               <Pressable
                 onPress={() => setField("contagemAntecipada", false)}
-                style={[
-                  styles.radioBtn,
-                  report.contagemAntecipada === false &&
-                    styles.radioBtnSelected,
-                ]}
+                style={[styles.radioBtn, report.contagemAntecipada === false && styles.radioBtnSelected]}
               >
-                <Text
-                  style={[
-                    styles.radioTxt,
-                    report.contagemAntecipada === false &&
-                      styles.radioTxtSelected,
-                  ]}
-                >
+                <Text style={[styles.radioTxt, report.contagemAntecipada === false && styles.radioTxtSelected]}>
                   Não
                 </Text>
               </Pressable>
             </View>
           </View>
 
-          <Pressable
-            style={styles.buttonPrimary}
-            onPress={() => setPreviewVisible(true)}
-          >
+          <Pressable style={styles.buttonPrimary} onPress={() => setPreviewVisible(true)}>
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
             <Text style={styles.btnText}>Gerar Relatório</Text>
           </Pressable>
           <View style={[styles.row, { marginTop: 8, gap: 8 }]}>
-            <Pressable
-              style={[styles.buttonClear, { flex: 1 }]}
-              onPress={handleClearOnly}
-            >
+            <Pressable style={[styles.buttonClear, { flex: 1 }]} onPress={handleClearOnly}>
               <Text style={styles.btnTextDanger}>Limpar</Text>
             </Pressable>
             <Pressable
-              style={[
-                styles.buttonClear,
-                { flex: 1, backgroundColor: "#E2E8F0" },
-              ]}
+              style={[styles.buttonClear, { flex: 1, backgroundColor: "#E2E8F0" }]}
               onPress={() => void handleArchive(true)}
             >
-              <Text style={[styles.btnTextDanger, { color: "#334155" }]}>
-                Limpar/Arquivar
-              </Text>
+              <Text style={[styles.btnTextDanger, { color: "#334155" }]}>Limpar/Arquivar</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -504,10 +554,7 @@ export default function ReportAScreen() {
               <Text>{formatReportA(report)}</Text>
             </ScrollView>
             <View style={styles.row}>
-              <Pressable
-                style={styles.btnBack}
-                onPress={() => setPreviewVisible(false)}
-              >
+              <Pressable style={styles.btnBack} onPress={() => setPreviewVisible(false)}>
                 <Text>Voltar</Text>
               </Pressable>
               <Pressable style={styles.buttonPrimary} onPress={handleSend}>
@@ -523,14 +570,18 @@ export default function ReportAScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: {
+  alarmBanner: {
+    backgroundColor: "#DC2626",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2563EB",
-    padding: 16,
+    padding: 14,
+    gap: 10,
   },
-  headerLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 6 },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  alarmTextBlock: { flex: 1 },
+  alarmTitle: { color: "#fff", fontWeight: "bold", fontSize: 14 },
+  alarmMsg: { color: "#FEE2E2", fontSize: 12, marginTop: 2 },
+  alarmStopBtn: { alignItems: "center", justifyContent: "center", gap: 2 },
+  alarmStopTxt: { color: "#fff", fontSize: 10, fontWeight: "bold" },
   scrollContent: { padding: 16 },
   section: {
     backgroundColor: "#fff",
@@ -560,12 +611,7 @@ const styles = StyleSheet.create({
   half: { flex: 1 },
   inputGroup: { marginBottom: 8 },
   timeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nowBtn: {
-    padding: 10,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 8,
-    marginTop: 4,
-  },
+  nowBtn: { padding: 10, backgroundColor: "#EFF6FF", borderRadius: 8, marginTop: 4 },
   buttonPrimary: {
     backgroundColor: "#2563EB",
     padding: 16,
@@ -596,15 +642,6 @@ const styles = StyleSheet.create({
   radioBtnSelected: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
   radioTxt: { color: "#64748B", fontWeight: "bold" },
   radioTxtSelected: { color: "#2563EB" },
-  toggleBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: "#E2E8F0",
-    marginTop: 24,
-  },
-  toggleBtnActive: { backgroundColor: "#16A34A" },
-  toggleTxt: { fontSize: 12, fontWeight: "bold", color: "#64748B" },
   customTimeBox: {
     backgroundColor: "#F0FDF4",
     padding: 10,
@@ -613,12 +650,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DCFCE7",
   },
-  customTimeTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#166534",
-    marginBottom: 5,
-  },
+  customTimeTitle: { fontSize: 12, fontWeight: "bold", color: "#166534", marginBottom: 5 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
