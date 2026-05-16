@@ -10,7 +10,7 @@
 -- Consolidação de métricas de performance por colaborador.
 -- Colaboradores sem histórico recebem valores base (COALESCE para novatos).
 -- =============================================================================
-CREATE OR REPLACE VIEW public.vw_produtividade_consolidada AS
+CREATE OR REPLACE VIEW public.vw_produtividade_consolidada WITH (security_invoker = true) AS
 SELECT
     c.id                                                AS colaborador_id,
     c.nome,

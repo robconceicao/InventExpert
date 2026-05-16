@@ -193,40 +193,40 @@ ALTER TABLE public.escala            ENABLE ROW LEVEL SECURITY;
 -- Políticas: acesso total para usuários autenticados
 CREATE POLICY "Autenticados podem ver clientes"
     ON public.clientes FOR SELECT
-    TO authenticated USING (true);
+    TO public USING (true);
 
 CREATE POLICY "Autenticados podem gerenciar clientes"
     ON public.clientes FOR ALL
-    TO authenticated USING (true) WITH CHECK (true);
+    TO public USING (true) WITH CHECK (true);
 
 CREATE POLICY "Autenticados podem ver colaboradores"
     ON public.colaboradores FOR SELECT
-    TO authenticated USING (true);
+    TO public USING (true);
 
 CREATE POLICY "Autenticados podem gerenciar colaboradores"
     ON public.colaboradores FOR ALL
-    TO authenticated USING (true) WITH CHECK (true);
+    TO public USING (true) WITH CHECK (true);
 
 CREATE POLICY "Autenticados podem ver produtividade"
     ON public.produtividade FOR SELECT
-    TO authenticated USING (true);
+    TO public USING (true);
 
 CREATE POLICY "Autenticados podem inserir produtividade"
     ON public.produtividade FOR INSERT
-    TO authenticated WITH CHECK (true);
+    TO public WITH CHECK (true);
 
 CREATE POLICY "Autenticados podem ver inventarios"
     ON public.inventarios FOR SELECT
-    TO authenticated USING (true);
+    TO public USING (true);
 
 CREATE POLICY "Autenticados podem gerenciar inventarios"
     ON public.inventarios FOR ALL
-    TO authenticated USING (true) WITH CHECK (true);
+    TO public USING (true) WITH CHECK (true);
 
 CREATE POLICY "Autenticados podem ver escala"
     ON public.escala FOR SELECT
-    TO authenticated USING (true);
+    TO public USING (true);
 
 CREATE POLICY "Autenticados podem gerenciar escala"
     ON public.escala FOR ALL
-    TO authenticated USING (true) WITH CHECK (true);
+    TO public USING (true) WITH CHECK (true);

@@ -15,8 +15,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 
 export default function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -66,8 +68,13 @@ export default function AuthScreen() {
 
   const handleSignUp = async () => {
     if (!supabase) return;
-    if (!trimmedEmail || !password) {
+    if (!trimmedEmail || !password || !confirmPassword) {
       return Alert.alert("Aviso", "Preencha todos os campos.");
+    }
+
+    if (password !== confirmPassword) {
+      setPasswordError("As senhas não coincidem.");
+      return;
     }
 
     if (!validatePassword(password)) {
@@ -90,8 +97,9 @@ export default function AuthScreen() {
         setSuccessMessage(
           "E-mail de confirmação enviado! Verifique sua caixa de entrada (e a pasta de spam) para ativar sua conta."
         );
-        // Opcional: Limpar campos
         setPassword("");
+        setConfirmPassword("");
+        setMode("login");
       }
     } finally {
       setLoading(false);
@@ -119,6 +127,14 @@ export default function AuthScreen() {
     }
   };
 
+  const handleSubmit = () => {
+    if (mode === "login") {
+      handleSignIn();
+    } else {
+      handleSignUp();
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
@@ -135,18 +151,12 @@ export default function AuthScreen() {
             </Text>
           </View>
 
-          <View style={styles.instructionsContainer}>
-            <Text style={styles.instructionsText}>
-              <Text style={{ fontWeight: "700" }}>Primeiro acesso?</Text> Digite seu e-mail e uma senha (máx. 8 caracteres, com letras, números e símbolos) e clique em {"\""}Criar nova conta{"\""}. Em seguida, confirme a ativação no seu e-mail.
-            </Text>
-          </View>
-
           {!isSupabaseConfigured && (
             <Text style={styles.errorText}>
               Atenção: Supabase não configurado no app.json
             </Text>
           )}
-          
+
           {successMessage ? (
             <View style={styles.successContainer}>
               <Ionicons name="mail-unread-outline" size={24} color="#059669" />
@@ -159,6 +169,19 @@ export default function AuthScreen() {
               </Pressable>
             </View>
           ) : null}
+
+          {mode === "register" && (
+            <View style={styles.instructionsContainer}>
+              <Text style={styles.instructionsText}>
+                <Text style={{ fontWeight: "700" }}>Criando sua conta:</Text>{"\n"}
+                Digite seu e-mail e crie uma senha. A senha deve ter:{"\n"}
+                • Máximo de 8 caracteres{"\n"}
+                • Pelo menos 1 letra{"\n"}
+                • Pelo menos 1 número{"\n"}
+                • Pelo menos 1 símbolo (ex: @, #, !)
+              </Text>
+            </View>
+          )}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>E-mail</Text>
@@ -196,38 +219,67 @@ export default function AuthScreen() {
                 />
               </Pressable>
             </View>
-            {passwordError ? (
-              <Text style={styles.inputErrorText}>{passwordError}</Text>
-            ) : null}
           </View>
 
+          {mode === "register" && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirmar Senha</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (passwordError) setPasswordError("");
+                  }}
+                  secureTextEntry={!showPassword}
+                  placeholder="••••••••"
+                  style={styles.inputPassword}
+                />
+              </View>
+            </View>
+          )}
+
+          {passwordError ? (
+            <Text style={styles.inputErrorText}>{passwordError}</Text>
+          ) : null}
+
           <Pressable
-            onPress={handleSignIn}
+            onPress={handleSubmit}
             style={[styles.buttonPrimary, loading && styles.buttonDisabled]}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonTextPrimary}>Entrar</Text>
+              <Text style={styles.buttonTextPrimary}>
+                {mode === "login" ? "Entrar" : "Criar conta"}
+              </Text>
             )}
           </Pressable>
 
-          <Pressable
-            onPress={handleSignUp}
-            style={styles.buttonSecondary}
-            disabled={loading}
-          >
-            <Text style={styles.buttonTextSecondary}>Criar nova conta</Text>
-          </Pressable>
+          <View style={styles.footerContainer}>
+            <Pressable
+              onPress={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setPasswordError("");
+                setPassword("");
+                setConfirmPassword("");
+              }}
+              style={styles.toggleModeButton}
+            >
+              <Text style={styles.toggleModeText}>
+                {mode === "login"
+                  ? "Ainda não tem conta? Criar conta"
+                  : "Já tem conta? Entrar"}
+              </Text>
+            </Pressable>
 
-          <Pressable
-            onPress={handleResetPassword}
-            style={styles.buttonGhost}
-            disabled={loading}
-          >
-            <Text style={styles.buttonTextGhost}>Esqueci minha senha</Text>
-          </Pressable>
+            {mode === "login" && (
+              <Pressable onPress={handleResetPassword} style={styles.buttonGhost}>
+                <Text style={styles.buttonTextGhost}>Esqueci minha senha</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -271,16 +323,20 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: "#93C5FD" },
   buttonTextPrimary: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  buttonSecondary: {
-    borderWidth: 1,
-    borderColor: "#2563EB",
-    padding: 14,
-    borderRadius: 12,
+  footerContainer: {
+    marginTop: 20,
+    gap: 12,
     alignItems: "center",
-    marginTop: 12,
   },
-  buttonTextSecondary: { color: "#2563EB", fontWeight: "600" },
-  buttonGhost: { marginTop: 16, alignItems: "center" },
+  toggleModeButton: {
+    padding: 8,
+  },
+  toggleModeText: {
+    color: "#2563EB",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  buttonGhost: { alignItems: "center", padding: 8 },
   buttonTextGhost: { color: "#64748B", fontSize: 13 },
   passwordContainer: {
     flexDirection: "row",
@@ -301,9 +357,10 @@ const styles = StyleSheet.create({
   },
   inputErrorText: {
     color: "#DC2626",
-    fontSize: 11,
-    marginTop: 4,
+    fontSize: 13,
+    marginBottom: 8,
     fontWeight: "500",
+    textAlign: "center",
   },
   errorText: {
     color: "#DC2626",
@@ -344,6 +401,6 @@ const styles = StyleSheet.create({
   instructionsText: {
     fontSize: 13,
     color: "#1E40AF",
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });
