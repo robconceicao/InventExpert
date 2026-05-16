@@ -108,18 +108,18 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
 // Tipos internos da resposta da API Gemini
 // ---------------------------------------------------------------------------
 interface GeminiApiResponse {
-  candidates?: Array<{
+  candidates?: {
     content?: {
-      parts?: Array<{
+      parts?: {
         text?: string;
         inline_data?: {
           mime_type?: string;
           data?: string;
         };
-      }>;
+      }[];
     };
     finishReason?: string;
-  }>;
+  }[];
   error?: {
     code: number;
     message: string;

@@ -432,9 +432,9 @@ export default function ScannerScreen() {
               </>
             )}
 
-            {/* Fechar */}
+            {/* Voltar */}
             <Pressable
-              style={[styles.btnModalBack, { marginTop: 8 }]}
+              style={[styles.btnModalBack, { marginTop: 12, paddingVertical: 12 }]}
               onPress={() => {
                 setEraserVisible(false);
                 setEraserSource(null);
@@ -443,7 +443,7 @@ export default function ScannerScreen() {
                 setEraserUsedAI(false);
               }}
             >
-              <Text style={[styles.btnModalBackText, { textAlign: "center" }]}>Fechar</Text>
+              <Text style={[styles.btnModalBackText, { textAlign: "center", fontSize: 16, fontWeight: "bold" }]}>Voltar</Text>
             </Pressable>
           </View>
         </View>

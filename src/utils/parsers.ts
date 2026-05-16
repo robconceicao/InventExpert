@@ -403,9 +403,11 @@ export const parseInventoryCheckersCsv = (
     const cNome = matchCol([/nome/i, /conferente/i, /colaborador/i]);
     const cQtde = matchCol([/^qtde\.?\s*volu/i, /^qtde/i, /^quantidade/i, /^qtd/i, /total.*peca/i, /volumes/i], /1a1|unit/i);
     const cQtde1a1 = matchCol([/1\s*a\s*1/i, /1a1/i, /qtde1a1/i, /unit[aá]rio/i, /unit/i]);
-    const cProdutividade = matchCol([/produtividade/i, /prod/i, /hora/i, /ritmo/i, /itens/i]);
-    const cErro = matchCol([/^erro/i, /^erros/i, /diverg/i, /falha/i], /%/); // Erro absoluto (ignora colunas com %)
-    const cPctErro = matchCol([/%/i, /taxa.*erro/i]); // Procura por "% Erro" ou similar
+    // Produtividade: evitar "horas trabalhadas" ou "estimadas"
+    const cProdutividade = matchCol([/produtividade/i, /ritmo/i, /itens.*hora/i, /prod.*hora/i]);
+    // Erro: erro absoluto
+    const cErro = matchCol([/^erro/i, /^erros/i, /^qtde.*erro/i, /divergencia/i], /%/); 
+    const cPctErro = matchCol([/%/i, /taxa.*erro/i]); 
 
     // Diagnóstico flexível: tenta encontrar pelo menos Nome e Quantidade
     if (cNome >= 0 && cQtde >= 0) {
