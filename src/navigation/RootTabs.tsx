@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import type { Session } from "@supabase/supabase-js";
 import React, { useEffect, useState } from "react";
 import { Image, Platform, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import SyncStatus from "../components/SyncStatus";
 import AttendanceScreen from "../screens/AttendanceScreen";
@@ -33,6 +34,7 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 export default function RootTabs() {
   const showScanner = Platform.OS !== "web";
   const [session, setSession] = useState<Session | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!supabase) return;
@@ -98,7 +100,8 @@ export default function RootTabs() {
           borderTopColor: "#E2E8F0",
           elevation: 0,
           shadowOpacity: 0,
-          height: Platform.OS === "web" ? 56 : undefined,
+          height: Platform.OS === "web" ? 56 : 60 + insets.bottom,
+          paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 10) : insets.bottom,
         },
         tabBarIcon: ({ color, size }) => {
           const iconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
