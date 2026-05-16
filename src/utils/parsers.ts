@@ -401,15 +401,29 @@ export const parseInventoryCheckersCsv = (
     const rawHeader = parseRow(lines[r], sep);
     const header = rawHeader.map(normalizeHeader);
 
-    const cNome = findCol(header, [/nome\s*(do)?\s*conferente/i, /^nome$/i, /colaborador/i, /name/i]);
-    const cQtde = findCol(header, [/qtde\.?\s*volu/i, /^qtde\.?/i, /^qtd\.?/i, /quantidade/i, /total.*pecas/i]);
-    const cQtde1a1 = findCol(header, [/^1a1$/i, /^qtde1a1$/i, /1\s*a\s*1/i, /unit[aá]rio/i]);
-    const cProdutividade = findCol(header, [/^produtividade/i, /prod.*hora/i, /itens.*hora/i]);
-    const cErro = findCol(header, [/^erro$/i, /^qtde.*erro/i, /^erros$/i]);
+    const matchCol = (patterns: RegExp[], exclude?: RegExp): number => {
+      return header.findIndex((h) => {
+        if (exclude && exclude.test(h)) return false;
+        return patterns.some((p) => p.test(h));
+      });
+    };
 
-    // Pelo menos Nome, Qtde e Produtividade são estritamente obrigatórios para identificar o cabeçalho
-    if (cNome >= 0 && cQtde >= 0 && cProdutividade >= 0) {
-      col = { nome: cNome, qtde: cQtde, qtde1a1: cQtde1a1, produtividade: cProdutividade, erro: cErro };
+    const cNome = matchCol([/nome/i, /conferente/i, /colaborador/i]);
+    const cQtde = matchCol([/^qtde\.?\s*volu/i, /^qtde/i, /^quantidade/i, /^qtd/i, /total.*peca/i, /volumes/i], /1a1|unit/i);
+    const cQtde1a1 = matchCol([/1\s*a\s*1/i, /1a1/i, /qtde1a1/i, /unit[aá]rio/i, /unit/i]);
+    const cProdutividade = matchCol([/produtividade/i, /prod/i, /hora/i, /ritmo/i, /itens/i]);
+    const cErro = matchCol([/^erro/i, /^erros/i, /diverg/i, /falha/i], /%/); // Erro absoluto (ignora colunas com %)
+    const cPctErro = matchCol([/%/i, /taxa.*erro/i]); // Procura por "% Erro" ou similar
+
+    // Diagnóstico flexível: tenta encontrar pelo menos Nome e Quantidade
+    if (cNome >= 0 && cQtde >= 0) {
+      col = { 
+        nome: cNome, 
+        qtde: cQtde, 
+        qtde1a1: cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1, 
+        produtividade: cProdutividade >= 0 && cProdutividade !== cQtde ? cProdutividade : -1, 
+        erro: cErro >= 0 ? cErro : cPctErro // Se não achou absoluto, guarda o índice do %
+      };
       headerRowIndex = r;
       break;
     }
@@ -428,23 +442,44 @@ export const parseInventoryCheckersCsv = (
 
     const nome = (cells[col.nome] ?? "").trim();
     if (!nome) continue;
-    // Ignora linhas que são claramente de cabeçalho repetido ou totais
-    if (/^(nome|total|soma|media)/i.test(nome)) continue;
+    if (/^(nome|total|soma|media|resumo)/i.test(nome)) continue;
 
-    const qtde          = parseNumberBR(cells[col.qtde]         ?? "");
-    const qtde1a1       = Math.max(0, parseNumberBR(cells[col.qtde1a1]      ?? ""));
-    const produtividade = parseNumberBR(cells[col.produtividade] ?? "");
-    const erro          = Math.max(0, parseNumberBR(cells[col.erro]          ?? ""));
+    const qtde = parseNumberBR(cells[col.qtde] ?? "");
+    
+    // Se qtde1a1 não existir, assume 0 (100% bloco) para não gerar dados irreais
+    const qtde1a1Raw = col.qtde1a1 >= 0 ? parseNumberBR(cells[col.qtde1a1] ?? "") : 0;
+    const qtde1a1 = Math.max(0, qtde1a1Raw);
+    
+    const produtividade = col.produtividade >= 0 ? parseNumberBR(cells[col.produtividade] ?? "") : 0;
+    
+    let erro = 0;
+    if (col.erro >= 0) {
+      const rawErro = cells[col.erro] ?? "";
+      const valErro = parseNumberBR(rawErro);
+      // Se a coluna lida for a de porcentagem (ex: 1,73%), precisamos calcular o valor absoluto
+      if (rawErro.includes('%') || valErro < 5) { // heurística: se erro for um número muito baixo com casas decimais
+        // É provável que seja um percentual, então calculamos: qtde * (valErro / 100)
+        // A menos que não tenha o sinal de %, aí usamos o valErro como absoluto (pode ser 1 ou 2)
+        if (rawErro.includes('%')) {
+          erro = Math.round(qtde * (valErro / 100));
+        } else {
+          erro = valErro;
+        }
+      } else {
+        erro = valErro;
+      }
+    }
+    
+    erro = Math.max(0, erro);
 
-    // Descarta linhas inválidas: sem quantidade ou produtividade negativa
-    if (qtde <= 0 || produtividade < 0) continue;
+    if (qtde <= 0) continue;
 
     result.push({
       nome,
       qtde,
-      qtde1a1: Math.min(qtde1a1, qtde), // nunca pode ser maior que o total
+      qtde1a1: Math.min(qtde1a1, qtde),
       produtividade,
-      erro: Math.min(erro, qtde),        // nunca pode ser maior que o total
+      erro: Math.min(erro, qtde),
     });
   }
 
