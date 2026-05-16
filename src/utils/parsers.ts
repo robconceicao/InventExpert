@@ -300,20 +300,40 @@ export const formatReportC = (_r: unknown): string => "";
 /** @deprecated ReportD removido */
 export const formatReportD = (_r: unknown): string => "";
 
-// Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 5.23 -> 5.23
+// Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 1,770.65 -> 1770.65
 // Também lida com strings de percentagem "1,73%" -> 1.73
 const parseNumberBR = (s: string): number => {
-  // Remove símbolo de percentagem e espaços
   const v = String(s ?? "").replace(/%/g, "").trim();
   if (!v) return 0;
-  // Formato BR: pontos como separador de milhar, vírgula como decimal
-  if (v.includes(",")) {
-    const normal = v.replace(/\./g, "").replace(",", ".");
-    const n = parseFloat(normal);
-    return isNaN(n) ? 0 : n;
+  
+  // Detectar formato US exportado pelo XLSX (vírgula antes de ponto): "1,770.65"
+  const commaIdx = v.indexOf(",");
+  const dotIdx = v.indexOf(".");
+  if (commaIdx !== -1 && dotIdx !== -1) {
+    if (commaIdx < dotIdx) {
+      // US format: remove commas
+      return parseFloat(v.replace(/,/g, "")) || 0;
+    } else {
+      // BR format: remove dots, replace comma with dot
+      return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+    }
   }
-  const n = parseFloat(v);
-  return isNaN(n) ? 0 : n;
+  
+  // Apenas vírgula: "395,33" (BR) ou "5,647" (US thousand?)
+  // Se termina com exatos 3 dígitos após a vírgula, e tem formato de milhar, pode ser US.
+  // Mas no Brasil, usamos vírgula como decimal na maioria dos textos colados.
+  if (v.includes(",")) {
+    // Se for "5,647.00" já caiu no if acima. Se for "6,817", é BR decimal "6.817" ou US "6817"?
+    // Vamos assumir que vírgula sozinha é BR decimal, a não ser que tenha exatos 3 digitos.
+    if (/,\d{3}$/.test(v) && !/,\d{2}$/.test(v)) {
+      // Provável US thousand (ex: 5,647)
+      return parseFloat(v.replace(/,/g, "")) || 0;
+    }
+    // BR decimal
+    return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+  
+  return parseFloat(v) || 0;
 };
 
 // ==========================
@@ -435,18 +455,37 @@ export const parseInventoryCheckersCsv = (
       (c ?? "").replace(/^"|"$/g, "").trim(),
     );
 
+    // HEURÍSTICA DIRETA PARA O EXCEL DO CLIENTE:
+    // Evita o problema de colunas desalinhadas (merged cells) no Excel.
+    const nonEmpties = cells.filter(c => c !== "");
+    if (nonEmpties.length >= 10 && /^\d+$/.test(nonEmpties[0]) && /^\d+$/.test(nonEmpties[1]) && /\d{2}\/\d{2}\/\d{4}/.test(nonEmpties[4])) {
+      const nome = nonEmpties[2];
+      if (/^(nome|total|soma|media|resumo)/i.test(nome)) continue;
+      
+      const qtde = parseNumberBR(nonEmpties[3]);
+      const produtividade = parseNumberBR(nonEmpties[7]);
+      const erro = parseNumberBR(nonEmpties[8]);
+      const qtde1a1 = nonEmpties.length > 13 ? parseNumberBR(nonEmpties[13]) : 0;
+
+      result.push({
+        nome,
+        qtde: Math.max(0, qtde),
+        qtde1a1: Math.max(0, qtde1a1),
+        produtividade: Math.max(0, produtividade),
+        erro: Math.max(0, erro),
+      });
+      continue;
+    }
+
+    // FALLBACK ORIGINAL (Para CSVs normais ou colados à mão)
     const nome = (cells[col.nome] ?? "").trim();
     if (!nome) continue;
     if (/^(nome|total|soma|media|resumo)/i.test(nome)) continue;
 
     const qtde = parseNumberBR(cells[col.qtde] ?? "");
-    
-    // Se qtde1a1 não existir, assume 0 (100% bloco) para não gerar dados irreais
     const qtde1a1Raw = col.qtde1a1 >= 0 ? parseNumberBR(cells[col.qtde1a1] ?? "") : 0;
     const qtde1a1 = Math.max(0, qtde1a1Raw);
-    
     const produtividade = col.produtividade >= 0 ? parseNumberBR(cells[col.produtividade] ?? "") : 0;
-    
     let erro = 0;
     if (col.erro >= 0) {
       const rawErro = cells[col.erro] ?? "";

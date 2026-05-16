@@ -62,7 +62,7 @@ const buildEraserHtmlCss = (base64: string): string => `<!DOCTYPE html>
   @page { size: A4 portrait; margin: 0; }
   body { margin:0; padding:0; background:#fff; }
   img { display:block; width:100%; height:auto;
-    filter: brightness(1.4) contrast(1.7) saturate(0);
+    filter: grayscale(100%) contrast(1.2);
   }
 </style></head>
 <body><img src="data:image/png;base64,${base64}" /></body></html>`;
