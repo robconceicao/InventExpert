@@ -4,8 +4,8 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useState, useEffect } from "react";
+import * as Sharing from "expo-sharing";
+import React, { useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import DocumentScanner from "react-native-document-scanner-plugin";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { cleanFormWithApi } from "../services/formCleanerApi";
+import { eraseHandwritingWithGemini } from "../services/geminiVision";
 
 // ---------------------------------------------------------------------------
 // Helper: converte URI de imagem para base64 com orientação portrait corrigida
@@ -82,22 +82,6 @@ export default function ScannerScreen() {
   const [isErasing, setIsErasing] = useState(false);
   const [eraserStatus, setEraserStatus] = useState<string>("");
   const [eraserUsedAI, setEraserUsedAI] = useState(false);
-
-  // Settings
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const [serverIp, setServerIp] = useState("192.168.1.15");
-
-  useEffect(() => {
-    AsyncStorage.getItem("@form_cleaner_ip").then((ip) => {
-      if (ip) setServerIp(ip);
-    });
-  }, []);
-
-  const saveSettings = async () => {
-    await AsyncStorage.setItem("@form_cleaner_ip", serverIp);
-    setSettingsVisible(false);
-    Alert.alert("Sucesso", "IP do servidor salvo com sucesso!");
-  };
 
   // ── Escanear documento (portrait: o plugin já orienta corretamente em modo
   //    portrait do dispositivo; forçamos re-encode para garantir metadados EXIF)
@@ -227,25 +211,24 @@ export default function ScannerScreen() {
 
       let finalPdfUri: string;
 
-      // ── Passo 2: tenta a API de limpeza em Python (Claude)
-      setEraserStatus("🤖 Limpando escrita com FormCleaner...");
-      const apiUrl = `http://${serverIp}:8000/api/clean`;
-      const apiResult = await cleanFormWithApi(jpegBase64, apiUrl);
+      // ── Passo 2: tenta a IA (Gemini Vision) para recriar o formulário
+      setEraserStatus("Apagando escrita e adaptando...");
+      const geminiResult = await eraseHandwritingWithGemini(jpegBase64, "image/jpeg");
 
-      if (apiResult.success && apiResult.pdfUri) {
-        // ── A API já retornou o PDF completo e em formato binário convertido para base64
-        setEraserStatus("✅ Formulário limpo com sucesso!");
+      if (geminiResult.success) {
+        // ── Gemini retornou o HTML do formulário limpo
+        setEraserStatus("Gerando PDF Digital...");
         setEraserUsedAI(true);
+        const html = geminiResult.html;
 
-        finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_python_${Date.now()}.pdf`;
-        await FileSystem.writeAsStringAsync(finalPdfUri, apiResult.pdfUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        const printed = await Print.printToFileAsync({ html });
+        finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_gemini_${Date.now()}.pdf`;
+        await FileSystem.moveAsync({ from: printed.uri, to: finalPdfUri });
 
       } else {
-        // ── Fallback: API falhou, usa filtros CSS locais
-        console.warn("[Scanner] API Python falhou, usando fallback CSS:", apiResult.error);
-        setEraserStatus("⚠️ IA indisponível. Usando filtro local...");
+        // ── Fallback: IA falhou, usa filtros CSS locais
+        console.warn("[Scanner] Gemini falhou, usando fallback CSS:", geminiResult.error);
+        setEraserStatus("Apagando escrita e adaptando...");
 
         // Usa o jpegBase64 já compactado em vez de PNG gigante para evitar crash no WebView
         const html = buildEraserHtmlCss(jpegBase64);
@@ -278,13 +261,6 @@ export default function ScannerScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
-      
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 5 }}>
-        <Pressable onPress={() => setSettingsVisible(true)}>
-          <Ionicons name="settings-outline" size={26} color="#64748B" />
-        </Pressable>
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Card Scanner */}
         <View style={styles.card}>
@@ -430,7 +406,7 @@ export default function ScannerScreen() {
                 <>
                   <Ionicons name="sparkles-outline" size={20} color="#fff" />
                   <Text style={styles.buttonText}>
-                    {eraserResult ? "Reprocessar com IA" : "Apagar Escrita com IA"}
+                    {eraserResult ? "Reprocessar" : "Apagar Escrita"}
                   </Text>
                 </>
               )}
@@ -439,12 +415,10 @@ export default function ScannerScreen() {
             {/* Resultado disponível */}
             {eraserResult && (
               <>
-                <View style={styles.resultBanner}>
-                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-                  <Text style={styles.resultBannerText}>
-                    {eraserUsedAI
-                      ? "✨ Processado pelo Gemini Vision AI"
-                      : "⚠️ Processado com filtro local (IA indisponível)"}
+                <View style={[styles.resultBanner, { backgroundColor: "#F8FAFC" }]}>
+                  <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
+                  <Text style={[styles.resultBannerText, { color: "#1E3A8A", fontWeight: "bold" }]}>
+                    Processado com sucesso
                   </Text>
                 </View>
                 <Pressable
@@ -471,36 +445,6 @@ export default function ScannerScreen() {
               <Text style={[styles.btnModalBackText, { textAlign: "center", fontSize: 16, fontWeight: "bold" }]}>Voltar</Text>
             </Pressable>
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal: Configurações do Servidor Offline */}
-      <Modal visible={settingsVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.eraserHeader}>
-              <Ionicons name="server-outline" size={20} color="#2563EB" />
-              <Text style={styles.cardTitle}>Servidor Local (FormCleaner)</Text>
-            </View>
-            <Text style={styles.subtitle}>
-              Digite o IP do notebook que está rodando a API Python na loja.
-            </Text>
-            <TextInput
-              value={serverIp}
-              onChangeText={setServerIp}
-              placeholder="Ex: 192.168.0.10"
-              style={styles.input}
-              keyboardType="numeric"
-            />
-            <View style={styles.row}>
-              <Pressable style={styles.btnModalBack} onPress={() => setSettingsVisible(false)}>
-                <Text style={styles.btnModalBackText}>Cancelar</Text>
-              </Pressable>
-              <Pressable style={styles.btnModalSend} onPress={() => void saveSettings()}>
-                <Text style={styles.buttonText}>Salvar IP</Text>
-              </Pressable>
-            </View>
           </View>
         </View>
       </Modal>
