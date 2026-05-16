@@ -14,7 +14,7 @@ export async function readFileAsCsvText(uri: string, mimeType?: string): Promise
     });
     const workbook = XLSX.read(base64, { type: "base64" });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const csv = XLSX.utils.sheet_to_csv(firstSheet);
+    const csv = XLSX.utils.sheet_to_csv(firstSheet, { FS: ";" });
     return csv;
   }
 
