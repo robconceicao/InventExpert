@@ -31,12 +31,15 @@ export interface ReportA {
   contagemAntecipada: boolean | null;
 }
 
-export interface ReportB {
-  cliente: string;
+// ---------------------------------------------------------------------------
+// REPORT B — Farmácias
+// ---------------------------------------------------------------------------
+export interface ReportBFarmacias {
   lojaNum: string;
+  lojaNome: string;
   data: string;
-  pivProgramado: number | "";
-  pivRealizado: number | "";
+  pivProgramado: string;
+  pivRealizado: string;
   chegadaEquipe: string;
   inicioDeposito: string;
   terminoDeposito: string;
@@ -45,75 +48,102 @@ export interface ReportB {
   inicioAuditoriaCliente: string;
   terminoAuditoriaCliente: string;
   inicioControlados: string;
+  terminoControlados: string;
   inicioDivergencia: string;
   terminoDivergencia: string;
+  qtdAlterados: string;
   inicioNaoContados: string;
   terminoNaoContados: string;
-  qtdAlterados: number | "";
-  qtdNaoContados: number | "";
-  qtdEncontradosNaoContados: number | "";
-  totalPecas: number | "";
-  valorTotal: number | "";
+  qtdNaoContados: string;
+  qtdEncontradosNaoContados: string;
+  inicioRecontCliente: string;
+  terminoRecontCliente: string;
+  qtdItensRecontCliente: string;
+  qtdAltRecontCliente: string;
   envioArquivo1: string;
   envioArquivo2: string;
   envioArquivo3: string;
-  avalPrepDeposito: number | "";
-  avalPrepLoja: number | "";
-  acuracidadeCliente: number | "";
-  acuracidadeTerceirizada: number | "";
-  satisfacao: number | string;
+  totalPecas: string;
+  valorTotal: string;
+  avalPrepDeposito: string;
+  avalPrepLoja: string;
+  satisfacao: string;
   responsavel: string;
+  acuracidadeCliente: string;
+  acuracidadeTerceirizada: string;
   suporteSolicitado: boolean | null;
-  phCalculado?: number | "";
+  phCalculado: string;
   terminoInventario: string;
 }
 
-export interface ReportC {
-  inventario_ref: string; // ex: "12/12/2023"
-  cliente: string;
-  filial: string;
-  lider: string;
-  qtdEquipe: number | "";
-  qtdFaltas: number | "";
-  inicioContagemGeral: string;
-  fimContagemGeral: string;
-  pctInventario: number | "";
-  naoContadosInicio: string;
-  naoContadosTotal: number | "";
-  naoContadosFim: string;
-  div1Inicio: string;
-  div1Controlados: number | "";
-  div1Negativos: number | "";
-  div1Positivos: number | "";
-  div1Total: number | "";
-  div1Fim: string;
-  div2Inicio: string;
-  div2Negativos: number | "";
-  div2Positivos: number | "";
-  div2Total: number | "";
-  div2Fim: string;
-}
-
-export interface ReportD {
-  loja: string;
+// ---------------------------------------------------------------------------
+// REPORT B — Mercados (menos Atacado e Hipermercados)
+// ---------------------------------------------------------------------------
+export interface ReportBMercados {
+  lojaNome: string;
   lojaNum: string;
-  lider: string;
-  qtdPessoas: number | "";
-  qtdPecas: number | "";
-  pctInv: number | "";
-  chegada: string;
-  inicioContagemEstoque: string;
-  terminoContagemEstoque: string;
-  inicioContagemLoja: string;
-  terminoContagemLoja: string;
-  inicioAuditoria: string;
-  terminoAuditoria: string;
+  data: string;
+  pivProgramado: string;
+  pivRealizado: string;
+  chegadaEquipe: string;
+  inicioDeposito: string;
+  terminoDeposito: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioAuditoriaCliente: string;
+  terminoAuditoriaCliente: string;
   inicioDivergencia: string;
   terminoDivergencia: string;
-  avalEstoque: number | "";
-  avalLoja: number | "";
+  qtdAlterados: string;
+  inicioNaoContados: string;
+  qtdNaoContados: string;
+  qtdEncontradosNaoContados: string;
+  terminoNaoContados: string;
+  totalPecas: string;
+  valorTotal: string;
+  avalPrepDeposito: string;
+  avalPrepLoja: string;
+  satisfacao: string;
+  responsavel: string;
+  acuracidadeCliente: string;
+  acuracidadeTerceirizada: string;
+  suporteSolicitado: boolean | null;
   terminoInventario: string;
 }
+
+// ---------------------------------------------------------------------------
+// REPORT B — Outros Estabelecimentos em Geral
+// ---------------------------------------------------------------------------
+export interface ReportBOutros {
+  lojaNum: string;
+  lojaNome: string;
+  data: string;
+  responsavel: string;
+  qtdPessoas: string;
+  chegadaEquipe: string;
+  inicioDeposito: string;
+  terminoDeposito: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioAuditoriaCliente: string;
+  terminoAuditoriaCliente: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  totalPecas: string;
+  valorTotal: string;
+  pctInv: string;
+  avalEstoque: string;
+  avalLoja: string;
+  terminoInventario: string;
+}
+
+// Union para uso genérico
+export type ReportBMode = "farmacias" | "mercados" | "outros";
+export type ReportB = ReportBFarmacias | ReportBMercados | ReportBOutros;
+
+// Mantido para compatibilidade com imports existentes no parsers.ts
+export interface ReportC { _removed: true; }
+export interface ReportD { _removed: true; }
 
 export interface AttendanceCollaborator {
   id: string;

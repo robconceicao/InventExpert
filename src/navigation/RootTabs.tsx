@@ -4,14 +4,11 @@ import type { Session } from "@supabase/supabase-js";
 import React, { useEffect, useState } from "react";
 import { Image, Platform, Pressable, Text, View } from "react-native";
 
-// Importações dos componentes e telas
 import SyncStatus from "../components/SyncStatus";
 import AttendanceScreen from "../screens/AttendanceScreen";
 import InventExpImportScreen from "../screens/InventExpImportScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
-import ReportCScreen from "../screens/ReportCScreen";
-import ReportDScreen from "../screens/ReportDScreen";
 import AuthScreen from "../screens/AuthScreen";
 import ManagementScreen from "../screens/ManagementScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
@@ -24,8 +21,6 @@ import ScannerScreen from "../screens/ScannerScreen";
 export type RootTabParamList = {
   ReportA: undefined;
   ReportB: undefined;
-  ReportC: undefined;
-  ReportD: undefined;
   Attendance: undefined;
   Escala: undefined;
   InventExp: undefined;
@@ -79,7 +74,6 @@ export default function RootTabs() {
         ),
         headerRight: () => (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {/* O SyncStatus mostra se o app está online/sincronizado */}
             <SyncStatus />
             {isSupabaseConfigured && session ? (
               <Pressable
@@ -107,72 +101,28 @@ export default function RootTabs() {
           height: Platform.OS === "web" ? 56 : undefined,
         },
         tabBarIcon: ({ color, size }) => {
-          const iconMap: Record<
-            keyof RootTabParamList,
-            keyof typeof Ionicons.glyphMap
-          > = {
+          const iconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
             ReportA: "clipboard",
             ReportB: "document-text",
-            ReportC: "document-attach",
-            ReportD: "journal",
             Attendance: "checkmark-circle-outline",
             Escala: "calendar",
             InventExp: "analytics",
             Management: "briefcase",
             Scanner: "scan",
           };
-          const iconName =
-            iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
+          const iconName = iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
-      <Tab.Screen
-        name="ReportA"
-        component={ReportAScreen}
-        options={{ title: "Acompanhamento" }}
-      />
-      <Tab.Screen
-        name="ReportB"
-        component={ReportBScreen}
-        options={{ title: "Resumo" }}
-      />
-      <Tab.Screen
-        name="ReportC"
-        component={ReportCScreen}
-        options={{ title: "Farmaconde" }}
-      />
-      <Tab.Screen
-        name="ReportD"
-        component={ReportDScreen}
-        options={{ title: "Modelo D" }}
-      />
-      <Tab.Screen
-        name="Attendance"
-        component={AttendanceScreen}
-        options={{ title: "Reg. Presenças" }}
-      />
-      <Tab.Screen
-        name="Escala"
-        component={EscalaDashboardScreen}
-        options={{ title: "Plano Escala" }}
-      />
-      <Tab.Screen
-        name="InventExp"
-        component={InventExpImportScreen}
-        options={{ title: "Avaliação" }}
-      />
-      <Tab.Screen
-        name="Management"
-        component={ManagementScreen}
-        options={{ title: "Gestão" }}
-      />
+      <Tab.Screen name="ReportA" component={ReportAScreen} options={{ title: "Acompanham." }} />
+      <Tab.Screen name="ReportB" component={ReportBScreen} options={{ title: "Resumo" }} />
+      <Tab.Screen name="Attendance" component={AttendanceScreen} options={{ title: "Presenças" }} />
+      <Tab.Screen name="Escala" component={EscalaDashboardScreen} options={{ title: "Escala" }} />
+      <Tab.Screen name="InventExp" component={InventExpImportScreen} options={{ title: "Avaliação" }} />
+      <Tab.Screen name="Management" component={ManagementScreen} options={{ title: "Gestão" }} />
       {showScanner ? (
-        <Tab.Screen
-          name="Scanner"
-          component={ScannerScreen}
-          options={{ title: "Scanner" }}
-        />
+        <Tab.Screen name="Scanner" component={ScannerScreen} options={{ title: "Scanner" }} />
       ) : null}
     </Tab.Navigator>
   );

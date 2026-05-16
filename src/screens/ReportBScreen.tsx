@@ -1,627 +1,355 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import * as DocumentPicker from "expo-document-picker";
-import React, {
-    useCallback,
-    useEffect,
-    useState,
-} from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert, KeyboardAvoidingView, Linking, Modal, Platform,
+  Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
-import type { ReportB } from "../types";
-import { formatReportB } from "../utils/parsers";
+import type { ReportBFarmacias, ReportBMercados, ReportBOutros, ReportBMode } from "../types";
+import {
+  formatReportBFarmacias, formatReportBMercados, formatReportBOutros,
+} from "../utils/parsers";
 
-const REPORT_B_KEY = "inventexpert:reportB";
-const REPORT_B_HISTORY_KEY = "inventexpert:reportB:history";
+const KEY_MODE = "inventexpert:reportB:mode";
+const KEY_F = "inventexpert:reportB:farmacias";
+const KEY_M = "inventexpert:reportB:mercados";
+const KEY_O = "inventexpert:reportB:outros";
+const KEY_HIST = "inventexpert:reportB:history";
 
-const makeInitialState = (): ReportB => ({
-  cliente: "",
-  lojaNum: "",
-  data: new Date().toLocaleDateString("pt-BR"),
-  pivProgramado: "",
-  pivRealizado: "",
-  chegadaEquipe: "",
-  inicioDeposito: "",
-  terminoDeposito: "",
-  inicioLoja: "",
-  terminoLoja: "",
-  inicioAuditoriaCliente: "",
-  terminoAuditoriaCliente: "",
-  inicioControlados: "",
-  inicioDivergencia: "",
-  terminoDivergencia: "",
-  inicioNaoContados: "",
-  terminoNaoContados: "",
-  qtdAlterados: "",
-  qtdNaoContados: "",
-  qtdEncontradosNaoContados: "",
-  totalPecas: "",
-  valorTotal: "",
-  envioArquivo1: "",
-  envioArquivo2: "",
-  envioArquivo3: "",
-  avalPrepDeposito: "",
-  avalPrepLoja: "",
-  acuracidadeCliente: "",
-  acuracidadeTerceirizada: "",
-  satisfacao: "",
-  responsavel: "",
-  suporteSolicitado: null,
-  phCalculado: "",
-  terminoInventario: "",
+const initF = (): ReportBFarmacias => ({
+  lojaNum:"", lojaNome:"", data: new Date().toLocaleDateString("pt-BR"),
+  pivProgramado:"", pivRealizado:"", chegadaEquipe:"",
+  inicioDeposito:"", terminoDeposito:"", inicioLoja:"", terminoLoja:"",
+  inicioAuditoriaCliente:"", terminoAuditoriaCliente:"",
+  inicioControlados:"", terminoControlados:"",
+  inicioDivergencia:"", terminoDivergencia:"", qtdAlterados:"",
+  inicioNaoContados:"", terminoNaoContados:"", qtdNaoContados:"",
+  qtdEncontradosNaoContados:"", inicioRecontCliente:"", terminoRecontCliente:"",
+  qtdItensRecontCliente:"", qtdAltRecontCliente:"",
+  envioArquivo1:"", envioArquivo2:"", envioArquivo3:"",
+  totalPecas:"", valorTotal:"", avalPrepDeposito:"", avalPrepLoja:"",
+  satisfacao:"", responsavel:"", acuracidadeCliente:"", acuracidadeTerceirizada:"",
+  suporteSolicitado: null, phCalculado:"", terminoInventario:"",
 });
 
+const initM = (): ReportBMercados => ({
+  lojaNome:"", lojaNum:"", data: new Date().toLocaleDateString("pt-BR"),
+  pivProgramado:"", pivRealizado:"", chegadaEquipe:"",
+  inicioDeposito:"", terminoDeposito:"", inicioLoja:"", terminoLoja:"",
+  inicioAuditoriaCliente:"", terminoAuditoriaCliente:"",
+  inicioDivergencia:"", terminoDivergencia:"", qtdAlterados:"",
+  inicioNaoContados:"", qtdNaoContados:"", qtdEncontradosNaoContados:"",
+  terminoNaoContados:"", totalPecas:"", valorTotal:"",
+  avalPrepDeposito:"", avalPrepLoja:"", satisfacao:"", responsavel:"",
+  acuracidadeCliente:"", acuracidadeTerceirizada:"",
+  suporteSolicitado: null, terminoInventario:"",
+});
+
+const initO = (): ReportBOutros => ({
+  lojaNum:"", lojaNome:"", data: new Date().toLocaleDateString("pt-BR"),
+  responsavel:"", qtdPessoas:"", chegadaEquipe:"",
+  inicioDeposito:"", terminoDeposito:"", inicioLoja:"", terminoLoja:"",
+  inicioAuditoriaCliente:"", terminoAuditoriaCliente:"",
+  inicioDivergencia:"", terminoDivergencia:"",
+  totalPecas:"", valorTotal:"", pctInv:"",
+  avalEstoque:"", avalLoja:"", terminoInventario:"",
+});
 
 export default function ReportBScreen() {
-  const [report, setReport] = useState<ReportB>(makeInitialState);
-  const [backupUri, setBackupUri] = useState<string | null>(null);
-  const [backupName, setBackupName] = useState<string | null>(null);
+  const [mode, setMode] = useState<ReportBMode>("farmacias");
+  const [rf, setRf] = useState<ReportBFarmacias>(initF);
+  const [rm, setRm] = useState<ReportBMercados>(initM);
+  const [ro, setRo] = useState<ReportBOutros>(initO);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [isSharingBackup, setIsSharingBackup] = useState(false);
 
-
-  useFocusEffect(
-    useCallback(() => {
-      const load = async () => {
-        const savedB = await AsyncStorage.getItem(REPORT_B_KEY);
-        if (savedB) {
-          setReport(JSON.parse(savedB));
-        }
-      };
-      load();
-    }, []),
-  );
-
-  useEffect(() => {
-    AsyncStorage.setItem(REPORT_B_KEY, JSON.stringify(report)).catch(
-      () => null,
-    );
-  }, [report]);
-
-  const setField = <K extends keyof ReportB>(key: K, value: ReportB[K]) => {
-    setReport((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const setTimeNow = (key: keyof ReportB) => {
-    const now = new Date();
-    const time = now.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.multiGet([KEY_MODE, KEY_F, KEY_M, KEY_O]).then(pairs => {
+      const [modeRes, fRes, mRes, oRes] = pairs;
+      if (modeRes[1]) setMode(modeRes[1] as ReportBMode);
+      if (fRes[1]) setRf(JSON.parse(fRes[1]));
+      if (mRes[1]) setRm(JSON.parse(mRes[1]));
+      if (oRes[1]) setRo(JSON.parse(oRes[1]));
     });
-    setField(key, time);
-  };
+  }, []));
 
-  const renderTimeField = (label: string, field: keyof ReportB) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.timeRow}>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          value={String(report[field])}
-          onChangeText={(t) => setField(field, t)}
-          placeholder="00:00"
-          keyboardType="numbers-and-punctuation"
-        />
-        <Pressable onPress={() => setTimeNow(field)} style={styles.nowBtn}>
-          <Ionicons name="time-outline" size={20} color="#2563EB" />
-        </Pressable>
+  useEffect(() => { AsyncStorage.setItem(KEY_MODE, mode).catch(() => null); }, [mode]);
+  useEffect(() => { AsyncStorage.setItem(KEY_F, JSON.stringify(rf)).catch(() => null); }, [rf]);
+  useEffect(() => { AsyncStorage.setItem(KEY_M, JSON.stringify(rm)).catch(() => null); }, [rm]);
+  useEffect(() => { AsyncStorage.setItem(KEY_O, JSON.stringify(ro)).catch(() => null); }, [ro]);
+
+  const now = () => new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
+
+  const tf = <K extends keyof ReportBFarmacias>(label: string, key: K, numeric?: boolean) => (
+    <View style={s.ig}>
+      <Text style={s.label}>{label}</Text>
+      <View style={s.tr}>
+        <TextInput style={[s.input,{flex:1}]} value={String(rf[key])}
+          onChangeText={t => setRf(p=>({...p,[key]:t}))}
+          placeholder={numeric?"0":"00:00"} keyboardType={numeric?"numeric":"numbers-and-punctuation"} />
+        {!numeric && <Pressable onPress={()=>setRf(p=>({...p,[key]:now()}))} style={s.nowBtn}>
+          <Ionicons name="time-outline" size={18} color="#2563EB"/></Pressable>}
       </View>
     </View>
   );
 
-  const pickBackup = async () => {
-    const res = await DocumentPicker.getDocumentAsync({
-      type: ["application/zip", "application/x-zip-compressed", "*/*"],
-      copyToCacheDirectory: true,
-    });
-    if (!res.canceled && res.assets.length > 0) {
-      const asset = res.assets[0];
-      setBackupUri(asset.uri);
-      setBackupName(asset.name);
-    }
+  const tm = <K extends keyof ReportBMercados>(label: string, key: K, numeric?: boolean) => (
+    <View style={s.ig}>
+      <Text style={s.label}>{label}</Text>
+      <View style={s.tr}>
+        <TextInput style={[s.input,{flex:1}]} value={String(rm[key])}
+          onChangeText={t => setRm(p=>({...p,[key]:t}))}
+          placeholder={numeric?"0":"00:00"} keyboardType={numeric?"numeric":"numbers-and-punctuation"} />
+        {!numeric && <Pressable onPress={()=>setRm(p=>({...p,[key]:now()}))} style={s.nowBtn}>
+          <Ionicons name="time-outline" size={18} color="#2563EB"/></Pressable>}
+      </View>
+    </View>
+  );
+
+  const to = <K extends keyof ReportBOutros>(label: string, key: K, numeric?: boolean) => (
+    <View style={s.ig}>
+      <Text style={s.label}>{label}</Text>
+      <View style={s.tr}>
+        <TextInput style={[s.input,{flex:1}]} value={String(ro[key])}
+          onChangeText={t => setRo(p=>({...p,[key]:t}))}
+          placeholder={numeric?"0":"00:00"} keyboardType={numeric?"numeric":"numbers-and-punctuation"} />
+        {!numeric && <Pressable onPress={()=>setRo(p=>({...p,[key]:now()}))} style={s.nowBtn}>
+          <Ionicons name="time-outline" size={18} color="#2563EB"/></Pressable>}
+      </View>
+    </View>
+  );
+
+  const radF = (key: keyof ReportBFarmacias) => (
+    <View style={s.row}>
+      {([true,false] as const).map(v=>(
+        <Pressable key={String(v)} onPress={()=>setRf(p=>({...p,[key]:v}))}
+          style={[s.radio, rf[key]===v&&s.radioSel]}>
+          <Text style={[s.radioTxt,rf[key]===v&&s.radioTxtSel]}>{v?"Sim":"Não"}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const radM = (key: keyof ReportBMercados) => (
+    <View style={s.row}>
+      {([true,false] as const).map(v=>(
+        <Pressable key={String(v)} onPress={()=>setRm(p=>({...p,[key]:v}))}
+          style={[s.radio, rm[key]===v&&s.radioSel]}>
+          <Text style={[s.radioTxt,rm[key]===v&&s.radioTxtSel]}>{v?"Sim":"Não"}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const getPreview = () => {
+    if (mode==="farmacias") return formatReportBFarmacias(rf);
+    if (mode==="mercados") return formatReportBMercados(rm);
+    return formatReportBOutros(ro);
   };
 
-  const handleSendText = () => {
-    const msg = formatReportB(report);
-    const waUrl =
-      Platform.OS === "web"
-        ? `https://wa.me/?text=${encodeURIComponent(msg)}`
-        : `whatsapp://send?text=${encodeURIComponent(msg)}`;
-    Linking.openURL(waUrl).catch(() => {
-      Alert.alert("Erro", "Não foi possível abrir o WhatsApp");
-    });
+  const handleSend = () => {
+    const msg = getPreview();
+    const url = Platform.OS==="web"
+      ? `https://wa.me/?text=${encodeURIComponent(msg)}`
+      : `whatsapp://send?text=${encodeURIComponent(msg)}`;
+    Linking.openURL(url).catch(()=>Alert.alert("Erro","Não foi possível abrir o WhatsApp"));
   };
 
-  const handleShareBackup = async () => {
-    if (!backupUri) {
-      Alert.alert("Atenção", "Nenhum arquivo de backup selecionado.");
-      return;
-    }
-    if (Platform.OS === "web") {
-      Alert.alert(
-        "Backup selecionado ✅",
-        `Arquivo: ${backupName ?? "backup"}\n\nEnvie manualmente pelo WhatsApp Web após enviar o texto.`,
-      );
-      return;
-    }
+  const handleArchive = async (clear: boolean) => {
     try {
-      setIsSharingBackup(true);
-      // Dynamic require avoids loading the native module on web
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const RNShare = (require("react-native-share") as { default: { open: (opts: Record<string, unknown>) => Promise<void> } }).default;
-      await RNShare.open({
-        url: backupUri,
-        title: "Backup do inventário",
-        message: "Backup do inventário",
-      });
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      if (err?.message !== "User did not share") {
-        Alert.alert("Erro", "Falha ao compartilhar o backup.");
-      }
-    } finally {
-      setIsSharingBackup(false);
-    }
-  };
-
-  const handleArchive = async (clearForm: boolean) => {
-    try {
-      const stored = await AsyncStorage.getItem(REPORT_B_HISTORY_KEY);
-      const history = stored
-        ? (JSON.parse(stored) as { savedAt: string; report: ReportB }[])
-        : [];
-      history.push({
-        savedAt: new Date().toISOString(),
-        report: { ...report },
-      });
-      await AsyncStorage.setItem(REPORT_B_HISTORY_KEY, JSON.stringify(history));
-      await enqueueSyncItem("reportB", { report });
+      const stored = await AsyncStorage.getItem(KEY_HIST);
+      const hist = stored ? JSON.parse(stored) : [];
+      hist.push({ savedAt: new Date().toISOString(), mode, report: mode==="farmacias"?rf:mode==="mercados"?rm:ro });
+      await AsyncStorage.setItem(KEY_HIST, JSON.stringify(hist));
+      await enqueueSyncItem("reportB", { mode });
       void syncQueue();
-      if (clearForm) {
-        setReport(makeInitialState());
-        setBackupUri(null);
-        setBackupName(null);
-        Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
-      } else {
-        Alert.alert("Arquivado", "Dados salvos com sucesso.");
-      }
-    } catch {
-      Alert.alert("Erro", "Não foi possível arquivar.");
-    }
+      if (clear) {
+        if (mode==="farmacias") setRf(initF());
+        else if (mode==="mercados") setRm(initM());
+        else setRo(initO());
+        Alert.alert("Arquivado","Dados salvos e formulário limpo.");
+      } else Alert.alert("Arquivado","Dados salvos com sucesso.");
+    } catch { Alert.alert("Erro","Não foi possível arquivar."); }
   };
 
-  const handleClearOnly = () => {
-    Alert.alert(
-      "Limpar Tudo?",
-      "Isso apagará os dados e o backup atual sem salvar.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Limpar",
-          style: "destructive",
-          onPress: () => {
-            setReport(makeInitialState());
-            setBackupUri(null);
-            setBackupName(null);
-          },
-        },
-      ],
-    );
+  const handleClear = () => Alert.alert("Limpar?","Apagará os dados sem salvar.",[
+    {text:"Cancelar",style:"cancel"},
+    {text:"Limpar",style:"destructive",onPress:()=>{
+      if (mode==="farmacias") setRf(initF());
+      else if (mode==="mercados") setRm(initM());
+      else setRo(initO());
+    }},
+  ]);
+
+  const modeLabels: Record<ReportBMode,string> = {
+    farmacias:"Farmácias", mercados:"Mercados", outros:"Outros Estab.",
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+    <SafeAreaView style={s.safe}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB"/>
+      <KeyboardAvoidingView behavior={Platform.OS==="ios"?"padding":undefined} style={{flex:1}}>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* ... MANTENHA TODOS OS CAMPOS DO FORMULÁRIO IGUAIS (Seções 1 a 6) ... */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>1. Identificação</Text>
-            <Text style={styles.label}>Cliente</Text>
-            <TextInput
-              style={styles.input}
-              value={report.cliente}
-              onChangeText={(t) => setField("cliente", t)}
-            />
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Nº Loja</Text>
-                <TextInput
-                  style={styles.input}
-                  value={report.lojaNum}
-                  onChangeText={(t) => setField("lojaNum", t)}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Data</Text>
-                <TextInput
-                  style={styles.input}
-                  value={report.data}
-                  onChangeText={(t) => setField("data", t)}
-                />
-              </View>
-            </View>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>PIV Prog.</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.pivProgramado)}
-                  onChangeText={(t) =>
-                    setField("pivProgramado", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>PIV Real.</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.pivRealizado)}
-                  onChangeText={(t) =>
-                    setField("pivRealizado", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>2. Cronograma Operacional</Text>
-            {renderTimeField("Chegada Equipe", "chegadaEquipe")}
-            <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Início Dep.", "inicioDeposito")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Dep.", "terminoDeposito")}
-              </View>
-            </View>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Início Loja", "inicioLoja")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Loja", "terminoLoja")}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>3. Auditoria e Divergências</Text>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Início Aud. Cliente", "inicioAuditoriaCliente")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Aud. Cliente", "terminoAuditoriaCliente")}
-              </View>
-            </View>
-            {renderTimeField("Ini. Div. Controlados", "inicioControlados")}
-            <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Ini. Diverg.", "inicioDivergencia")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Diverg.", "terminoDivergencia")}
-              </View>
-            </View>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                {renderTimeField("Ini. Ñ Cont.", "inicioNaoContados")}
-              </View>
-              <View style={styles.half}>
-                {renderTimeField("Fim Ñ Cont.", "terminoNaoContados")}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>4. Resultado</Text>
-            <Text style={styles.label}>Total de Peças</Text>
-            <TextInput
-              style={styles.input}
-              value={String(report.totalPecas)}
-              onChangeText={(t) => setField("totalPecas", t === "" ? "" : Number(t))}
-              keyboardType="numeric"
-              placeholder="0"
-            />
-            <Text style={styles.label}>Valor Total (R$)</Text>
-            <TextInput
-              style={styles.input}
-              value={String(report.valorTotal)}
-              onChangeText={(t) => setField("valorTotal", t === "" ? "" : Number(t))}
-              keyboardType="numeric"
-            />
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Alt. Diverg.</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.qtdAlterados)}
-                  onChangeText={(t) =>
-                    setField("qtdAlterados", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Não Cont.</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.qtdNaoContados)}
-                  onChangeText={(t) =>
-                    setField("qtdNaoContados", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-            <Text style={styles.label}>Enc. no Não Contado</Text>
-            <TextInput
-              style={styles.input}
-              value={String(report.qtdEncontradosNaoContados)}
-              onChangeText={(t) =>
-                setField("qtdEncontradosNaoContados", t === "" ? "" : Number(t))
-              }
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>5. Envio de Arquivos</Text>
-            {renderTimeField("Envio 1º Arq", "envioArquivo1")}
-            {renderTimeField("Envio 2º Arq", "envioArquivo2")}
-            {renderTimeField("Envio 3º Arq", "envioArquivo3")}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              6. Indicadores e Finalização
-            </Text>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Aval. Dep. (%)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.avalPrepDeposito)}
-                  onChangeText={(t) =>
-                    setField("avalPrepDeposito", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Aval. Loja (%)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.avalPrepLoja)}
-                  onChangeText={(t) =>
-                    setField("avalPrepLoja", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Acur. Cliente (%)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.acuracidadeCliente)}
-                  onChangeText={(t) =>
-                    setField("acuracidadeCliente", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.half}>
-                <Text style={styles.label}>Acur. Terc. (%)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.acuracidadeTerceirizada)}
-                  onChangeText={(t) =>
-                    setField("acuracidadeTerceirizada", t === "" ? "" : Number(t))
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-            <View style={styles.row}>
-              <View style={styles.half}>
-                <Text style={styles.label}>Satisfação</Text>
-                <TextInput
-                  style={styles.input}
-                  value={String(report.satisfacao)}
-                  onChangeText={(t) => {
-                    const v = t.replace(",", ".").trim();
-                    setField("satisfacao", v);
-                  }}
-                  keyboardType="numeric"
-                  placeholder="ex: 4.5"
-                />
-              </View>
-            </View>
-            <Text style={styles.label}>Responsável</Text>
-            <TextInput
-              style={styles.input}
-              value={report.responsavel}
-              onChangeText={(t) => setField("responsavel", t)}
-            />
-            <Text style={styles.label}>PH Calculado</Text>
-            <TextInput
-              style={styles.input}
-              value={String(report.phCalculado)}
-              onChangeText={(t) => setField("phCalculado", t === "" ? "" : Number(t))}
-              keyboardType="numeric"
-              placeholder="0"
-            />
-            {renderTimeField("Fim Inventário", "terminoInventario")}
-            <Text style={styles.label}>Houve solicitação de Suporte?</Text>
-            <View style={styles.row}>
-              <Pressable
-                onPress={() => setField("suporteSolicitado", true)}
-                style={[
-                  styles.radioBtn,
-                  report.suporteSolicitado === true && styles.radioBtnSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.radioTxt,
-                    report.suporteSolicitado === true &&
-                      styles.radioTxtSelected,
-                  ]}
-                >
-                  Sim
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setField("suporteSolicitado", false)}
-                style={[
-                  styles.radioBtn,
-                  report.suporteSolicitado === false && styles.radioBtnSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.radioTxt,
-                    report.suporteSolicitado === false &&
-                      styles.radioTxtSelected,
-                  ]}
-                >
-                  Não
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Backup</Text>
-            <Text style={styles.helpText}>
-              Selecione o arquivo compactado de backup (zip)
-            </Text>
-            <Pressable style={styles.buttonPhoto} onPress={pickBackup}>
-              <Ionicons name="folder-open-outline" size={24} color="#2563EB" />
-              <Text style={styles.btnTextSecondary}>Selecionar Backup</Text>
-            </Pressable>
-            {backupName ? (
-              <Text style={[styles.helpText, { marginTop: 8, color: "#16A34A" }]}>
-                ✅ {backupName}
+        {/* Seletor de modo */}
+        <View style={s.modeSel}>
+          {(["farmacias","mercados","outros"] as ReportBMode[]).map(m=>(
+            <Pressable key={m} onPress={()=>setMode(m)}
+              style={[s.modeBtn, mode===m&&s.modeBtnActive]}>
+              <Text style={[s.modeTxt, mode===m&&s.modeTxtActive]} numberOfLines={2}>
+                {modeLabels[m]}
               </Text>
-            ) : null}
-          </View>
+            </Pressable>
+          ))}
+        </View>
 
-          <Pressable
-            style={styles.buttonPrimary}
-            onPress={() => setPreviewVisible(true)}
-          >
-            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.btnText}>Continuar para Envio</Text>
+        <ScrollView contentContainerStyle={s.scroll}>
+
+          {/* ═══ FARMÁCIAS ═══ */}
+          {mode==="farmacias" && <>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>1. Identificação</Text>
+              <View style={s.row}>
+                <View style={s.half}>{tf("Nº Loja","lojaNum",true)}</View>
+                <View style={s.half}>{tf("Data","data")}</View>
+              </View>
+              {tf("Loja","lojaNome")}
+              <View style={s.row}>
+                <View style={s.half}>{tf("PIV Prog.","pivProgramado",true)}</View>
+                <View style={s.half}>{tf("PIV Real.","pivRealizado",true)}</View>
+              </View>
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>2. Cronograma</Text>
+              {tf("Chegada Equipe","chegadaEquipe")}
+              <View style={s.row}><View style={s.half}>{tf("Ini. Cont. Dep.","inicioDeposito")}</View><View style={s.half}>{tf("Fim Cont. Dep.","terminoDeposito")}</View></View>
+              <View style={s.row}><View style={s.half}>{tf("Ini. Cont. Loja","inicioLoja")}</View><View style={s.half}>{tf("Fim Cont. Loja","terminoLoja")}</View></View>
+              <View style={s.row}><View style={s.half}>{tf("Ini. Audit. Cli.","inicioAuditoriaCliente")}</View><View style={s.half}>{tf("Fim Audit. Cli.","terminoAuditoriaCliente")}</View></View>
+              <View style={s.row}><View style={s.half}>{tf("Ini. Diverg. Ctrl.","inicioControlados")}</View><View style={s.half}>{tf("Fim Diverg. Ctrl.","terminoControlados")}</View></View>
+              <View style={s.row}><View style={s.half}>{tf("Ini. Diverg.","inicioDivergencia")}</View><View style={s.half}>{tf("Fim Diverg.","terminoDivergencia")}</View></View>
+              {tf("Itens Alt. Diverg.","qtdAlterados",true)}
+              <View style={s.row}><View style={s.half}>{tf("Ini. N. Cont.","inicioNaoContados")}</View><View style={s.half}>{tf("Fim N. Cont.","terminoNaoContados")}</View></View>
+              {tf("Itens N. Cont.","qtdNaoContados",true)}
+              {tf("Enc. no N. Cont.","qtdEncontradosNaoContados",true)}
+              <View style={s.row}><View style={s.half}>{tf("Ini. Recont. Cli.","inicioRecontCliente")}</View><View style={s.half}>{tf("Fim Recont. Cli.","terminoRecontCliente")}</View></View>
+              {tf("Qtd. Itens Recont. Cli.","qtdItensRecontCliente",true)}
+              {tf("Qtd. Alt. Recont. Cli.","qtdAltRecontCliente",true)}
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>3. Envio de Arquivos</Text>
+              {tf("Envio 1º Arq.","envioArquivo1")}
+              {tf("Envio 2º Arq.","envioArquivo2")}
+              {tf("Envio 3º Arq.","envioArquivo3")}
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>4. Resultado</Text>
+              {tf("Total Peças","totalPecas",true)}
+              {tf("Valor Total (R$)","valorTotal",true)}
+              <View style={s.row}><View style={s.half}>{tf("Aval. Prep. Dep.","avalPrepDeposito",true)}</View><View style={s.half}>{tf("Aval. Prep. Loja","avalPrepLoja",true)}</View></View>
+              <View style={s.row}><View style={s.half}>{tf("Acur. Cli. (%)","acuracidadeCliente",true)}</View><View style={s.half}>{tf("Acur. Terc. (%)","acuracidadeTerceirizada",true)}</View></View>
+              <View style={s.row}><View style={s.half}>{tf("Satisfação","satisfacao",true)}</View><View style={s.half}>{tf("PH Calc.","phCalculado",true)}</View></View>
+              {tf("Responsável","responsavel")}
+              <Text style={s.label}>Houve Suporte?</Text>
+              {radF("suporteSolicitado")}
+              {tf("Fim Inventário","terminoInventario")}
+            </View>
+          </>}
+
+          {/* ═══ MERCADOS ═══ */}
+          {mode==="mercados" && <>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>1. Identificação</Text>
+              {tm("Loja","lojaNome")}
+              <View style={s.row}><View style={s.half}>{tm("Nº Loja","lojaNum",true)}</View><View style={s.half}>{tm("Data","data")}</View></View>
+              <View style={s.row}><View style={s.half}>{tm("PIV Prog.","pivProgramado",true)}</View><View style={s.half}>{tm("PIV Real.","pivRealizado",true)}</View></View>
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>2. Cronograma</Text>
+              {tm("Chegada Equipe","chegadaEquipe")}
+              <View style={s.row}><View style={s.half}>{tm("Ini. Cont. Dep.","inicioDeposito")}</View><View style={s.half}>{tm("Fim Cont. Dep.","terminoDeposito")}</View></View>
+              <View style={s.row}><View style={s.half}>{tm("Ini. Cont. Loja","inicioLoja")}</View><View style={s.half}>{tm("Fim Cont. Loja","terminoLoja")}</View></View>
+              <View style={s.row}><View style={s.half}>{tm("Ini. Audit. Cli.","inicioAuditoriaCliente")}</View><View style={s.half}>{tm("Fim Audit. Cli.","terminoAuditoriaCliente")}</View></View>
+              <View style={s.row}><View style={s.half}>{tm("Ini. Diverg.","inicioDivergencia")}</View><View style={s.half}>{tm("Fim Diverg.","terminoDivergencia")}</View></View>
+              {tm("Itens Alt. Diverg.","qtdAlterados",true)}
+              {tm("Ini. N. Cont.","inicioNaoContados")}
+              {tm("Itens N. Cont.","qtdNaoContados",true)}
+              {tm("Enc. no N. Cont.","qtdEncontradosNaoContados",true)}
+              {tm("Fim N. Cont.","terminoNaoContados")}
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>3. Resultado</Text>
+              {tm("Total Peças","totalPecas",true)}
+              {tm("Valor Total (R$)","valorTotal",true)}
+              <View style={s.row}><View style={s.half}>{tm("Aval. Prep. Dep.","avalPrepDeposito",true)}</View><View style={s.half}>{tm("Aval. Prep. Loja","avalPrepLoja",true)}</View></View>
+              <View style={s.row}><View style={s.half}>{tm("Acur. Cli. (%)","acuracidadeCliente",true)}</View><View style={s.half}>{tm("Acur. Terc. (%)","acuracidadeTerceirizada",true)}</View></View>
+              {tm("Satisfação","satisfacao",true)}
+              {tm("Responsável","responsavel")}
+              <Text style={s.label}>Houve Suporte?</Text>
+              {radM("suporteSolicitado")}
+              {tm("Fim Inventário","terminoInventario")}
+            </View>
+          </>}
+
+          {/* ═══ OUTROS ═══ */}
+          {mode==="outros" && <>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>1. Identificação</Text>
+              <View style={s.row}><View style={s.half}>{to("Nº Loja","lojaNum",true)}</View><View style={s.half}>{to("Data","data")}</View></View>
+              {to("Loja","lojaNome")}
+              {to("Responsável","responsavel")}
+              {to("Qtd. Pessoas","qtdPessoas",true)}
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>2. Cronograma</Text>
+              {to("Chegada Equipe","chegadaEquipe")}
+              <View style={s.row}><View style={s.half}>{to("Ini. Cont. Dep.","inicioDeposito")}</View><View style={s.half}>{to("Fim Cont. Dep.","terminoDeposito")}</View></View>
+              <View style={s.row}><View style={s.half}>{to("Ini. Cont. Loja","inicioLoja")}</View><View style={s.half}>{to("Fim Cont. Loja","terminoLoja")}</View></View>
+              <View style={s.row}><View style={s.half}>{to("Ini. Audit. Cli.","inicioAuditoriaCliente")}</View><View style={s.half}>{to("Fim Audit. Cli.","terminoAuditoriaCliente")}</View></View>
+              <View style={s.row}><View style={s.half}>{to("Ini. Diverg.","inicioDivergencia")}</View><View style={s.half}>{to("Fim Diverg.","terminoDivergencia")}</View></View>
+            </View>
+            <View style={s.sec}>
+              <Text style={s.secTitle}>3. Resultado</Text>
+              {to("Total Peças","totalPecas",true)}
+              {to("Valor Total (R$)","valorTotal",true)}
+              {to("% Inv.","pctInv",true)}
+              <View style={s.row}><View style={s.half}>{to("Aval. Est. (%)","avalEstoque",true)}</View><View style={s.half}>{to("Aval. Loja (%)","avalLoja",true)}</View></View>
+              {to("Fim Inventário","terminoInventario")}
+            </View>
+          </>}
+
+          {/* Botões de ação */}
+          <Pressable style={s.btnPrimary} onPress={()=>setPreviewVisible(true)}>
+            <Ionicons name="logo-whatsapp" size={20} color="#fff"/>
+            <Text style={s.btnTxt}>Gerar Relatório</Text>
           </Pressable>
-
-          <View style={[styles.row, { marginTop: 8, gap: 8 }]}>
-            <Pressable
-              style={[styles.buttonClear, { flex: 1 }]}
-              onPress={handleClearOnly}
-            >
-              <Text style={styles.btnTextDanger}>Limpar</Text>
+          <View style={[s.row,{marginTop:8,gap:8}]}>
+            <Pressable style={[s.btnClear,{flex:1}]} onPress={handleClear}>
+              <Text style={s.btnTxtDanger}>Limpar</Text>
             </Pressable>
-            <Pressable
-              style={[
-                styles.buttonClear,
-                { flex: 1, backgroundColor: "#E2E8F0" },
-              ]}
-              onPress={() => void handleArchive(true)}
-            >
-              <Text style={[styles.btnTextDanger, { color: "#334155" }]}>
-                Limpar/Arquivar
-              </Text>
+            <Pressable style={[s.btnClear,{flex:1,backgroundColor:"#E2E8F0"}]} onPress={()=>void handleArchive(true)}>
+              <Text style={[s.btnTxtDanger,{color:"#334155"}]}>Limpar/Arquivar</Text>
             </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Modal preview */}
       <Modal visible={previewVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.sectionTitle}>Pré-visualização e Envio</Text>
-            <Text style={styles.helpText}>1. Clique para enviar o Texto.</Text>
-            <Text style={styles.helpText}>
-              2. Volte e clique para enviar o Backup.
-            </Text>
-
-            <ScrollView style={styles.previewBox}>
-              <Text>{formatReportB(report)}</Text>
+        <View style={s.overlay}>
+          <View style={s.modalBox}>
+            <Text style={s.secTitle}>Pré-visualização</Text>
+            <ScrollView style={s.previewBox}>
+              <Text>{getPreview()}</Text>
             </ScrollView>
-
-            <View style={styles.row}>
-              <Pressable
-                style={styles.btnBack}
-                onPress={() => setPreviewVisible(false)}
-              >
+            <View style={s.row}>
+              <Pressable style={s.btnBack} onPress={()=>setPreviewVisible(false)}>
                 <Text>Voltar</Text>
               </Pressable>
+              <Pressable style={s.btnPrimary} onPress={handleSend}>
+                <Text style={s.btnTxt}>Enviar</Text>
+              </Pressable>
             </View>
-
-            <Pressable
-              style={[
-                styles.buttonPrimary,
-                { marginTop: 10, backgroundColor: "#25D366" },
-              ]}
-              onPress={handleSendText}
-            >
-              <Ionicons
-                name="logo-whatsapp"
-                size={20}
-                color="#fff"
-                style={{ marginRight: 10 }}
-              />
-              <Text style={styles.btnText}>1º Enviar Texto (WhatsApp)</Text>
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.buttonPrimary,
-                { marginTop: 10, backgroundColor: "#0284C7" },
-              ]}
-              onPress={() => void handleShareBackup()}
-              disabled={!backupUri || isSharingBackup}
-            >
-              {isSharingBackup ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Ionicons
-                  name="archive"
-                  size={20}
-                  color="#fff"
-                  style={{ marginRight: 10 }}
-                />
-              )}
-              <Text style={styles.btnText}>2º Enviar Backup</Text>
-            </Pressable>
           </View>
         </View>
       </Modal>
@@ -629,122 +357,33 @@ export default function ReportBScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2563EB",
-    padding: 16,
-  },
-  headerLogo: { width: 32, height: 32, marginRight: 10, borderRadius: 6 },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  scrollContent: { padding: 16 },
-  section: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1E40AF",
-    marginBottom: 12,
-    textTransform: "uppercase",
-  },
-  label: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 8 },
-  helpText: {
-    fontSize: 12,
-    color: "#64748B",
-    marginBottom: 10,
-    fontStyle: "italic",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 4,
-    fontSize: 16,
-    color: "#1E293B",
-  },
-  row: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 },
-  half: { flex: 1 },
-  inputGroup: { marginBottom: 8 },
-  timeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nowBtn: {
-    padding: 10,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  buttonPrimary: {
-    backgroundColor: "#2563EB",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 10,
-  },
-  buttonPhoto: {
-    borderWidth: 1,
-    borderColor: "#2563EB",
-    borderStyle: "dashed",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-  },
-  btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  btnTextSecondary: { color: "#2563EB", fontWeight: "bold" },
-  buttonClear: {
-    flex: 1,
-    backgroundColor: "#FEE2E2",
-    padding: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  btnTextDanger: { color: "#DC2626", fontWeight: "bold" },
-  radioBtn: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  radioBtnSelected: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
-  radioTxt: { color: "#64748B", fontWeight: "bold" },
-  radioTxtSelected: { color: "#2563EB" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    maxHeight: "90%",
-  },
-  previewBox: {
-    backgroundColor: "#F1F5F9",
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 10,
-  },
-  btnBack: {
-    flex: 1,
-    padding: 14,
-    alignItems: "center",
-    backgroundColor: "#E2E8F0",
-    borderRadius: 12,
-  },
+const s = StyleSheet.create({
+  safe:{flex:1,backgroundColor:"#F8FAFC"},
+  modeSel:{flexDirection:"row",backgroundColor:"#EFF6FF",padding:8,gap:6},
+  modeBtn:{flex:1,padding:10,borderRadius:10,alignItems:"center",backgroundColor:"#fff",borderWidth:1,borderColor:"#CBD5E1"},
+  modeBtnActive:{backgroundColor:"#2563EB",borderColor:"#2563EB"},
+  modeTxt:{fontSize:11,fontWeight:"bold",color:"#64748B",textAlign:"center"},
+  modeTxtActive:{color:"#fff"},
+  scroll:{padding:16},
+  sec:{backgroundColor:"#fff",padding:16,borderRadius:12,marginBottom:16,elevation:2},
+  secTitle:{fontSize:15,fontWeight:"bold",color:"#1E40AF",marginBottom:10,textTransform:"uppercase"},
+  label:{fontSize:12,fontWeight:"600",color:"#64748B",marginTop:8},
+  input:{borderWidth:1,borderColor:"#E2E8F0",borderRadius:8,padding:10,marginTop:4,fontSize:15,color:"#1E293B"},
+  row:{flexDirection:"row",gap:8,alignItems:"center",marginTop:6},
+  half:{flex:1},
+  ig:{marginBottom:6},
+  tr:{flexDirection:"row",alignItems:"center",gap:6},
+  nowBtn:{padding:9,backgroundColor:"#EFF6FF",borderRadius:8,marginTop:4},
+  radio:{flex:1,padding:10,borderWidth:1,borderColor:"#CBD5E1",borderRadius:8,alignItems:"center"},
+  radioSel:{backgroundColor:"#EFF6FF",borderColor:"#2563EB"},
+  radioTxt:{color:"#64748B",fontWeight:"bold"},
+  radioTxtSel:{color:"#2563EB"},
+  btnPrimary:{backgroundColor:"#2563EB",padding:15,borderRadius:12,alignItems:"center",flexDirection:"row",justifyContent:"center",gap:8,marginTop:10},
+  btnClear:{backgroundColor:"#FEE2E2",padding:13,borderRadius:12,alignItems:"center"},
+  btnTxt:{color:"#fff",fontWeight:"bold",fontSize:15},
+  btnTxtDanger:{color:"#DC2626",fontWeight:"bold"},
+  overlay:{flex:1,backgroundColor:"rgba(0,0,0,0.5)",justifyContent:"center",padding:20},
+  modalBox:{backgroundColor:"#fff",borderRadius:16,padding:20,maxHeight:"85%"},
+  previewBox:{backgroundColor:"#F1F5F9",padding:12,borderRadius:8,marginVertical:10},
+  btnBack:{flex:1,padding:13,alignItems:"center",backgroundColor:"#E2E8F0",borderRadius:12},
 });
