@@ -10,8 +10,9 @@
  * compatível com React Native / Expo.
  */
 
-const GEMINI_API_KEY = "AIzaSyCJE8Hb-Weem_3C-q5F5LGZvZIRwzgvkyY";
-const GEMINI_MODEL = "gemini-1.5-flash";
+import { GEMINI_API_KEY } from '@env';
+
+const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 export type GeminiEraseResult =
@@ -50,8 +51,8 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
         {
           parts: [
             {
-              inline_data: {
-                mime_type: mimeType,
+              inlineData: {
+                mimeType: mimeType,
                 data: base64Image,
               },
             },
@@ -63,9 +64,29 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
         temperature: 0.1,
         topP: 0.8,
         maxOutputTokens: 8192,
-        responseMimeType: "text/plain", // Pede retorno em texto (HTML)
       },
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_ONLY_HIGH",
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH",
+          threshold: "BLOCK_ONLY_HIGH",
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_ONLY_HIGH",
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_ONLY_HIGH",
+        },
+      ],
     };
+
+    console.log("[Gemini] Sending payload to:", GEMINI_API_URL);
+    console.log("[Gemini] Base64 Image length:", base64Image.length);
 
     const response = await fetch(GEMINI_API_URL, {
       method: "POST",
@@ -73,12 +94,16 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
       body: JSON.stringify(body),
     });
 
+    console.log("[Gemini] Response status:", response.status);
+
     if (!response.ok) {
       const errText = await response.text();
+      console.error("[Gemini] Error Response:", errText);
       return { success: false, error: `HTTP ${response.status}: ${errText}` };
     }
 
     const json = (await response.json()) as GeminiApiResponse;
+    console.log("[Gemini] Success Response (truncated):", JSON.stringify(json).slice(0, 800));
 
     // Extrai o texto gerado
     const parts = json?.candidates?.[0]?.content?.parts ?? [];
@@ -94,9 +119,11 @@ Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de
       };
     }
 
+    console.error("[Gemini] Candidates content missing. Full Response:", JSON.stringify(json));
     return { success: false, error: "Resposta inesperada do Gemini (sem texto)." };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error("[Gemini] Exception during API call:", msg);
     return { success: false, error: `Erro de rede: ${msg}` };
   }
 }
