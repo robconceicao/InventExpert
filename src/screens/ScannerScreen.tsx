@@ -21,7 +21,7 @@ import {
 } from "react-native";
 import DocumentScanner from "react-native-document-scanner-plugin";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { eraseHandwritingWithGemini } from "../services/geminiVision";
+import { eraseHandwriting } from "../services/handwritingEraser";
 
 // ---------------------------------------------------------------------------
 // Helper: converte URI de imagem para base64 com orientação portrait corrigida
@@ -40,33 +40,6 @@ const toPortraitBase64 = async (uri: string): Promise<string> => {
   return manipResult.base64 ?? "";
 };
 
-// ---------------------------------------------------------------------------
-// Helper (fallback): converte para PNG base64 para uso no HTML/PDF CSS
-// ---------------------------------------------------------------------------
-const toPngBase64 = async (uri: string): Promise<string> => {
-  const result = await ImageManipulator.manipulateAsync(
-    uri,
-    [{ rotate: 0 }],
-    { compress: 1, format: ImageManipulator.SaveFormat.PNG, base64: true },
-  );
-  return result.base64 ?? "";
-};
-
-// ---------------------------------------------------------------------------
-// Helper (fallback CSS): remoção básica de escrita via filtros CSS quando
-// o Gemini não está disponível (offline ou erro de API).
-// ---------------------------------------------------------------------------
-const buildEraserHtmlCss = (base64: string): string => `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
-<style>
-  @page { size: A4 portrait; margin: 0; }
-  body { margin:0; padding:0; background:#fff; }
-  img { display:block; width:100%; height:auto;
-    filter: grayscale(100%) contrast(1.2);
-  }
-</style></head>
-<body><img src="data:image/jpeg;base64,${base64}" /></body></html>`;
-
 export default function ScannerScreen() {
   const [scannedImages, setScannedImages] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -81,6 +54,8 @@ export default function ScannerScreen() {
   const [isErasing, setIsErasing] = useState(false);
   const [eraserStatus, setEraserStatus] = useState<string>("");
   const [eraserUsedAI, setEraserUsedAI] = useState(false);
+  const [eraserEngineName, setEraserEngineName] = useState("");
+  const [eraserModelName, setEraserModelName] = useState("");
 
   // ── Escanear documento (portrait: o plugin já orienta corretamente em modo
   //    portrait do dispositivo; forçamos re-encode para garantir metadados EXIF)
@@ -196,6 +171,8 @@ export default function ScannerScreen() {
   const handleEraseHandwriting = async () => {
     if (!eraserSource) return;
     setEraserUsedAI(false);
+    setEraserEngineName("");
+    setEraserModelName("");
     try {
       setIsErasing(true);
 
@@ -210,48 +187,39 @@ export default function ScannerScreen() {
 
       let finalPdfUri: string;
 
-      // ── Passo 2: tenta a IA (Gemini Vision) para recriar o formulário
+      // ── Passo 2: tenta a IA (Gemini Vision / Outras / Híbrida)
       setEraserStatus("Apagando escrita e adaptando...");
-      const geminiResult = await eraseHandwritingWithGemini(jpegBase64, "image/jpeg");
+      const result = await eraseHandwriting(jpegBase64, "image/jpeg");
 
-      if (geminiResult.success) {
-        // ── Gemini retornou o HTML do formulário limpo
+      if (result.success) {
         setEraserStatus("Gerando PDF Digital...");
         setEraserUsedAI(true);
-        const html = geminiResult.html;
+        setEraserEngineName(result.engine);
+        setEraserModelName(result.model);
+        const html = result.html;
 
         const printed = await Print.printToFileAsync({ html });
-        finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_gemini_${Date.now()}.pdf`;
+        finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_${Date.now()}.pdf`;
         await FileSystem.moveAsync({ from: printed.uri, to: finalPdfUri });
-
+        setEraserResult(finalPdfUri);
       } else {
-        // ── Fallback: IA falhou, usa filtros CSS locais
-        console.warn("[Scanner] Gemini falhou, usando fallback CSS:", geminiResult.error);
-        
-        // Exibe um alerta de debug temporário para descobrirmos o erro exato retornado pelo Google
+        setEraserUsedAI(false);
+        setEraserResult(null);
+        // Exibe erro completo detalhando quais APIs falharam
         Alert.alert(
-          "Debug: Novo Erro da IA",
-          `O Gemini retornou o seguinte erro:\n\n${geminiResult.error}\n\nO app usará o filtro preto e branco reserva.`,
+          "Falha no Processamento",
+          result.error,
           [{ text: "OK" }]
         );
-
-        setEraserStatus("Apagando escrita e adaptando...");
-
-        // Usa o jpegBase64 já compactado em vez de PNG gigante para evitar crash no WebView
-        const html = buildEraserHtmlCss(jpegBase64);
-
-        const printed = await Print.printToFileAsync({ html });
-        finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_css_${Date.now()}.pdf`;
-        await FileSystem.moveAsync({ from: printed.uri, to: finalPdfUri });
       }
-
-      setEraserResult(finalPdfUri);
       setEraserStatus("");
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("[Scanner] Erro no apagador:", e);
       setEraserStatus("");
-      Alert.alert("Erro", "Não foi possível processar a imagem. Tente novamente.");
+      setEraserUsedAI(false);
+      setEraserResult(null);
+      Alert.alert("Erro", "Ocorreu um erro inesperado ao processar a imagem. Tente novamente.");
     } finally {
       setIsErasing(false);
     }
@@ -377,11 +345,11 @@ export default function ScannerScreen() {
               <Text style={[styles.cardTitle, { color: "#7C3AED", marginBottom: 0, flex: 1 }]}>
                 Apagar Escrita
               </Text>
-              {eraserUsedAI && (
+              {eraserUsedAI && eraserEngineName ? (
                 <View style={styles.aiBadge}>
-                  <Text style={styles.aiBadgeText}>✨ Gemini AI</Text>
+                  <Text style={styles.aiBadgeText}>✨ {eraserEngineName}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
 
             {/* Preview da foto capturada */}
@@ -422,10 +390,10 @@ export default function ScannerScreen() {
             {/* Resultado disponível */}
             {eraserResult && (
               <>
-                <View style={[styles.resultBanner, { backgroundColor: "#F8FAFC" }]}>
-                  <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
-                  <Text style={[styles.resultBannerText, { color: "#1E3A8A", fontWeight: "bold" }]}>
-                    Processado com sucesso
+                <View style={styles.resultBanner}>
+                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                  <Text style={styles.resultBannerText}>
+                    Processado com {eraserEngineName || "IA"} ({eraserModelName || "modelo"})
                   </Text>
                 </View>
                 <Pressable

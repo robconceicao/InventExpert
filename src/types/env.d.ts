@@ -4,4 +4,6 @@
 declare module '@env' {
   export const GEMINI_API_KEY: string;
   export const DEEPSEEK_API_KEY: string;
+  export const OPENAI_API_KEY: string | undefined;
+  export const GROQ_API_KEY: string | undefined;
 }
