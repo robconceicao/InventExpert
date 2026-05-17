@@ -30,20 +30,22 @@ export async function eraseHandwritingWithGemini(
   base64Image: string,
   mimeType: "image/jpeg" | "image/png" = "image/jpeg",
 ): Promise<GeminiEraseResult> {
-  const prompt = `Você é um sistema especializado em processamento de documentos e OCR.
+  const prompt = `Você é um sistema especialista em OCR e reconstrução digital de documentos.
 
-A imagem enviada é uma folha de relatório de inventário com:
-- Layout impresso (formulário com cabeçalho, colunas, tabelas)
-- Preenchimento manual feito a caneta/lápis
+A imagem enviada é um formulário impresso de inventário que foi preenchido manualmente.
+Sua missão é gerar um documento HTML limpo que seja a RECONSTRUÇÃO DIGITAL exata do formulário original, atendendo aos seguintes critérios:
 
-Sua tarefa:
-1. Recrie EXATAMENTE a estrutura digital do formulário original (títulos, cabeçalhos, colunas da tabela).
-2. REMOVA COMPLETAMENTE toda a escrita manuscrita ou preenchimento à caneta. Os campos/linhas da tabela devem ficar em branco.
-3. Crie uma tabela HTML limpa e profissional com bordas, usando CSS inline, como se o arquivo original em branco tivesse sido baixado do sistema de inventário.
-4. Mantenha o máximo de fidelidade aos nomes das colunas e textos de cabeçalho que você conseguir ler.
-5. Adicione cerca de 20 a 25 linhas em branco na tabela para reproduzir o aspecto da folha impressa.
+1. APAGUE COMPLETAMENTE toda a escrita manual (caneta azul, preenchimentos à mão, assinaturas ou rabiscos).
+2. PRESERVE EXATAMENTE todo o texto impresso original (títulos como "FORMULARIO DE INVENTARIO", rótulos de campos como "Campo 2:", "Campo 3:", cabeçalhos de tabelas, etc.). O documento retornado deve conter esses textos como TEXTO DIGITAL selecionável no HTML (não como imagem).
+3. DETECTE O LAYOUT ORIGINAL E RECONSTRUA-O FIELMENTE:
+   - Se for uma lista de campos com linhas horizontais para escrita (ex: "Campo X: ____________"), crie campos com linhas horizontais vazias usando CSS de bordas inferiores (border-bottom) ou linhas contínuas elegantes.
+   - Se for uma tabela com colunas, crie uma tabela HTML real (<table>) com bordas finas, mantendo os cabeçalhos originais, e deixe as linhas de dados em branco para preenchimento.
+4. ESTILO E APARÊNCIA:
+   - Use CSS inline limpo e profissional.
+   - O documento final deve parecer um arquivo PDF novo em branco, gerado por computador e pronto para impressão.
+   - Configure a página para A4 portrait (vertical) com margens elegantes para que caiba perfeitamente no PDF.
 
-Retorne APENAS o código HTML completo (<!DOCTYPE html><html>...), sem blocos de código Markdown (\`\`\`html). Nenhuma outra palavra.`;
+Retorne APENAS o código HTML completo e válido (começando com <!DOCTYPE html> e terminando com </html>), sem blocos de código Markdown ou qualquer outro texto explicativo.`;
 
   try {
     const body = {
