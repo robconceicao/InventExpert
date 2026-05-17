@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Linking,
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
+import { analyzeInventoryGaps } from "../services/deepseek";
 import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
@@ -97,6 +99,28 @@ const isWarningTime = (targetHour: number, targetMin: number): boolean => {
 export default function ReportAScreen() {
   const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
+
+  const handleAiAudit = async () => {
+    setAiLoading(true);
+    setAiModalVisible(true);
+    try {
+      const reportText = formatReportA(report);
+      const result = await analyzeInventoryGaps(reportText);
+      if (result.success) {
+        setAiResult(result.text);
+      } else {
+        setAiResult(`Falha ao gerar auditoria: ${result.error}`);
+      }
+    } catch (err) {
+      setAiResult(`Erro inesperado: ${String(err)}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const [alarmActive, setAlarmActive] = useState(false);
   const [alarmLabel, setAlarmLabel] = useState("");
   const alarmTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -549,16 +573,74 @@ export default function ReportAScreen() {
       <Modal visible={previewVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.sectionTitle}>Pré-visualização</Text>
-            <ScrollView style={styles.previewBox}>
-              <Text>{formatReportA(report)}</Text>
-            </ScrollView>
-            <View style={styles.row}>
-              <Pressable style={styles.btnBack} onPress={() => setPreviewVisible(false)}>
-                <Text>Voltar</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <Text style={styles.sectionTitle}>Pré-visualização</Text>
+              <Pressable
+                onPress={handleAiAudit}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#eff6ff",
+                  borderColor: "#bfdbfe",
+                  borderWidth: 1,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  gap: 4
+                }}
+              >
+                <Ionicons name="sparkles" size={14} color="#1d4ed8" />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#1d4ed8" }}>Auditoria IA</Text>
               </Pressable>
-              <Pressable style={styles.buttonPrimary} onPress={handleSend}>
+            </View>
+            <ScrollView style={styles.previewBox}>
+              <Text style={{ fontSize: 12, lineHeight: 18, color: "#334155" }}>{formatReportA(report)}</Text>
+            </ScrollView>
+            <View style={[styles.row, { gap: 8, marginTop: 12 }]}>
+              <Pressable style={[styles.btnBack, { flex: 1 }]} onPress={() => setPreviewVisible(false)}>
+                <Text style={{ fontWeight: "600", color: "#475569", textAlign: "center" }}>Voltar</Text>
+              </Pressable>
+              <Pressable style={[styles.buttonPrimary, { flex: 1, marginVertical: 0 }]} onPress={handleSend}>
+                <Ionicons name="logo-whatsapp" size={16} color="#fff" />
                 <Text style={styles.btnText}>Enviar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Auditoria Inteligente DeepSeek */}
+      <Modal
+        visible={aiModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAiModalVisible(false)}
+      >
+        <View style={styles.aiModalOverlay}>
+          <View style={styles.aiModalContent}>
+            <View style={styles.aiModalHeader}>
+              <Ionicons name="sparkles" size={22} color="#1d4ed8" />
+              <Text style={styles.aiModalTitle}>Auditoria de Gargalos IA</Text>
+              <Pressable onPress={() => setAiModalVisible(false)} style={styles.aiCloseBtn}>
+                <Ionicons name="close-circle" size={24} color="#64748b" />
+              </Pressable>
+            </View>
+
+            {aiLoading ? (
+              <View style={styles.aiLoadingContainer}>
+                <ActivityIndicator size="large" color="#1d4ed8" />
+                <Text style={styles.aiLoadingText}>DeepSeek auditando tempos e acuracidade...</Text>
+                <Text style={styles.aiLoadingSubtext}>Isso pode levar alguns segundos.</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.aiResultScroll}>
+                <Text style={styles.aiResultText}>{aiResult}</Text>
+              </ScrollView>
+            )}
+
+            <View style={styles.aiModalFooter}>
+              <Pressable style={styles.aiModalCloseBtn} onPress={() => setAiModalVisible(false)}>
+                <Text style={styles.aiModalCloseBtnText}>Fechar Diagnóstico</Text>
               </Pressable>
             </View>
           </View>
@@ -675,5 +757,83 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#E2E8F0",
     borderRadius: 12,
+  },
+  aiModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  aiModalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    width: "100%",
+    maxHeight: "85%",
+    padding: 20,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  aiModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    paddingBottom: 12,
+  },
+  aiModalTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  aiCloseBtn: {
+    padding: 2,
+  },
+  aiLoadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 50,
+    gap: 12,
+  },
+  aiLoadingText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#0f172a",
+    textAlign: "center",
+  },
+  aiLoadingSubtext: {
+    fontSize: 12,
+    color: "#64748b",
+    textAlign: "center",
+  },
+  aiResultScroll: {
+    marginVertical: 14,
+    maxHeight: 350,
+  },
+  aiResultText: {
+    fontSize: 13,
+    color: "#334155",
+    lineHeight: 20,
+  },
+  aiModalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 12,
+  },
+  aiModalCloseBtn: {
+    backgroundColor: "#f1f5f9",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  aiModalCloseBtnText: {
+    fontSize: 14,
+    color: "#475569",
+    fontWeight: "700",
   },
 });

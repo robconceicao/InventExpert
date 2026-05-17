@@ -4,7 +4,6 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import {
     ActivityIndicator,
@@ -205,7 +204,7 @@ export default function ScannerScreen() {
       const jpegResult = await ImageManipulator.manipulateAsync(
         eraserSource,
         [{ rotate: 0 }],
-        { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        { compress: 0.50, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       );
       const jpegBase64 = jpegResult.base64 ?? "";
 
@@ -228,6 +227,14 @@ export default function ScannerScreen() {
       } else {
         // ── Fallback: IA falhou, usa filtros CSS locais
         console.warn("[Scanner] Gemini falhou, usando fallback CSS:", geminiResult.error);
+        
+        // Exibe um alerta de debug temporário para descobrirmos o erro exato retornado pelo Google
+        Alert.alert(
+          "Debug: Novo Erro da IA",
+          `O Gemini retornou o seguinte erro:\n\n${geminiResult.error}\n\nO app usará o filtro preto e branco reserva.`,
+          [{ text: "OK" }]
+        );
+
         setEraserStatus("Apagando escrita e adaptando...");
 
         // Usa o jpegBase64 já compactado em vez de PNG gigante para evitar crash no WebView

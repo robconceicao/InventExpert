@@ -1,6 +1,8 @@
 import { useNavigation } from "@react-navigation/native";
 import React, { useLayoutEffect, useMemo, useState } from "react";
 import {
+    ActivityIndicator,
+    Modal,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -9,6 +11,7 @@ import {
     Text,
     View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { CheckerFeedbackReport } from "../components/CheckerFeedbackReport";
 import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
@@ -16,6 +19,7 @@ import {
     evaluateChecker,
     sortRanking,
 } from "../services/InventoryEvaluationService";
+import { analyzeTeamPerformance } from "../services/deepseek";
 import type {
     InventoryCheckerEvaluation,
     InventoryCheckerInput,
@@ -76,6 +80,34 @@ export default function LeaderEvaluationDashboard() {
       e.nivel === "CRITICO" ||
       e.tags.includes("🚨 Risco de Contagem Superficial"),
   );
+
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
+
+  const handleAiAnalysis = async () => {
+    setAiLoading(true);
+    setAiModalVisible(true);
+    try {
+      const rankingText = ranking
+        .map(
+          (ev, index) =>
+            `${index + 1}º ${ev.input.nome}: Score ${ev.scoreFinal} (${ev.nivel}) | Qtd Contada: ${ev.input.qtde} | Erros: ${ev.input.erro} (${ev.pctErro.toFixed(2)}%) | Prod/h: ${ev.input.produtividade} | Bloco: ${ev.pctBloco.toFixed(1)}%`
+        )
+        .join("\n");
+
+      const result = await analyzeTeamPerformance(operationType, rankingText);
+      if (result.success) {
+        setAiResult(result.text);
+      } else {
+        setAiResult(`Falha ao gerar análise: ${result.error}`);
+      }
+    } catch (err) {
+      setAiResult(`Erro inesperado: ${String(err)}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const profile = INVENTORY_PROFILES[operationType];
 
@@ -183,6 +215,67 @@ export default function LeaderEvaluationDashboard() {
             </View>
           ))}
         </View>
+
+        {/* Card Premium do DeepSeek IA */}
+        <View style={[styles.card, styles.aiCard]}>
+          <View style={styles.aiCardHeader}>
+            <View style={styles.aiIconContainer}>
+              <Ionicons name="sparkles" size={20} color="#1d4ed8" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aiCardTitle}>Consultoria de Performance IA</Text>
+              <Text style={styles.aiCardSubtitle}>Powered by DeepSeek-V3</Text>
+            </View>
+            <View style={styles.deepseekBadge}>
+              <Text style={styles.deepseekBadgeText}>DEEPSEEK</Text>
+            </View>
+          </View>
+          <Text style={styles.aiCardBody}>
+            Gere instantaneamente uma análise detalhada sobre a produtividade do time, identificando riscos operacionais e obtendo orientações táticas para o seu inventário.
+          </Text>
+          <Pressable style={styles.aiButton} onPress={handleAiAnalysis}>
+            <Ionicons name="analytics" size={18} color="#ffffff" />
+            <Text style={styles.aiButtonText}>Analisar Equipe com IA</Text>
+          </Pressable>
+        </View>
+
+        {/* Modal de Análise da IA */}
+        <Modal
+          visible={aiModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAiModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Ionicons name="sparkles" size={22} color="#1d4ed8" />
+                <Text style={styles.modalTitle}>Análise do Consultor DeepSeek</Text>
+                <Pressable onPress={() => setAiModalVisible(false)} style={styles.closeBtn}>
+                  <Ionicons name="close-circle" size={24} color="#64748b" />
+                </Pressable>
+              </View>
+
+              {aiLoading ? (
+                <View style={styles.aiLoadingContainer}>
+                  <ActivityIndicator size="large" color="#1d4ed8" />
+                  <Text style={styles.aiLoadingText}>DeepSeek analisando métricas da equipe...</Text>
+                  <Text style={styles.aiLoadingSubtext}>Isso pode levar alguns segundos.</Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.aiResultScroll}>
+                  <Text style={styles.aiResultText}>{aiResult}</Text>
+                </ScrollView>
+              )}
+
+              <View style={styles.modalFooter}>
+                <Pressable style={styles.modalCloseBtn} onPress={() => setAiModalVisible(false)}>
+                  <Text style={styles.modalCloseBtnText}>Fechar Diagnóstico</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {radarRisco.length > 0 && (
           <View style={styles.card}>
@@ -404,5 +497,149 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#7f1d1d",
     fontStyle: "italic",
+  },
+  aiCard: {
+    backgroundColor: "#f0f7ff",
+    borderColor: "#bfdbfe",
+    borderWidth: 1.5,
+    shadowColor: "#1d4ed8",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  aiCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  aiIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#dbeafe",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e3a8a",
+  },
+  aiCardSubtitle: {
+    fontSize: 11,
+    color: "#3b82f6",
+    fontWeight: "600",
+  },
+  deepseekBadge: {
+    backgroundColor: "#3b82f6",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  deepseekBadgeText: {
+    fontSize: 9,
+    color: "#ffffff",
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  aiCardBody: {
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  aiButton: {
+    backgroundColor: "#1d4ed8",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  aiButtonText: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    width: "100%",
+    maxHeight: "85%",
+    padding: 20,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    paddingBottom: 12,
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  closeBtn: {
+    padding: 2,
+  },
+  aiLoadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 50,
+    gap: 12,
+  },
+  aiLoadingText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#0f172a",
+    textAlign: "center",
+  },
+  aiLoadingSubtext: {
+    fontSize: 12,
+    color: "#64748b",
+    textAlign: "center",
+  },
+  aiResultScroll: {
+    marginVertical: 14,
+    maxHeight: 350,
+  },
+  aiResultText: {
+    fontSize: 13,
+    color: "#334155",
+    lineHeight: 20,
+  },
+  modalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 12,
+  },
+  modalCloseBtn: {
+    backgroundColor: "#f1f5f9",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalCloseBtnText: {
+    fontSize: 14,
+    color: "#475569",
+    fontWeight: "700",
   },
 });
