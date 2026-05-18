@@ -44,10 +44,6 @@ export default function AttendanceScreen() {
   const [attendance, setAttendance] = useState<AttendanceData>(emptyData);
   const [previewVisible, setPreviewVisible] = useState(false);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
-
   useEffect(() => {
     const loadData = async () => {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -224,14 +220,6 @@ export default function AttendanceScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
-      <View style={styles.header}>
-        <Image
-          source={HeaderIcon}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerTitle}>Controle de Escala</Text>
-      </View>
 
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {/* PARSER WHATSAPP */}

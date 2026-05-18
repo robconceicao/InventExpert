@@ -65,10 +65,7 @@ export default function RootTabs() {
         headerTintColor: "#fff",
         headerTitle: (props) => (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Image
-              source={require("../../assets/images/icon.png")}
-              style={{ width: 24, height: 24, tintColor: "#fff" }}
-            />
+            <Ionicons name="clipboard-outline" size={24} color="#fff" />
             <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
               {props.children}
             </Text>
@@ -120,7 +117,11 @@ export default function RootTabs() {
     >
       <Tab.Screen name="ReportA" component={ReportAScreen} options={{ title: "Acompanham." }} />
       <Tab.Screen name="ReportB" component={ReportBScreen} options={{ title: "Resumo" }} />
-      <Tab.Screen name="Attendance" component={AttendanceScreen} options={{ title: "Presenças" }} />
+      <Tab.Screen
+        name="Attendance"
+        component={AttendanceScreen}
+        options={{ title: "Controle de Escala", tabBarLabel: "Presenças" }}
+      />
       <Tab.Screen name="Escala" component={EscalaDashboardScreen} options={{ title: "Escala" }} />
       <Tab.Screen name="InventExp" component={InventExpImportScreen} options={{ title: "Avaliação" }} />
       <Tab.Screen name="Management" component={ManagementScreen} options={{ title: "Gestão" }} />
