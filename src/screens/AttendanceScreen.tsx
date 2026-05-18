@@ -27,7 +27,6 @@ import {
   parseWhatsAppScale,
 } from "../utils/parsers";
 
-const HeaderIcon = require("../../assets/images/splash-icon.png");
 const STORAGE_KEY = "inventexpert:attendance";
 const HISTORY_KEY = "inventexpert:attendance:history";
 

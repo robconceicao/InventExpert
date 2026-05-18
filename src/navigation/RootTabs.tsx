@@ -15,6 +15,8 @@ import ManagementScreen from "../screens/ManagementScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 
+import AppLogo from "../components/AppLogo";
+
 // Metro automatically resolves ScannerScreen.web.tsx on web (stub)
 // and ScannerScreen.tsx on native
 import ScannerScreen from "../screens/ScannerScreen";
@@ -37,20 +39,18 @@ export default function RootTabs() {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!isSupabaseConfigured || !supabase) return;
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
+    supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
+      setSession(activeSession);
+    }).catch(() => null);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, activeSession) => {
+      setSession(activeSession);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
-      },
-    );
-
     return () => {
-      listener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -65,7 +65,7 @@ export default function RootTabs() {
         headerTintColor: "#fff",
         headerTitle: (props) => (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Ionicons name="clipboard-outline" size={24} color="#fff" />
+            <AppLogo size={24} color="#fff" />
             <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
               {props.children}
             </Text>

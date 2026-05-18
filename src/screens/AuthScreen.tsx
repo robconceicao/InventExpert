@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
+import AppLogo from "../components/AppLogo";
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -141,10 +142,7 @@ export default function AuthScreen() {
       <View style={styles.container}>
         <View style={styles.card}>
           <View style={styles.header}>
-            <Image
-              source={require("../../assets/images/icon.png")}
-              style={styles.logo}
-            />
+            <AppLogo size={64} color="#2563EB" trendColor="#1E40AF" />
             <Text style={styles.title}>InventExpert</Text>
             <Text style={styles.subtitle}>
               Gestão de Inventário para Líderes
