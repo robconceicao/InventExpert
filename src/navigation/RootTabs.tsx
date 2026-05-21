@@ -10,6 +10,8 @@ import AttendanceScreen from "../screens/AttendanceScreen";
 import InventExpImportScreen from "../screens/InventExpImportScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
+import ReportFarmacondeScreen from "../screens/ReportFarmacondeScreen";
+import AcompanhamentoScreen from "../screens/AcompanhamentoScreen";
 import AuthScreen from "../screens/AuthScreen";
 import ManagementScreen from "../screens/ManagementScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
@@ -29,6 +31,8 @@ export type RootTabParamList = {
   InventExp: undefined;
   Management: undefined;
   Scanner: undefined;
+  Acompanhamento: undefined;
+  ReportFarmaconde: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -101,21 +105,25 @@ export default function RootTabs() {
           paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 10) : insets.bottom,
         },
         tabBarIcon: ({ color, size }) => {
-          const iconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
-            ReportA: "clipboard",
-            ReportB: "document-text",
-            Attendance: "checkmark-circle-outline",
-            Escala: "calendar",
-            InventExp: "analytics",
-            Management: "briefcase",
-            Scanner: "scan",
-          };
+            const iconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
+              ReportA: "clipboard",
+              ReportB: "document-text",
+              Attendance: "checkmark-circle-outline",
+              Escala: "calendar",
+              InventExp: "analytics",
+              Management: "briefcase",
+              Scanner: "scan",
+              Acompanhamento: "list-outline",
+              ReportFarmaconde: "medkit",
+            };
           const iconName = iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="ReportA" component={ReportAScreen} options={{ title: "Acompanham." }} />
+      <Tab.Screen name="Acompanhamento" component={AcompanhamentoScreen} options={{ title: "Acompanhamento" }} />
+      <Tab.Screen name="ReportA" component={ReportAScreen} options={{ title: "Geral", tabBarButton: () => null }} />
+      <Tab.Screen name="ReportFarmaconde" component={ReportFarmacondeScreen} options={{ title: "FARMACONDE", tabBarButton: () => null }} />
       <Tab.Screen name="ReportB" component={ReportBScreen} options={{ title: "Resumo" }} />
       <Tab.Screen
         name="Attendance"

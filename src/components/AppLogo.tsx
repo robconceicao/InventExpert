@@ -1,6 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 interface AppLogoProps {
   size?: number;
@@ -13,14 +12,16 @@ export default function AppLogo({
   size = 28,
   color = "#ffffff",
   glowColor = "rgba(96, 165, 250, 0.3)",
-  trendColor = "#60A5FA",
 }: AppLogoProps) {
-  const iconSize = size * 0.75;
-  const subIconSize = size * 0.45;
+  // Use the white-lined logo when color requested is white (usually means dark/blue background)
+  const isWhite = color === "#fff" || color === "#ffffff" || color.toLowerCase() === "white";
+  
+  const source = isWhite
+    ? require("../../assets/images/logo-white.jpg")
+    : require("../../assets/images/logo-blue.jpg");
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      {/* Background soft glow to give a premium feel */}
       <View
         style={[
           styles.glow,
@@ -32,14 +33,9 @@ export default function AppLogo({
           },
         ]}
       />
-      {/* Primary inventory 3D cube icon */}
-      <Ionicons name="cube" size={iconSize} color={color} style={styles.icon} />
-      {/* Overlapping growth and optimization trend arrow */}
-      <Ionicons
-        name="trending-up"
-        size={subIconSize}
-        color={trendColor}
-        style={styles.subIcon}
+      <Image
+        source={source}
+        style={{ width: size, height: size, resizeMode: "contain" }}
       />
     </View>
   );
@@ -54,13 +50,5 @@ const styles = StyleSheet.create({
   glow: {
     position: "absolute",
     transform: [{ scale: 1.2 }],
-  },
-  icon: {
-    position: "absolute",
-  },
-  subIcon: {
-    position: "absolute",
-    bottom: -1,
-    right: -1,
   },
 });

@@ -152,12 +152,31 @@ export default function ReportBScreen() {
     return formatReportBOutros(ro);
   };
 
-  const handleSendWhatsApp = () => {
+  const handleSendWhatsApp = async () => {
     const msg = getPreview();
-    const url = Platform.OS==="web"
-      ? `https://wa.me/?text=${encodeURIComponent(msg)}`
-      : `whatsapp://send?text=${encodeURIComponent(msg)}`;
-    Linking.openURL(url).catch(()=>Alert.alert("Erro","Não foi possível abrir o WhatsApp"));
+    if (attachment) {
+      if (Platform.OS === "web") {
+        Alert.alert("Aviso", "O envio de arquivos no Web deve ser feito manualmente.");
+        return;
+      }
+      try {
+        await Share.shareSingle({
+          social: Share.Social.WHATSAPP,
+          message: msg,
+          url: attachment.uri,
+        });
+      } catch (err: any) {
+        if (err.message !== "User did not share") {
+          // Fallback to normal share if WhatsApp direct fails
+          Share.open({ message: msg, url: attachment.uri, subject: "Relatório de Inventário" }).catch(() => null);
+        }
+      }
+    } else {
+      const url = Platform.OS==="web"
+        ? `https://wa.me/?text=${encodeURIComponent(msg)}`
+        : `whatsapp://send?text=${encodeURIComponent(msg)}`;
+      Linking.openURL(url).catch(()=>Alert.alert("Erro","Não foi possível abrir o WhatsApp"));
+    }
   };
 
   const pickDocument = async () => {
