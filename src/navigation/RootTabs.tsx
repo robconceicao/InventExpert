@@ -15,6 +15,7 @@ import AcompanhamentoScreen from "../screens/AcompanhamentoScreen";
 import AuthScreen from "../screens/AuthScreen";
 import ManagementScreen from "../screens/ManagementScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
+import CheckersScreen from "../screens/CheckersScreen";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 
 import AppLogo from "../components/AppLogo";
@@ -33,6 +34,7 @@ export type RootTabParamList = {
   Scanner: undefined;
   Acompanhamento: undefined;
   ReportFarmaconde: undefined;
+  Checkers: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -115,6 +117,7 @@ export default function RootTabs() {
               Scanner: "scan",
               Acompanhamento: "list-outline",
               ReportFarmaconde: "medkit",
+              Checkers: "people-circle-outline",
             };
           const iconName = iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -131,6 +134,7 @@ export default function RootTabs() {
         options={{ title: "Controle de Escala", tabBarLabel: "Presenças" }}
       />
       <Tab.Screen name="Escala" component={EscalaDashboardScreen} options={{ title: "Escala" }} />
+      <Tab.Screen name="Checkers" component={CheckersScreen} options={{ title: "Conferentes" }} />
       <Tab.Screen name="InventExp" component={InventExpImportScreen} options={{ title: "Avaliação" }} />
       <Tab.Screen name="Management" component={ManagementScreen} options={{ title: "Gestão" }} />
       {showScanner ? (

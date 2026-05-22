@@ -1,6 +1,6 @@
 export const INVENTORY_PROFILES = {
   FARMACIA: {
-    weights: { quality: 0.55, productivity: 0.25, adherence: 0.2 },
+    weights: { quality: 0.55, productivity: 0.20, adherence: 0.15, volume: 0.10 },
     targets: {
       productivity: 800,
       maxBlockLimit: 20,
@@ -10,7 +10,7 @@ export const INVENTORY_PROFILES = {
     alerts: { criticalBlockLimit: 50 },
   },
   SUPERMERCADO: {
-    weights: { quality: 0.45, productivity: 0.4, adherence: 0.15 },
+    weights: { quality: 0.45, productivity: 0.35, adherence: 0.10, volume: 0.10 },
     targets: {
       productivity: 1200,
       maxBlockLimit: 50,
@@ -20,7 +20,7 @@ export const INVENTORY_PROFILES = {
     alerts: { criticalBlockLimit: 80 },
   },
   LOJA_GERAL: {
-    weights: { quality: 0.5, productivity: 0.3, adherence: 0.2 },
+    weights: { quality: 0.5, productivity: 0.25, adherence: 0.15, volume: 0.10 },
     targets: {
       productivity: 1000,
       maxBlockLimit: 35,

@@ -163,6 +163,14 @@ export interface AttendanceData {
 
 // ========== INVENTEXP - AVALIAÇÃO DE CONFERENTES ==========
 
+export type CheckerExperienceLevel = "novato" | "junior" | "pleno" | "senior" | "expert";
+
+export interface CheckerDBRecord {
+  nome: string;
+  inventarios_base: number;
+  data_registro: string;
+}
+
 export type InventoryOperationType = "FARMACIA" | "SUPERMERCADO" | "LOJA_GERAL";
 
 export interface InventoryCheckerInput {
@@ -171,6 +179,7 @@ export interface InventoryCheckerInput {
   qtde1a1: number;
   produtividade: number;
   erro: number;
+  experiencia?: CheckerExperienceLevel;
 }
 
 export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";
@@ -183,6 +192,11 @@ export interface InventoryCheckerEvaluation {
   scoreQualidade: number;
   scoreProdutividade: number;
   scoreAderencia: number;
+  minimoEsperado?: number;
+  icv?: number;
+  pontosVolume?: number;
+  bonusVolume?: number;
+  penalidadeVolume?: number;
   scoreFinal: number;
   nivel: InventoryScoreLevel;
   nivelColor: string;

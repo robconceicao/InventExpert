@@ -43,17 +43,17 @@ export function generateInventExpGerencialReportText(
   r += `| Score médio | ${resumo.scoreMedio} |\n`;
   r += `| Meta de produtividade | ${perfil.targets.productivity} itens/h |\n`;
   r += `| Limite de bloco | ${perfil.targets.maxBlockLimit}% |\n`;
-  r += `| Erro tolerância | ${perfil.targets.erroTolerancia}% |\n`;
-  r += `| Erro crítico | ${perfil.targets.erroCritico}% |\n`;
   r += `\n---\n\n`;
 
   r += `## 2. RANKING COMPLETO\n\n`;
-  r += `| # | Nome | Score | Nível | Prod (itens/h) | % Erro | % Bloco | Tags |\n`;
-  r += `|---|------|-------|------|----------------|--------|--------|------|\n`;
+  r += `| # | Nome | Nível Exp. | Score | Nível | Prod | % Erro | ICV | Tags |\n`;
+  r += `|---|------|------------|-------|------|------|--------|-----|------|\n`;
   evaluations.forEach((e, i) => {
-    r += `| ${i + 1} | ${e.input.nome} | ${e.scoreFinal} | ${e.nivel} | ${
+    const icvStr = e.icv !== undefined ? Math.round(e.icv) + '%' : '-';
+    const expStr = e.input.experiencia ? e.input.experiencia.toUpperCase() : '-';
+    r += `| ${i + 1} | ${e.input.nome} | ${expStr} | ${e.scoreFinal} | ${e.nivel} | ${
       e.input.produtividade
-    } | ${e.pctErro.toFixed(2)} | ${e.pctBloco.toFixed(1)} | ${
+    } | ${e.pctErro.toFixed(2)} | ${icvStr} | ${
       e.tags.join(" · ") || "-"
     } |\n`;
   });
@@ -61,12 +61,14 @@ export function generateInventExpGerencialReportText(
 
   r += `## 3. TOP 5 MELHORES\n\n`;
   top5.forEach((e, i) => {
+    const icvStr = e.icv !== undefined ? Math.round(e.icv) + '%' : '-';
+    const expStr = e.input.experiencia ? e.input.experiencia.toUpperCase() : '-';
     r += `**${i + 1}º - ${e.input.nome}** (Score: ${e.scoreFinal} - ${
       e.nivel
     })\n`;
-    r += `- Produtividade: ${e.input.produtividade} itens/h | % Erro: ${e.pctErro.toFixed(
+    r += `- Experiência: ${expStr} | Produtividade: ${e.input.produtividade} itens/h | % Erro: ${e.pctErro.toFixed(
       2,
-    )}% | % Bloco: ${e.pctBloco.toFixed(1)}%\n`;
+    )}% | ICV: ${icvStr}\n`;
     if (e.tags.length > 0) {
       r += `- Tags: ${e.tags.join(" · ")}\n`;
     }
@@ -145,7 +147,12 @@ export function generateInventExpIndividualReportText(
   r += `---\n\n`;
 
   r += `## 📊 OS SEUS NÚMEROS\n\n`;
+  r += `- Experiência reconhecida: **${(d.experiencia || 'Pleno').toUpperCase()}**\n`;
   r += `- Total de peças contadas: ${d.qtde}\n`;
+  if (ev.minimoEsperado && ev.minimoEsperado > 0) {
+    r += `- Meta de volume estimada para seu nível: ${ev.minimoEsperado} peças\n`;
+    r += `- **ICV (Índice de Cumprimento de Volume): ${Math.round(ev.icv || 0)}%**\n`;
+  }
   r += `- Ritmo médio: ${d.produtividade} itens/h (meta do perfil: ${perfil.targets.productivity} itens/h)\n`;
   r += `- % Erro: ${ev.pctErro.toFixed(2)}%\n`;
   r += `- % Bloco: ${ev.pctBloco.toFixed(1)}% (limite recomendado: ${perfil.targets.maxBlockLimit}%)\n\n`;
@@ -154,7 +161,13 @@ export function generateInventExpIndividualReportText(
   r += `## 🎯 COMO A SUA NOTA FOI CALCULADA\n\n`;
   r += `- Qualidade: ${Math.round(ev.scoreQualidade)} pts\n`;
   r += `- Produtividade: ${Math.round(ev.scoreProdutividade)} pts\n`;
-  r += `- Aderência ao método: ${Math.round(ev.scoreAderencia)} pts\n\n`;
+  r += `- Aderência ao método: ${Math.round(ev.scoreAderencia)} pts\n`;
+  if (ev.pontosVolume !== undefined) {
+    r += `- Volume (ICV): ${Math.round(ev.pontosVolume)} pts\n`;
+  }
+  if (ev.bonusVolume) r += `  + Bônus Volume: ${ev.bonusVolume} pts\n`;
+  if (ev.penalidadeVolume) r += `  - Penalidade Volume: ${ev.penalidadeVolume} pts\n`;
+  r += `\n`;
 
   if (ev.pctErro > perfil.targets.erroCritico) {
     r += `• A sua taxa de erro ficou acima do limite crítico do perfil, reduzindo parte da nota de produtividade.\n`;

@@ -46,6 +46,13 @@ export function CheckerFeedbackReport({
       "Foi identificado risco de contagem superficial (erro alto com muito bloco).",
     );
   }
+  if (evaluation.minimoEsperado && evaluation.minimoEsperado > 0) {
+    if (evaluation.bonusVolume) {
+      mensagens.push(`Excelente volume! Você superou sua meta de peças contadas e ganhou ${evaluation.bonusVolume} pontos de bônus.`);
+    } else if (evaluation.penalidadeVolume) {
+      mensagens.push(`Seu volume de contagem ficou abaixo do esperado para o seu nível de experiência, resultando em uma penalidade de ${evaluation.penalidadeVolume} pontos.`);
+    }
+  }
   if (mensagens.length === 0) {
     mensagens.push(
       "A sua nota foi calculada equilibrando qualidade, produtividade e aderência ao método.",
@@ -92,9 +99,9 @@ export function CheckerFeedbackReport({
             <Text style={styles.metricValue}>{pctErro.toFixed(2)}%</Text>
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>1 a 1 vs Bloco</Text>
+            <Text style={styles.metricLabel}>ICV (Volume)</Text>
             <Text style={styles.metricValue}>
-              {pct1a1.toFixed(1)}% 1a1 / {pctBloco.toFixed(1)}% Bloco
+              {evaluation.icv !== undefined ? Math.round(evaluation.icv) + "%" : "-"}
             </Text>
           </View>
         </View>

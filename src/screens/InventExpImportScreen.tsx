@@ -21,6 +21,7 @@ import {
     evaluateChecker,
     sortRanking,
 } from "../services/InventoryEvaluationService";
+import { getCheckerCurrentLevel } from "../services/CheckerDBService";
 import type {
     InventoryCheckerEvaluation,
     InventoryOperationType,
@@ -43,6 +44,8 @@ export default function InventExpImportScreen() {
   const [operationType, setOperationType] =
     useState<InventoryOperationType>("FARMACIA");
   const [rawText, setRawText] = useState("");
+  const [totalPecas, setTotalPecas] = useState("");
+  const [duracaoReal, setDuracaoReal] = useState("");
   const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>(
     [],
   );
@@ -75,7 +78,7 @@ export default function InventExpImportScreen() {
     }
   };
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     const parsed = parseInventoryCheckersCsv(rawText);
     if (parsed.length === 0) {
       Alert.alert(
@@ -84,8 +87,19 @@ export default function InventExpImportScreen() {
       );
       return;
     }
-    const evaluated = parsed.map((item) =>
-      evaluateChecker(item, operationType),
+    const pecas = parseInt(totalPecas.replace(/\D/g, "")) || 0;
+    const duracao = parseFloat(duracaoReal.replace(",", ".")) || 5;
+    const totalConferentes = parsed.length;
+
+    const parsedWithExp = await Promise.all(
+      parsed.map(async (item) => {
+        const exp = await getCheckerCurrentLevel(item.nome);
+        return { ...item, experiencia: exp };
+      })
+    );
+
+    const evaluated = parsedWithExp.map((item) =>
+      evaluateChecker(item, operationType, pecas, duracao, totalConferentes),
     );
     setEvaluations(sortRanking(evaluated));
   };
@@ -255,6 +269,16 @@ export default function InventExpImportScreen() {
             Erro (qtde).
           </Text>
           <View style={styles.importRow}>
+            <View style={{flex: 1}}>
+              <Text style={styles.label}>Total de Peças</Text>
+              <TextInput value={totalPecas} onChangeText={setTotalPecas} placeholder="Ex: 15000" keyboardType="numeric" style={styles.input} />
+            </View>
+            <View style={{flex: 1, marginLeft: 12}}>
+              <Text style={styles.label}>Duração (horas)</Text>
+              <TextInput value={duracaoReal} onChangeText={setDuracaoReal} placeholder="Ex: 5.5" keyboardType="numeric" style={styles.input} />
+            </View>
+          </View>
+          <View style={styles.importRow}>
             <Pressable onPress={handlePickFile} style={styles.btnAttach}>
               <Ionicons name="attach" size={20} color="#2563EB" />
               <Text style={styles.btnAttachText}>Anexar CSV/Excel</Text>
@@ -269,7 +293,7 @@ export default function InventExpImportScreen() {
             style={styles.textArea}
             textAlignVertical="top"
           />
-          <Pressable onPress={handleProcess} style={styles.btnPrimary}>
+          <Pressable onPress={() => void handleProcess()} style={styles.btnPrimary}>
             <Ionicons name="calculator-outline" size={20} color="#fff" />
             <Text style={styles.btnTextWhite}>Processar Avaliação</Text>
           </Pressable>
@@ -541,6 +565,22 @@ const styles = StyleSheet.create({
     fontFamily: "System",
     color: "#0f172a",
     backgroundColor: "#F8FAFC",
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: "#0f172a",
+    backgroundColor: "#fff",
   },
   btnPrimary: {
     marginTop: 8,

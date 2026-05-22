@@ -1,13 +1,57 @@
 import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
 import type {
+  CheckerExperienceLevel,
   InventoryCheckerEvaluation,
   InventoryCheckerInput,
   InventoryOperationType,
 } from "../types";
 
+function getExperienciaFator(nivel: CheckerExperienceLevel): number {
+  switch (nivel) {
+    case "novato":
+      return 0.70;
+    case "junior":
+      return 0.85;
+    case "pleno":
+      return 1.00;
+    case "senior":
+      return 1.15;
+    case "expert":
+      return 1.30;
+    default:
+      return 1.00;
+  }
+}
+
+function calcularPontosVolume(icv: number, nivelExperiencia: CheckerExperienceLevel): number {
+  let pontos = Math.min(icv, 150);
+  
+  const ajustes = {
+    novato: { bonus: 20, penalidade: 0.5 },
+    junior: { bonus: 10, penalidade: 0.7 },
+    pleno: { bonus: 0, penalidade: 1.0 },
+    senior: { bonus: -10, penalidade: 1.3 },
+    expert: { bonus: -15, penalidade: 1.5 },
+  };
+  
+  const ajuste = ajustes[nivelExperiencia] || ajustes.pleno;
+  
+  if (icv >= 100) {
+    pontos = Math.min(pontos + ajuste.bonus, 100);
+  } else {
+    const deficit = 100 - icv;
+    pontos = icv - (deficit * ajuste.penalidade);
+  }
+  
+  return Math.max(0, Math.min(100, pontos));
+}
+
 export function evaluateChecker(
   data: InventoryCheckerInput,
   operationType: InventoryOperationType,
+  totalPecasLoja: number = 0,
+  duracaoRealInventario: number = 5,
+  numeroConferentes: number = 1
 ): InventoryCheckerEvaluation {
   const profile = INVENTORY_PROFILES[operationType];
   const { weights, targets, alerts } = profile;
@@ -36,10 +80,57 @@ export function evaluateChecker(
     scoreProdutividade *= 0.5;
   }
 
+  // CÁLCULO DE VOLUME (ICV)
+  const nivelExp = data.experiencia || "pleno";
+  const fatorExp = getExperienciaFator(nivelExp);
+  const fatorTempo = duracaoRealInventario > 0 ? 5 / duracaoRealInventario : 1;
+  
+  let minimoIndividual = 0;
+  let icv = 0;
+  let pontosVolume = 100;
+  let bonusVolume = 0;
+  let penalidadeVolume = 0;
+
+  if (totalPecasLoja > 0 && numeroConferentes > 0) {
+    const minimoBase = (totalPecasLoja / numeroConferentes) * fatorTempo;
+    minimoIndividual = Math.round(minimoBase * fatorExp);
+    
+    icv = minimoIndividual > 0 ? (qtde / minimoIndividual) * 100 : 100;
+    pontosVolume = calcularPontosVolume(icv, nivelExp);
+
+    // Bônus Volume
+    if (icv >= 100 && pctErro <= 3.0 && pctBloco <= 20) {
+      if (icv >= 150) bonusVolume = 10;
+      else if (icv >= 135) bonusVolume = 7;
+      else if (icv >= 120) bonusVolume = 5;
+      else if (icv >= 110) bonusVolume = 3;
+      else if (icv >= 100) bonusVolume = 1;
+    }
+
+    // Penalidade Volume
+    if (icv < 100) {
+      const deficit = 100 - icv;
+      if (deficit >= 30) penalidadeVolume = 15;
+      else if (deficit >= 20) penalidadeVolume = 10;
+      else if (deficit >= 10) penalidadeVolume = 5;
+      else penalidadeVolume = 2;
+
+      if (nivelExp === "expert" || nivelExp === "senior") {
+        penalidadeVolume = Math.round(penalidadeVolume * 1.5);
+      }
+      penalidadeVolume = Math.min(penalidadeVolume, 20);
+    }
+  }
+
+  // PESOS DA AVALIAÇÃO (agora com volume)
   let scoreFinal =
     weights.quality * scoreQualidade +
     weights.productivity * scoreProdutividade +
-    weights.adherence * scoreAderencia;
+    weights.adherence * scoreAderencia +
+    ((weights as any).volume || 0.1) * pontosVolume;
+
+  scoreFinal += bonusVolume;
+  scoreFinal -= penalidadeVolume;
 
   const tags: string[] = [];
 
@@ -56,6 +147,20 @@ export function evaluateChecker(
   if (pctErro > 1.5 && pctBloco > alerts.criticalBlockLimit) {
     scoreFinal -= 20;
     tags.push("🚨 Risco de Contagem Superficial");
+  }
+
+  // PROTEÇÃO ANTI-GAMIFICAÇÃO E SUBTERFÚGIOS
+  if (totalPecasLoja > 0) {
+    if (pctBloco > 20 && icv > 150) {
+      tags.push("🚨 Volume Suspeito: Muito Bloco");
+    }
+    if (icv > 200 && pctErro < 0.5) {
+      tags.push("🚨 Volume Irreal (Investigar Fraude)");
+    }
+    const prodMax = targets.productivity * 3;
+    if (produtividade > prodMax) {
+      tags.push("🚨 Produtividade Impossível");
+    }
   }
 
   const scoreFinalClamped = Math.round(
@@ -85,6 +190,7 @@ export function evaluateChecker(
       qtde1a1,
       produtividade,
       erro,
+      experiencia: nivelExp,
     },
     operationType,
     pctErro,
@@ -92,6 +198,11 @@ export function evaluateChecker(
     scoreQualidade,
     scoreProdutividade,
     scoreAderencia,
+    minimoEsperado: minimoIndividual,
+    icv,
+    pontosVolume,
+    bonusVolume,
+    penalidadeVolume,
     scoreFinal: scoreFinalClamped,
     nivel,
     nivelColor,
@@ -115,4 +226,3 @@ export function sortRanking(
     return a.input.nome.localeCompare(b.input.nome);
   });
 }
-
