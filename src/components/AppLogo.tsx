@@ -26,7 +26,7 @@ export default function AppLogo({
         ]}
       />
       <Image
-        source={require("../../assets/images/icon.png")}
+        source={require("../../assets/images/app-logo.png")}
         style={{ width: size, height: size, resizeMode: "contain" }}
       />
     </View>
