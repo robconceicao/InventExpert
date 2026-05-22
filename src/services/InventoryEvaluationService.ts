@@ -163,6 +163,28 @@ export function evaluateChecker(
     }
   }
 
+  // ANÁLISE COMPORTAMENTAL (Omissão vs Excesso)
+  const itensPulados = data.itensPulados || 0;
+  const itensDuplicados = data.itensDuplicados || 0;
+  
+  if (itensPulados > 0) {
+    // Penalidade por pular itens (grave pois causa quebra de estoque)
+    const penalidadeOmissao = Math.min(itensPulados * 0.5, 30);
+    scoreFinal -= penalidadeOmissao;
+    if (itensPulados > 15) {
+      tags.push("🚨 O 'Conferente que Pula' (Omissões altas)");
+    }
+  }
+
+  if (itensDuplicados > 0) {
+    // Penalidade por inventar/duplicar itens
+    const penalidadeExcesso = Math.min(itensDuplicados * 0.2, 20);
+    scoreFinal -= penalidadeExcesso;
+    if (itensDuplicados > 20) {
+      tags.push("🔄 Fantasmas (Excesso de repetições)");
+    }
+  }
+
   const scoreFinalClamped = Math.round(
     Math.max(0, Math.min(100, scoreFinal)),
   );
@@ -191,6 +213,8 @@ export function evaluateChecker(
       produtividade,
       erro,
       experiencia: nivelExp,
+      itensPulados,
+      itensDuplicados,
     },
     operationType,
     pctErro,

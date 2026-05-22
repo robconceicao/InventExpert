@@ -146,7 +146,7 @@ export function generateInventExpIndividualReportText(
   r += `Posição no ranking: ${rank}º de ${totalConferentes}\n\n`;
   r += `---\n\n`;
 
-  r += `## 📊 OS SEUS NÚMEROS\n\n`;
+  r += `## 📊 OS SEUS NÚMEROS GERAIS\n\n`;
   r += `- Experiência reconhecida: **${(d.experiencia || 'Pleno').toUpperCase()}**\n`;
   r += `- Total de peças contadas: ${d.qtde}\n`;
   if (ev.minimoEsperado && ev.minimoEsperado > 0) {
@@ -156,6 +156,19 @@ export function generateInventExpIndividualReportText(
   r += `- Ritmo médio: ${d.produtividade} itens/h (meta do perfil: ${perfil.targets.productivity} itens/h)\n`;
   r += `- % Erro: ${ev.pctErro.toFixed(2)}%\n`;
   r += `- % Bloco: ${ev.pctBloco.toFixed(1)}% (limite recomendado: ${perfil.targets.maxBlockLimit}%)\n\n`;
+  r += `---\n\n`;
+
+  r += `## 🔍 RAIO-X DA SUA QUALIDADE OPERACIONAL\n`;
+  r += `Para te ajudar a entender seus pontos fortes e onde precisamos redobrar a atenção, mapeamos o comportamento das suas seções:\n\n`;
+  
+  r += `- **Erros de Execução (Quantidade direta)**: ${d.erro} erros.\n`;
+  r += `  _(Produto bipado, mas a quantidade digitada na tela foi maior/menor que o real)_\n\n`;
+  
+  r += `- **Itens Esquecidos na Gôndola (Omissão)**: ${d.itensPulados || 0} produtos.\n`;
+  r += `  _(Prateleira pulada ou produto sem bip. Afeta diretamente a quebra física da loja!)_\n\n`;
+
+  r += `- **Contagens Duplicadas (Excesso)**: ${d.itensDuplicados || 0} produtos.\n`;
+  r += `  _(Produto bipado por engano ou gancho repetido que já havia sido contado)_\n\n`;
   r += `---\n\n`;
 
   r += `## 🎯 COMO A SUA NOTA FOI CALCULADA\n\n`;
@@ -200,15 +213,22 @@ export function generateInventExpIndividualReportText(
     r += `\n---\n\n`;
   }
 
-  r += `## 📌 PRÓXIMOS PASSOS RECOMENDADOS\n\n`;
-  if (ev.nivel === "EXCELENTE" || ev.nivel === "BOM") {
-    r += `- Manter o padrão atual de qualidade e ritmo.\n`;
-    r += `- Compartilhar boas práticas com o time.\n`;
+  r += `## 📌 DIRECIONAMENTO PARA O PRÓXIMO INVENTÁRIO\n\n`;
+  
+  const pulados = d.itensPulados || 0;
+  const duplicados = d.itensDuplicados || 0;
+
+  if (pulados > 15) {
+    r += `💡 **Foco em Varredura:** No próximo inventário, sua atenção deve ser voltada para a varredura visual completa da prateleira (da esquerda para a direita, de cima para baixo), garantindo que nenhum produto ou gancho fique para trás sem o bip.\n\n`;
+  } else if (duplicados > 20) {
+    r += `💡 **Foco em Demarcação:** Certifique-se de marcar visualmente ou usar as etiquetas de marcação nas seções para nunca recontar uma área que você ou seu colega já finalizaram.\n\n`;
+  } else if (ev.nivel === "EXCELENTE" || ev.nivel === "BOM") {
+    r += `✅ **Manter o Padrão:** Continue mantendo o equilíbrio atual entre velocidade e qualidade. Seus números de atenção visual estão muito bons!\n\n`;
   } else {
-    r += `- Rever junto ao líder os principais tipos de erro ocorridos.\n`;
-    r += `- Ajustar o equilíbrio entre velocidade e qualidade, priorizando reduzir o % de erro.\n`;
-    r += `- Reduzir o uso de contagem em bloco quando não for estritamente necessário.\n`;
+    r += `⚠️ **Ajuste de Qualidade:** Priorize reduzir o % de erro bruto digitado. Revise junto à liderança os principais tipos de erros ocorridos hoje e reduza o uso de contagem em bloco quando não for estritamente necessário.\n\n`;
   }
+
+  r += `Contamos com sua atenção e evolução no próximo processo!\n`;
   r += `\n---\n\n`;
 
   r += `*Relatório gerado pela Avaliação - Módulo Avaliação (Qualidade · Produtividade · Aderência)*\n`;

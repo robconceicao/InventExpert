@@ -32,18 +32,19 @@ import {
     generateInventExpGerencialReportText,
     generateInventExpIndividualReportText,
 } from "../utils/inventExpReports";
-import { parseInventoryCheckersCsv } from "../utils/parsers";
-
+import { parseInventoryCheckersCsv, parseTagsCsv } from "../utils/parsers";
 
 const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
-AMANDA DE OLIVEIRA P...;395,33;752;0;18;1,9;13;1,73%
-ANA CLAUDIA SILVA;802,26;5549;4487;374;6,9;13;0,23%
-CAMILA FERREIRA;1046,31;5573;1190;451;5,3;0;0,00%`;
+AMANDA DE OLIVEIRA P...;395,33;752;0;18;1,9;13;1,73%`;
 
-export default function InventExpImportScreen() {
+const EXAMPLE_TAGS_CSV = `Nome;Qtd(A1)
+AMANDA DE OLIVEIRA P...;15
+CAMILA FERREIRA;-5`;
+
   const [operationType, setOperationType] =
     useState<InventoryOperationType>("FARMACIA");
   const [rawText, setRawText] = useState("");
+  const [tagsText, setTagsText] = useState("");
   const [totalPecas, setTotalPecas] = useState("");
   const [duracaoReal, setDuracaoReal] = useState("");
   const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>(
@@ -51,7 +52,7 @@ export default function InventExpImportScreen() {
   );
 
 
-  const handlePickFile = async () => {
+  const handlePickFile = async (type: 'prod' | 'tags') => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -68,22 +69,25 @@ export default function InventExpImportScreen() {
         file.uri,
         file.mimeType ?? undefined,
       );
-      setRawText(text);
+      if (type === 'prod') setRawText(text);
+      else setTagsText(text);
       Alert.alert(
         "Arquivo carregado",
-        `${file.name} importado. Clique em Processar Avaliação.`,
+        `${file.name} importado para ${type === 'prod' ? 'Produtividade' : 'Tags'}.`,
       );
     } catch (e) {
-      Alert.alert("Erro", "Não foi possível ler o arquivo. Tente CSV.");
+      Alert.alert("Erro", "Não foi possível ler o arquivo.");
     }
   };
 
   const handleProcess = async () => {
     const parsed = parseInventoryCheckersCsv(rawText);
+    const parsedTags = parseTagsCsv(tagsText);
+
     if (parsed.length === 0) {
       Alert.alert(
         "Dados inválidos",
-        "Cole a tabela ou anexe CSV/Excel.\nColunas obrigatórias: Nome, Qtde, Qtde1a1, Produtividade, Erro.",
+        "Cole a tabela ou anexe CSV/Excel de Produtividade.",
       );
       return;
     }
@@ -94,7 +98,13 @@ export default function InventExpImportScreen() {
     const parsedWithExp = await Promise.all(
       parsed.map(async (item) => {
         const exp = await getCheckerCurrentLevel(item.nome);
-        return { ...item, experiencia: exp };
+        const tagsData = parsedTags[item.nome.toLowerCase().trim()] || { itensPulados: 0, itensDuplicados: 0 };
+        return { 
+          ...item, 
+          experiencia: exp,
+          itensPulados: tagsData.itensPulados,
+          itensDuplicados: tagsData.itensDuplicados
+        };
       })
     );
 
@@ -279,11 +289,16 @@ export default function InventExpImportScreen() {
             </View>
           </View>
           <View style={styles.importRow}>
-            <Pressable onPress={handlePickFile} style={styles.btnAttach}>
+            <Pressable onPress={() => handlePickFile('prod')} style={styles.btnAttach}>
               <Ionicons name="attach" size={20} color="#2563EB" />
-              <Text style={styles.btnAttachText}>Anexar CSV/Excel</Text>
+              <Text style={styles.btnAttachText}>Anexar Produtividade</Text>
+            </Pressable>
+            <Pressable onPress={() => handlePickFile('tags')} style={[styles.btnAttach, { marginLeft: 10 }]}>
+              <Ionicons name="attach" size={20} color="#059669" />
+              <Text style={[styles.btnAttachText, { color: "#059669" }]}>Anexar Tags (Omissão/Excesso)</Text>
             </Pressable>
           </View>
+          <Text style={styles.label}>1. Produtividade (Geral)</Text>
           <TextInput
             value={rawText}
             onChangeText={setRawText}
@@ -291,6 +306,16 @@ export default function InventExpImportScreen() {
             placeholderTextColor="#94A3B8"
             multiline
             style={styles.textArea}
+            textAlignVertical="top"
+          />
+          <Text style={[styles.label, { marginTop: 12 }]}>2. Produtividade Tags (Qtd A1)</Text>
+          <TextInput
+            value={tagsText}
+            onChangeText={setTagsText}
+            placeholder={EXAMPLE_TAGS_CSV}
+            placeholderTextColor="#94A3B8"
+            multiline
+            style={[styles.textArea, { minHeight: 80 }]}
             textAlignVertical="top"
           />
           <Pressable onPress={() => void handleProcess()} style={styles.btnPrimary}>

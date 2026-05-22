@@ -180,6 +180,8 @@ export interface InventoryCheckerInput {
   produtividade: number;
   erro: number;
   experiencia?: CheckerExperienceLevel;
+  itensPulados?: number;
+  itensDuplicados?: number;
 }
 
 export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";

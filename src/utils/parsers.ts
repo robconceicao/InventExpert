@@ -519,3 +519,101 @@ export const parseInventoryCheckersCsv = (
 
   return result;
 };
+
+// ==========================
+// PARSER INVENTEXP - TAGS (CSV/Excel)
+// ==========================
+export const parseTagsCsv = (
+  text: string,
+): Record<string, { itensPulados: number; itensDuplicados: number }> => {
+  const result: Record<string, { itensPulados: number; itensDuplicados: number }> = {};
+  
+  const lines = text
+    .split(/[\r\n]+/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+    
+  if (lines.length < 2) return result;
+
+  const detectSeparator = (line: string): RegExp => {
+    const semicolons = (line.match(/;/g) ?? []).length;
+    const tabs       = (line.match(/\t/g) ?? []).length;
+    const commas     = (line.match(/,/g) ?? []).length;
+    if (semicolons >= tabs && semicolons >= commas) return /;/;
+    if (tabs >= commas) return /\t/;
+    return /,/;
+  };
+
+  const parseRow = (row: string, sep: RegExp): string[] => {
+    if (!row.includes('"')) {
+      return row.split(sep).map((c) => c.trim());
+    }
+    const res: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < row.length; i++) {
+      const c = row[i];
+      if (c === '"') { inQuotes = !inQuotes; continue; }
+      if (sep.test(c) && !inQuotes) {
+        res.push(current.trim());
+        current = "";
+      } else {
+        current += c;
+      }
+    }
+    res.push(current.trim());
+    return res;
+  };
+
+  const normalizeHeader = (h: string): string =>
+    h.replace(/^"|"$/g, "").trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  let headerRowIndex = -1;
+  let sep = /,/;
+  let col = { nome: -1, qtdA1: -1 };
+
+  for (let r = 0; r < Math.min(lines.length, 30); r++) {
+    sep = detectSeparator(lines[r]);
+    const header = parseRow(lines[r], sep).map(normalizeHeader);
+
+    const cNome = header.findIndex((h) => /nome|conferente|colaborador/i.test(h));
+    const cQtdA1 = header.findIndex((h) => /qtd.*a1/i.test(h));
+
+    if (cNome >= 0 && cQtdA1 >= 0) {
+      col = { nome: cNome, qtdA1: cQtdA1 };
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  if (headerRowIndex < 0) return result;
+
+  for (let i = headerRowIndex + 1; i < lines.length; i++) {
+    const cells = parseRow(lines[i], sep).map((c) =>
+      (c ?? "").replace(/^"|"$/g, "").trim(),
+    );
+
+    const nomeRaw = (cells[col.nome] ?? "").trim();
+    if (!nomeRaw || /^(nome|total|soma|media|resumo)/i.test(nomeRaw)) continue;
+    
+    // Simplificar o nome para facilitar o matching
+    const nomeKey = nomeRaw.toLowerCase().trim();
+    
+    const qtdStr = cells[col.qtdA1] ?? "0";
+    const qtdA1 = parseNum(qtdStr); // parseNum suporta virgula decimal e negativo
+
+    if (!result[nomeKey]) {
+      result[nomeKey] = { itensPulados: 0, itensDuplicados: 0 };
+    }
+
+    if (qtdA1 > 0) {
+      result[nomeKey].itensPulados += qtdA1;
+    } else if (qtdA1 < 0) {
+      result[nomeKey].itensDuplicados += Math.abs(qtdA1);
+    }
+  }
+
+  return result;
+};
+
