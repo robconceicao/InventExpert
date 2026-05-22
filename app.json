@@ -4,7 +4,7 @@
     "slug": "InventExpert",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.jpg",
+    "icon": "./assets/images/icon.png",
     "scheme": "inventexpert",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -21,9 +21,9 @@
       "package": "com.inventexpert.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/icon.jpg",
-        "backgroundImage": "./assets/images/icon.jpg",
-        "monochromeImage": "./assets/images/icon.jpg"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -34,13 +34,13 @@
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/icon.jpg"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon.jpg",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
