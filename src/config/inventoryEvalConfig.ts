@@ -8,6 +8,13 @@ export const INVENTORY_PROFILES = {
       erroCritico: 0.8,
     },
     alerts: { criticalBlockLimit: 50 },
+    /**
+     * Fator de decaimento da curva de qualidade (k).
+     * Fórmula: scoreQualidade = 100 * e^(-k * pctErro)
+     * Farmácia: alta sensibilidade a erros (medicamentos = risco de saúde)
+     * k=1.5 → 1% erro ≈ 78 pts | 2% erro ≈ 50 pts | 5% erro ≈ 5 pts
+     */
+    qualityDecayRate: 1.5,
   },
   SUPERMERCADO: {
     weights: { quality: 0.45, productivity: 0.35, adherence: 0.10, volume: 0.10 },
@@ -18,6 +25,11 @@ export const INVENTORY_PROFILES = {
       erroCritico: 2.0,
     },
     alerts: { criticalBlockLimit: 80 },
+    /**
+     * Supermercado: tolerância maior (produtos embalados, menor risco unitário)
+     * k=0.8 → 1% erro ≈ 92 pts | 2% erro ≈ 85 pts | 5% erro ≈ 67 pts
+     */
+    qualityDecayRate: 0.8,
   },
   LOJA_GERAL: {
     weights: { quality: 0.5, productivity: 0.25, adherence: 0.15, volume: 0.10 },
@@ -28,6 +40,11 @@ export const INVENTORY_PROFILES = {
       erroCritico: 1.5,
     },
     alerts: { criticalBlockLimit: 65 },
+    /**
+     * Loja geral: sensibilidade intermediária
+     * k=1.1 → 1% erro ≈ 89 pts | 2% erro ≈ 80 pts | 5% erro ≈ 58 pts
+     */
+    qualityDecayRate: 1.1,
   },
 } as const;
 

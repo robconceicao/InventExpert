@@ -344,7 +344,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.qtdColaboradores)}
-                  onChangeText={(t) => setField("qtdColaboradores", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("qtdColaboradores", t)}
                   keyboardType="numeric"
                 />
               </View>

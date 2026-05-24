@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { formatTimeInput, formatTimeNow } from '@/src/utils/parsers';
 
@@ -21,26 +21,61 @@ export default function TimeInput({ label, value, onChange, required }: TimeInpu
   };
 
   return (
-    <View className="mb-3">
-      <Text className="text-sm font-semibold text-slate-700">
+    <View style={styles.container}>
+      <Text style={styles.labelText}>
         {label}
         {required ? ' *' : ''}
       </Text>
-      <View className="mt-2 flex-row items-center gap-2">
+      <View style={styles.inputRow}>
         <TextInput
           value={value}
           onChangeText={handleChange}
           placeholder="HH:mm"
           keyboardType="numeric"
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-          style={{ maxWidth: 120, minWidth: 110 }}
+          style={styles.textInput}
         />
         <Pressable
           onPress={handleNow}
-          className="h-10 w-10 items-center justify-center rounded-lg bg-blue-600">
+          style={styles.buttonNow}>
           <Ionicons name="time" size={18} color="#fff" />
         </Pressable>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 12,
+  },
+  labelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  inputRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#0f172a',
+    maxWidth: 120,
+    minWidth: 110,
+  },
+  buttonNow: {
+    height: 40,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+  },
+});

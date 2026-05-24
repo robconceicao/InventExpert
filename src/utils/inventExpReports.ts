@@ -2,7 +2,9 @@ import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
 import type {
     InventoryCheckerEvaluation,
     InventoryOperationType,
+    SectionAccuracyRecord,
 } from "../types";
+
 
 export function generateInventExpGerencialReportText(
   operationType: InventoryOperationType,
@@ -15,6 +17,7 @@ export function generateInventExpGerencialReportText(
     scoreMedio: number;
   },
   dataInventario?: string,
+  sectionAccuracy?: SectionAccuracyRecord[],
 ): string {
   const data = dataInventario ?? new Date().toLocaleDateString("pt-BR");
   const perfil = INVENTORY_PROFILES[operationType];
@@ -43,7 +46,24 @@ export function generateInventExpGerencialReportText(
   r += `| Score médio | ${resumo.scoreMedio} |\n`;
   r += `| Meta de produtividade | ${perfil.targets.productivity} itens/h |\n`;
   r += `| Limite de bloco | ${perfil.targets.maxBlockLimit}% |\n`;
+  r += `\n`;
+
+  // Distribuição de níveis de performance
+  const distNiveis = {
+    EXCELENTE: evaluations.filter(e => e.nivel === "EXCELENTE").length,
+    BOM:       evaluations.filter(e => e.nivel === "BOM").length,
+    ATENCAO:   evaluations.filter(e => e.nivel === "ATENCAO").length,
+    CRITICO:   evaluations.filter(e => e.nivel === "CRITICO").length,
+  };
+  r += `### Distribuição de Performance\n`;
+  r += `| Nível | Conferentes | % do time |\n`;
+  r += `|-------|-------------|-----------|\n`;
+  r += `| ✅ EXCELENTE | ${distNiveis.EXCELENTE} | ${Math.round(distNiveis.EXCELENTE/resumo.totalConferentes*100)}% |\n`;
+  r += `| 🔵 BOM | ${distNiveis.BOM} | ${Math.round(distNiveis.BOM/resumo.totalConferentes*100)}% |\n`;
+  r += `| 🟠 ATENÇÃO | ${distNiveis.ATENCAO} | ${Math.round(distNiveis.ATENCAO/resumo.totalConferentes*100)}% |\n`;
+  r += `| 🔴 CRÍTICO | ${distNiveis.CRITICO} | ${Math.round(distNiveis.CRITICO/resumo.totalConferentes*100)}% |\n`;
   r += `\n---\n\n`;
+
 
   r += `## 2. RANKING COMPLETO\n\n`;
   r += `| # | Nome | Nível Exp. | Score | Nível | Prod | % Erro | ICV | Tags |\n`;
@@ -121,6 +141,42 @@ export function generateInventExpGerencialReportText(
   r += `*Relatório gerado pela Avaliação - Módulo Avaliação (score Qualidade/Produtividade/Aderência)*\n`;
   r += `Data: ${new Date().toLocaleDateString("pt-BR")}\n`;
 
+  // MAPA DE ACURÁCIA DE SEÇÕES (opcional — só quando dados estendidos estão disponíveis)
+  if (sectionAccuracy && sectionAccuracy.length > 0) {
+    r += `\n---\n\n`;
+    r += `## 7. MAPA DE ACURÁCIA DE SEÇÕES FÍSICAS\n\n`;
+    r += `> **Como interpretar:** Acurácia = 1 - (Σ|Ajuste| / Σ Contado). \n`;
+    r += `> 🚨 Crítico (<97.5%) | ⚠️ Atenção (97.5-99%) | ✅ OK (≥99%) | ⭐ Perfeito (100%)\n\n`;
+    r += `| Seção | Contado | Ajuste Absoluto | Saldo Líquido | Acurácia | Status |\n`;
+    r += `|-------|---------|-----------------|---------------|----------|--------|\n`;
+    for (const s of sectionAccuracy) {
+      const acc = s.acuracidade.toFixed(2);
+      const status =
+        s.acuracidade === 100 ? "⭐ Perfeito" :
+        s.acuracidade >= 99   ? "✅ OK" :
+        s.acuracidade >= 97.5 ? "⚠️ Atenção" :
+                                "🚨 Crítico";
+      const saldo = s.ajusteLiquido >= 0 ? `+${s.ajusteLiquido.toFixed(0)}` : s.ajusteLiquido.toFixed(0);
+      r += `| ${s.area} | ${s.totalC1.toFixed(0)} | ${s.ajusteAbsoluto.toFixed(0)} | ${saldo} | ${acc}% | ${status} |\n`;
+    }
+    r += `\n`;
+    const criticas = sectionAccuracy.filter(s => s.acuracidade < 97.5);
+    if (criticas.length > 0) {
+      r += `### 🚨 Seções Críticas — Ação Imediata Recomendada\n\n`;
+      criticas.forEach(s => {
+        r += `**${s.area}** — Acurácia: ${s.acuracidade.toFixed(2)}% | Colaboradores: ${s.colaboradores.join(", ")}\n`;
+        if (s.ajusteLiquido === 0 && s.ajusteAbsoluto > 20) {
+          r += `  ⚠️ Saldo zero com ajuste alto = produtos trocados/mal etiquetados na gôndola.\n`;
+        } else if (s.ajusteLiquido < 0) {
+          r += `  📦 Saldo negativo = provável sobre-contagem ou reposição após contagem.\n`;
+        } else {
+          r += `  📋 Saldo positivo = provável sub-contagem ou produto sem bip.\n`;
+        }
+        r += `\n`;
+      });
+    }
+  }
+
   return r;
 }
 
@@ -169,7 +225,24 @@ export function generateInventExpIndividualReportText(
 
   r += `- **Contagens Duplicadas (Excesso)**: ${d.itensDuplicados || 0} produtos.\n`;
   r += `  _(Produto bipado por engano ou gancho repetido que já havia sido contado)_\n\n`;
+
+  if (d.erroSecao !== undefined) {
+    r += `- **Erro de Seção (Σ|Ajuste Área|)**: ${d.erroSecao} unidades.\n`;
+    r += `  _(Soma dos ajustes modulares após recontagem das seções físicas)_\n\n`;
+    if (ev.icsi !== undefined) {
+      const icsiPct = Math.round(ev.icsi * 100);
+      r += `- **ICSI (Índice de Consistência Seção/Item)**: ${icsiPct}%\n`;
+      if (icsiPct >= 80) {
+        r += `  _(Alto: seus erros são diretos e identificáveis — mais fácil de corrigir com treinamento)_\n\n`;
+      } else if (icsiPct >= 50) {
+        r += `  _(Médio: parte dos erros se compensou internamente nas seções)_\n\n`;
+      } else {
+        r += `  _(Baixo: erros em direções opostas dentro das seções — risco oculto na gôndola)_\n\n`;
+      }
+    }
+  }
   r += `---\n\n`;
+
 
   r += `## 🎯 COMO A SUA NOTA FOI CALCULADA\n\n`;
   r += `- Qualidade: ${Math.round(ev.scoreQualidade)} pts\n`;

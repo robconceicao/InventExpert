@@ -161,7 +161,7 @@ export default function ReportBScreen() {
       }
       try {
         await Share.shareSingle({
-          social: Share.Social.WHATSAPP,
+          social: Share.Social.WHATSAPP as any,
           message: msg,
           url: attachment.uri,
         });

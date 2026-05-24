@@ -20,11 +20,13 @@ import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
 import {
     evaluateChecker,
     sortRanking,
+    getDistribuicaoNiveis,
 } from "../services/InventoryEvaluationService";
 import { getCheckerCurrentLevel } from "../services/CheckerDBService";
 import type {
     InventoryCheckerEvaluation,
     InventoryOperationType,
+    SectionAccuracyRecord,
 } from "../types";
 import { shareCsvFile, shareTextFile } from "../utils/export";
 import { readFileAsCsvText } from "../utils/fileImport";
@@ -32,7 +34,8 @@ import {
     generateInventExpGerencialReportText,
     generateInventExpIndividualReportText,
 } from "../utils/inventExpReports";
-import { parseInventoryCheckersCsv, parseTagsCsv } from "../utils/parsers";
+import { parseInventoryCheckersCsv, parseTagsExtended } from "../utils/parsers";
+
 
 const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
 AMANDA DE OLIVEIRA P...;395,33;752;0;18;1,9;13;1,73%`;
@@ -41,15 +44,16 @@ const EXAMPLE_TAGS_CSV = `Nome;Qtd(A1)
 AMANDA DE OLIVEIRA P...;15
 CAMILA FERREIRA;-5`;
 
+export default function InventExpImportScreen() {
   const [operationType, setOperationType] =
     useState<InventoryOperationType>("FARMACIA");
   const [rawText, setRawText] = useState("");
   const [tagsText, setTagsText] = useState("");
   const [totalPecas, setTotalPecas] = useState("");
   const [duracaoReal, setDuracaoReal] = useState("");
-  const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>(
-    [],
-  );
+  const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>([]);
+  const [sectionAccuracy, setSectionAccuracy] = useState<SectionAccuracyRecord[]>([]);
+  const [isExtendedTags, setIsExtendedTags] = useState(false);
 
 
   const handlePickFile = async (type: 'prod' | 'tags') => {
@@ -82,7 +86,7 @@ CAMILA FERREIRA;-5`;
 
   const handleProcess = async () => {
     const parsed = parseInventoryCheckersCsv(rawText);
-    const parsedTags = parseTagsCsv(tagsText);
+    const tagsResult = parseTagsExtended(tagsText);
 
     if (parsed.length === 0) {
       Alert.alert(
@@ -98,12 +102,17 @@ CAMILA FERREIRA;-5`;
     const parsedWithExp = await Promise.all(
       parsed.map(async (item) => {
         const exp = await getCheckerCurrentLevel(item.nome);
-        const tagsData = parsedTags[item.nome.toLowerCase().trim()] || { itensPulados: 0, itensDuplicados: 0 };
-        return { 
-          ...item, 
+        const nomeKey = item.nome.toLowerCase().trim();
+        const tagsData = tagsResult.porColaborador[nomeKey] || {
+          itensPulados: 0, itensDuplicados: 0, erroSecao: undefined, numSecoes: undefined,
+        };
+        return {
+          ...item,
           experiencia: exp,
           itensPulados: tagsData.itensPulados,
-          itensDuplicados: tagsData.itensDuplicados
+          itensDuplicados: tagsData.itensDuplicados,
+          erroSecao: tagsResult.isExtended ? tagsData.erroSecao : undefined,
+          numSecoes: tagsResult.isExtended ? tagsData.numSecoes : undefined,
         };
       })
     );
@@ -112,7 +121,17 @@ CAMILA FERREIRA;-5`;
       evaluateChecker(item, operationType, pecas, duracao, totalConferentes),
     );
     setEvaluations(sortRanking(evaluated));
+
+    // Salva dados de acurácia de seções quando formato estendido
+    if (tagsResult.isExtended && tagsResult.porArea.length > 0) {
+      setSectionAccuracy(tagsResult.porArea);
+      setIsExtendedTags(true);
+    } else {
+      setSectionAccuracy([]);
+      setIsExtendedTags(false);
+    }
   };
+
 
   const resumo = useMemo(() => {
     if (evaluations.length === 0) return null;
@@ -125,14 +144,17 @@ CAMILA FERREIRA;-5`;
       evaluations.length;
     const scoreMedio =
       evaluations.reduce((s, e) => s + e.scoreFinal, 0) / evaluations.length;
+    const dist = getDistribuicaoNiveis(evaluations);
     return {
       totalConferentes,
       totalItens,
       taxaMediaErro: Math.round(taxaMediaErro * 100) / 100,
       produtividadeMedia: Math.round(produtividadeMedia * 10) / 10,
       scoreMedio: Math.round(scoreMedio * 10) / 10,
+      dist,
     };
   }, [evaluations]);
+
 
   const handleExportCsv = async () => {
     if (evaluations.length === 0) {
@@ -203,6 +225,8 @@ CAMILA FERREIRA;-5`;
       operationType,
       evaluations,
       resumo,
+      undefined,
+      isExtendedTags ? sectionAccuracy : undefined,
     );
     await shareTextFile(
       `relatorio_gerencial_avaliacao_${new Date()
@@ -212,6 +236,7 @@ CAMILA FERREIRA;-5`;
       "Exportar Relatório Gerencial Avaliação",
     );
   };
+
 
   const handleSendIndividualWhatsApp = (
     ev: InventoryCheckerEvaluation,
@@ -330,9 +355,7 @@ CAMILA FERREIRA;-5`;
               <Text style={styles.cardTitle}>Resumo da Avaliação</Text>
               <View style={styles.resumoGrid}>
                 <View style={styles.resumoItem}>
-                  <Text style={styles.resumoValue}>
-                    {resumo.totalConferentes}
-                  </Text>
+                  <Text style={styles.resumoValue}>{resumo.totalConferentes}</Text>
                   <Text style={styles.resumoLabel}>Conferentes</Text>
                 </View>
                 <View style={styles.resumoItem}>
@@ -342,15 +365,11 @@ CAMILA FERREIRA;-5`;
                   <Text style={styles.resumoLabel}>Itens contados</Text>
                 </View>
                 <View style={styles.resumoItem}>
-                  <Text style={styles.resumoValue}>
-                    {resumo.taxaMediaErro}%
-                  </Text>
+                  <Text style={styles.resumoValue}>{resumo.taxaMediaErro}%</Text>
                   <Text style={styles.resumoLabel}>Taxa média erro</Text>
                 </View>
                 <View style={styles.resumoItem}>
-                  <Text style={styles.resumoValue}>
-                    {resumo.produtividadeMedia}
-                  </Text>
+                  <Text style={styles.resumoValue}>{resumo.produtividadeMedia}</Text>
                   <Text style={styles.resumoLabel}>Prod/h média</Text>
                 </View>
                 <View style={styles.resumoItem}>
@@ -358,7 +377,39 @@ CAMILA FERREIRA;-5`;
                   <Text style={styles.resumoLabel}>Score médio</Text>
                 </View>
               </View>
+              {/* Pills de distribuição de performance */}
+              {resumo.dist && (
+                <View style={styles.distRow}>
+                  {resumo.dist.EXCELENTE > 0 && (
+                    <View style={[styles.distPill, { backgroundColor: "#16a34a" }]}>
+                      <Text style={styles.distPillText}>
+                        {resumo.dist.EXCELENTE} EXCELENTE
+                      </Text>
+                    </View>
+                  )}
+                  {resumo.dist.BOM > 0 && (
+                    <View style={[styles.distPill, { backgroundColor: "#2563eb" }]}>
+                      <Text style={styles.distPillText}>{resumo.dist.BOM} BOM</Text>
+                    </View>
+                  )}
+                  {resumo.dist.ATENCAO > 0 && (
+                    <View style={[styles.distPill, { backgroundColor: "#f97316" }]}>
+                      <Text style={styles.distPillText}>
+                        {resumo.dist.ATENCAO} ATENÇÃO
+                      </Text>
+                    </View>
+                  )}
+                  {resumo.dist.CRITICO > 0 && (
+                    <View style={[styles.distPill, { backgroundColor: "#dc2626" }]}>
+                      <Text style={styles.distPillText}>
+                        {resumo.dist.CRITICO} CRÍTICO
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
+
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Top 3 MVPs</Text>
@@ -380,11 +431,13 @@ CAMILA FERREIRA;-5`;
               <Text style={styles.cardTitle}>Ranking Avaliação</Text>
               <View style={styles.tableHeader}>
                 <Text style={[styles.th, { flex: 0.5 }]}>#</Text>
-                <Text style={[styles.th, { flex: 1.7 }]}>Conferente</Text>
-                <Text style={[styles.th, { flex: 0.8 }]}>Score</Text>
-                <Text style={[styles.th, { flex: 0.9 }]}>% Erro</Text>
-                <Text style={[styles.th, { flex: 1.1 }]}>Prod/h</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Bloco%</Text>
+                <Text style={[styles.th, { flex: 1.5 }]}>Conferente</Text>
+                <Text style={[styles.th, { flex: 0.7 }]}>Score</Text>
+                <Text style={[styles.th, { flex: 0.8 }]}>% Erro</Text>
+                <Text style={[styles.th, { flex: 0.9 }]}>Prod/h</Text>
+                {isExtendedTags && (
+                  <Text style={[styles.th, { flex: 0.8 }]}>Err.Seç</Text>
+                )}
               </View>
               {evaluations.map((ev, index) => (
                 <Pressable
@@ -392,32 +445,29 @@ CAMILA FERREIRA;-5`;
                   style={styles.tableRow}
                   onPress={() => handleSendIndividualWhatsApp(ev, index)}
                 >
-                  <Text style={[styles.tdRank, { flex: 0.5 }]}>
-                    {index + 1}º
-                  </Text>
-                  <Text style={[styles.tdNome, { flex: 1.7 }]}>
-                    {ev.input.nome}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.tdScore,
-                      { flex: 0.8, color: ev.nivelColor },
-                    ]}
-                  >
+                  <Text style={[styles.tdRank, { flex: 0.5 }]}>{index + 1}º</Text>
+                  <Text style={[styles.tdNome, { flex: 1.5 }]}>{ev.input.nome}</Text>
+                  <Text style={[styles.tdScore, { flex: 0.7, color: ev.nivelColor }]}>
                     {ev.scoreFinal}
                   </Text>
-                  <Text style={[styles.td, { flex: 0.9 }]}>
+                  <Text style={[styles.td, { flex: 0.8 }]}>
                     {ev.pctErro.toFixed(2)}%
                   </Text>
-                  <Text style={[styles.td, { flex: 1.1 }]}>
+                  <Text style={[styles.td, { flex: 0.9 }]}>
                     {ev.input.produtividade}
                   </Text>
-                  <Text style={[styles.td, { flex: 1 }]}>
-                    {ev.pctBloco.toFixed(1)}%
-                  </Text>
+                  {isExtendedTags && (
+                    <Text style={[
+                      styles.td,
+                      { flex: 0.8, color: ev.icsi !== undefined && ev.icsi < 0.5 ? "#f97316" : "#475569" }
+                    ]}>
+                      {ev.input.erroSecao ?? "-"}
+                    </Text>
+                  )}
                 </Pressable>
               ))}
             </View>
+
 
             {radarRisco.length > 0 && (
               <View style={styles.card}>
@@ -453,13 +503,55 @@ CAMILA FERREIRA;-5`;
 
             {evaluations[0] && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>
-                  Exemplo de recibo do conferente
-                </Text>
+                <Text style={styles.cardTitle}>Exemplo de recibo do conferente</Text>
                 <CheckerFeedbackReport
                   evaluation={evaluations[0]}
                   operationType={operationType}
                 />
+              </View>
+            )}
+
+            {/* Card Mapa de Acurácia de Seções */}
+            {isExtendedTags && sectionAccuracy.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>🇳🇪 Mapa de Acurácia de Seções</Text>
+                <Text style={styles.cardSubtitle}>
+                  Acurácia = 1 − (|Σ Ajuste| ÷ Total Contado). Ordenado do mais crítico ao perfeito.
+                </Text>
+                {sectionAccuracy.map((s) => {
+                  const isRisk = s.acuracidade < 97.5;
+                  const isOk   = s.acuracidade >= 99;
+                  const dotColor = s.acuracidade === 100 ? "#16a34a" :
+                                   isOk ? "#2563eb" :
+                                   isRisk ? "#dc2626" : "#f97316";
+                  return (
+                    <View key={s.area} style={[
+                      styles.sectionRow,
+                      isRisk && { backgroundColor: "#fef2f2" },
+                    ]}>
+                      <View style={styles.sectionHeader}>
+                        <View style={[styles.sectionDot, { backgroundColor: dotColor }]} />
+                        <Text style={styles.sectionName}>{s.area}</Text>
+                        <Text style={[styles.sectionAcc, { color: dotColor }]}>
+                          {s.acuracidade.toFixed(2)}%
+                        </Text>
+                      </View>
+                      <View style={styles.sectionMeta}>
+                        <Text style={styles.sectionMetaText}>
+                          Contado: {s.totalC1.toFixed(0)}
+                        </Text>
+                        <Text style={styles.sectionMetaText}>
+                          Ajuste: {s.ajusteAbsoluto.toFixed(0)}
+                        </Text>
+                        <Text style={[styles.sectionMetaText, {
+                          color: s.ajusteLiquido < 0 ? "#dc2626" : s.ajusteLiquido > 0 ? "#f97316" : "#64748b"
+                        }]}>
+                          Saldo: {s.ajusteLiquido >= 0 ? "+" : ""}{s.ajusteLiquido.toFixed(0)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -756,5 +848,60 @@ const styles = StyleSheet.create({
     backgroundColor: "#059669",
     paddingVertical: 10,
     paddingHorizontal: 16,
+  },
+  // Pills de distribuição de performance
+  distRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  distPill: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  distPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+  // Mapa de Seções
+  sectionRow: {
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    marginTop: 6,
+    gap: 4,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sectionName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  sectionAcc: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  sectionMeta: {
+    flexDirection: "row",
+    gap: 12,
+    marginLeft: 16,
+  },
+  sectionMetaText: {
+    fontSize: 11,
+    color: "#64748b",
   },
 });

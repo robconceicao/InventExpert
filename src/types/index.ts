@@ -175,6 +175,7 @@ export type InventoryOperationType = "FARMACIA" | "SUPERMERCADO" | "LOJA_GERAL";
 
 export interface InventoryCheckerInput {
   nome: string;
+  matricula?: string;
   qtde: number;
   qtde1a1: number;
   produtividade: number;
@@ -182,9 +183,24 @@ export interface InventoryCheckerInput {
   experiencia?: CheckerExperienceLevel;
   itensPulados?: number;
   itensDuplicados?: number;
+  /** Soma de |Qtd(A1)| por conferente extraída da produtividade_tag */
+  erroSecao?: number;
+  /** Número de seções físicas que o conferente trabalhou */
+  numSecoes?: number;
 }
 
 export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";
+
+/** Acurácia de uma seção física da loja para o relatório gerencial */
+export interface SectionAccuracyRecord {
+  area: string;
+  totalC1: number;       // soma Qtd(C1) da seção
+  ajusteAbsoluto: number; // soma |Qtd(A1)| da seção
+  ajusteLiquido: number; // soma Qtd(A1) com sinal (saldo final)
+  acuracidade: number;   // % 0-100
+  /** Colaboradores que trabalharam na seção */
+  colaboradores: string[];
+}
 
 export interface InventoryCheckerEvaluation {
   input: InventoryCheckerInput;
@@ -199,6 +215,11 @@ export interface InventoryCheckerEvaluation {
   pontosVolume?: number;
   bonusVolume?: number;
   penalidadeVolume?: number;
+  /**
+   * ICSI — Índice de Consistência Seção vs. Item (0-100%)
+   * Alto = erros diretos e identificáveis; Baixo = erros se compensaram nas seções (risco oculto)
+   */
+  icsi?: number;
   scoreFinal: number;
   nivel: InventoryScoreLevel;
   nivelColor: string;

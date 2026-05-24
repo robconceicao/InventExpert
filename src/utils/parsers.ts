@@ -106,6 +106,25 @@ export const formatDateInput = (text: string) => {
   return v;
 };
 
+export const formatTimeInput = (text: string): string => {
+  let clean = text.replace(/\D/g, "");
+  if (clean.length > 4) {
+    clean = clean.slice(0, 4);
+  }
+  if (clean.length > 2) {
+    return `${clean.slice(0, 2)}:${clean.slice(2)}`;
+  }
+  return clean;
+};
+
+export const formatTimeNow = (): string => {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, "0");
+  const m = String(now.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+};
+
+
 export const formatAttendanceMessage = (data: AttendanceData): string => {
   const icon = (c: AttendanceCollaborator) =>
     c.status === "PRESENTE" ? " ✅" : c.status === "AUSENTE" ? " ❌" : "";
@@ -521,7 +540,7 @@ export const parseInventoryCheckersCsv = (
 };
 
 // ==========================
-// PARSER INVENTEXP - TAGS (CSV/Excel)
+// PARSER INVENTEXP - TAGS (CSV/Excel) — Formato simples (backward-compat)
 // ==========================
 export const parseTagsCsv = (
   text: string,
@@ -601,7 +620,7 @@ export const parseTagsCsv = (
     const nomeKey = nomeRaw.toLowerCase().trim();
     
     const qtdStr = cells[col.qtdA1] ?? "0";
-    const qtdA1 = parseNum(qtdStr); // parseNum suporta virgula decimal e negativo
+    const qtdA1 = parseNumberBR(qtdStr); // parseNumberBR suporta virgula decimal e negativo
 
     if (!result[nomeKey]) {
       result[nomeKey] = { itensPulados: 0, itensDuplicados: 0 };
@@ -617,3 +636,176 @@ export const parseTagsCsv = (
   return result;
 };
 
+// ==========================
+// PARSER AVANÇADO - PRODUTIVIDADE_TAG (Formato completo: AREA + MATRICULA + NOME + C1 + A1 ...)
+// ==========================
+export interface TagsExtendedResult {
+  /** Por colaborador: erroSecao = Σ|Qtd(A1)|, numSecoes */
+  porColaborador: Record<string, {
+    erroSecao: number;
+    numSecoes: number;
+    itensPulados: number;
+    itensDuplicados: number;
+    matricula?: string;
+  }>;
+  /** Por área física: acurácia de estoque */
+  porArea: Array<{
+    area: string;
+    totalC1: number;
+    ajusteAbsoluto: number;
+    ajusteLiquido: number;
+    acuracidade: number;
+    colaboradores: string[];
+  }>;
+  /** Flag indicando se o formato estendido foi detectado */
+  isExtended: boolean;
+}
+
+/**
+ * Parser avançado para o formato completo do relatório RProInv_Produtividade.
+ * Suporta o formato exportado com colunas: AREA | MATRICULA | NOME | Seções | Qtd(C1) | Qtd(A1) | Qtd(A2) | Qtd(A3) | QTD(FINAL)
+ * Também aceita o formato simples Nome;Qtd(A1) (backward-compat).
+ *
+ * Calcula:
+ *  - erroSecao por conferente = Σ|Qtd(A1)| (erros modulares por seção)
+ *  - acurácia por área = 1 - (Σ|Qtd(A1)| / Σ Qtd(C1)) * 100
+ */
+export const parseTagsExtended = (text: string): TagsExtendedResult => {
+  const lines = text
+    .split(/[\r\n]+/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const emptyResult: TagsExtendedResult = {
+    porColaborador: {},
+    porArea: [],
+    isExtended: false,
+  };
+
+  if (lines.length < 2) return emptyResult;
+
+  const detectSeparator = (line: string): RegExp => {
+    const tabs = (line.match(/\t/g) ?? []).length;
+    const semi = (line.match(/;/g) ?? []).length;
+    const commas = (line.match(/,/g) ?? []).length;
+    if (tabs >= semi && tabs >= commas) return /\t/;
+    if (semi >= commas) return /;/;
+    return /,/;
+  };
+
+  const parseRow = (row: string, sep: RegExp): string[] =>
+    row.split(sep).map((c) => c.replace(/^"|"$/g, "").trim());
+
+  const normalizeH = (h: string): string =>
+    h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+
+  const parseBR = (s: string): number => {
+    const v = String(s ?? "").replace(/%/g, "").replace(/\s/g, "").trim();
+    if (!v) return 0;
+    if (v.includes(",")) {
+      return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+    }
+    return parseFloat(v) || 0;
+  };
+
+  // Procura header do formato estendido (AREA, NOME, Qtd(C1), Qtd(A1))
+  let headerIdx = -1;
+  let sep = /\t/;
+  let cArea = -1, cMatricula = -1, cNome = -1, cSecoes = -1, cC1 = -1, cA1 = -1;
+
+  for (let r = 0; r < Math.min(lines.length, 20); r++) {
+    sep = detectSeparator(lines[r]);
+    const raw = parseRow(lines[r], sep);
+    const hdr = raw.map(normalizeH);
+
+    const iArea     = hdr.findIndex(h => /^area$/.test(h));
+    const iNome     = hdr.findIndex(h => /^nome$/.test(h));
+    const iC1       = hdr.findIndex(h => /qtd.*c1/i.test(h));
+    const iA1       = hdr.findIndex(h => /qtd.*a1/i.test(h));
+    const iMatr     = hdr.findIndex(h => /matricula/i.test(h));
+    const iSecoes   = hdr.findIndex(h => /sec[oa]es\s*contadas|secoes/i.test(h));
+
+    if (iArea >= 0 && iNome >= 0 && iC1 >= 0 && iA1 >= 0) {
+      cArea = iArea; cNome = iNome; cC1 = iC1; cA1 = iA1;
+      cMatricula = iMatr; cSecoes = iSecoes;
+      headerIdx = r;
+      break;
+    }
+  }
+
+  // Formato estendido não detectado → tenta formato simples
+  if (headerIdx < 0) {
+    const simple = parseTagsCsv(text);
+    const por: TagsExtendedResult["porColaborador"] = {};
+    for (const [k, v] of Object.entries(simple)) {
+      por[k] = { erroSecao: 0, numSecoes: 0, ...v };
+    }
+    return { porColaborador: por, porArea: [], isExtended: false };
+  }
+
+  // Estruturas de acumulação
+  const colabMap: Record<string, {
+    erroSecao: number; numSecoes: number;
+    itensPulados: number; itensDuplicados: number; matricula?: string;
+  }> = {};
+  const areaMap: Record<string, {
+    totalC1: number; ajusteAbsoluto: number; ajusteLiquido: number; colaboradores: Set<string>;
+  }> = {};
+
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const cells = parseRow(lines[i], sep);
+
+    const area  = (cells[cArea] ?? "").trim();
+    const nome  = (cells[cNome] ?? "").trim();
+    const c1Raw = cells[cC1] ?? "";
+    const a1Raw = cells[cA1] ?? "";
+
+    // Pula linhas de total/subtotal (sem nome ou sem área), cabeçalhos repetidos e linhas de página
+    if (!area || !nome) continue;
+    if (/^(area|nome|total|page|rproinv|relat)/i.test(area)) continue;
+    if (/^(nome|total|soma|media|page)/i.test(nome)) continue;
+
+    const c1 = parseBR(c1Raw);
+    const a1 = parseBR(a1Raw);
+    const secoes = cSecoes >= 0 ? (parseBR(cells[cSecoes] ?? "0") || 1) : 1;
+    const matricula = cMatricula >= 0 ? (cells[cMatricula] ?? "").trim() || undefined : undefined;
+
+    if (c1 <= 0 && a1 === 0) continue; // linha de subtotal sem dados reais
+
+    // Acumula por colaborador (chave normalizada = lowercase)
+    const nomeKey = nome.toLowerCase().trim();
+    if (!colabMap[nomeKey]) {
+      colabMap[nomeKey] = { erroSecao: 0, numSecoes: 0, itensPulados: 0, itensDuplicados: 0, matricula };
+    }
+    colabMap[nomeKey].erroSecao += Math.abs(a1);
+    colabMap[nomeKey].numSecoes += secoes;
+    if (a1 > 0) colabMap[nomeKey].itensPulados += a1;
+    else if (a1 < 0) colabMap[nomeKey].itensDuplicados += Math.abs(a1);
+
+    // Acumula por área (apenas linhas com nome de colaborador, não subtotais)
+    const areaKey = area.toUpperCase().trim();
+    if (!areaMap[areaKey]) {
+      areaMap[areaKey] = { totalC1: 0, ajusteAbsoluto: 0, ajusteLiquido: 0, colaboradores: new Set() };
+    }
+    areaMap[areaKey].totalC1 += c1;
+    areaMap[areaKey].ajusteAbsoluto += Math.abs(a1);
+    areaMap[areaKey].ajusteLiquido += a1;
+    areaMap[areaKey].colaboradores.add(nome);
+  }
+
+  // Monta array de acurácia por área, ordenado do pior para o melhor
+  const porArea = Object.entries(areaMap)
+    .map(([area, d]) => ({
+      area,
+      totalC1: d.totalC1,
+      ajusteAbsoluto: d.ajusteAbsoluto,
+      ajusteLiquido: d.ajusteLiquido,
+      acuracidade: d.totalC1 > 0
+        ? Math.max(0, Math.min(100, (1 - d.ajusteAbsoluto / d.totalC1) * 100))
+        : 100,
+      colaboradores: Array.from(d.colaboradores),
+    }))
+    .sort((a, b) => a.acuracidade - b.acuracidade);
+
+  return { porColaborador: colabMap, porArea, isExtended: true };
+};
