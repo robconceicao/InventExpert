@@ -165,6 +165,21 @@ export interface AttendanceData {
 
 export type CheckerExperienceLevel = "novato" | "junior" | "pleno" | "senior" | "expert";
 
+/**
+ * Perfil comportamental do conferente — derivado da análise de sinais do Qtd(A1)
+ * extraído da produtividade_tag (positivo = omissão, negativo = excesso).
+ *
+ * - PULA_ITENS:      Alto índice de omissão → risco financeiro direto (produto esquecido na gôndola)
+ * - FANTASMA:        Alto índice de excesso/duplicação → bipagem a mais (capturado na auditoria)
+ * - DESATENTO_GERAL: Ambos elevados → atenção dispersa no processo
+ * - EQUILIBRADO:     Ambos baixos → perfil de qualidade operacional
+ */
+export type PerfilComportamental =
+  | "PULA_ITENS"
+  | "FANTASMA"
+  | "DESATENTO_GERAL"
+  | "EQUILIBRADO";
+
 export interface CheckerDBRecord {
   nome: string;
   inventarios_base: number;
@@ -220,6 +235,11 @@ export interface InventoryCheckerEvaluation {
    * Alto = erros diretos e identificáveis; Baixo = erros se compensaram nas seções (risco oculto)
    */
   icsi?: number;
+  /**
+   * Perfil comportamental derivado da separação de sinais do Qtd(A1).
+   * Disponível apenas quando dados de tags estendidos forem importados.
+   */
+  perfilComportamental?: PerfilComportamental;
   scoreFinal: number;
   nivel: InventoryScoreLevel;
   nivelColor: string;

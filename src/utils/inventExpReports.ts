@@ -2,9 +2,15 @@ import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
 import type {
     InventoryCheckerEvaluation,
     InventoryOperationType,
+    PerfilComportamental,
     SectionAccuracyRecord,
 } from "../types";
+import { getDistribuicaoPerfilComportamental } from "../services/InventoryEvaluationService";
 
+
+// =============================================================================
+// RELATÓRIO GERENCIAL
+// =============================================================================
 
 export function generateInventExpGerencialReportText(
   operationType: InventoryOperationType,
@@ -28,6 +34,11 @@ export function generateInventExpGerencialReportText(
     (e) =>
       e.nivel === "CRITICO" ||
       e.tags.includes("🚨 Risco de Contagem Superficial"),
+  );
+
+  // Verifica se há dados de perfil comportamental disponíveis
+  const temDadosComportamentais = evaluations.some(
+    e => e.perfilComportamental !== undefined,
   );
 
   let r = "";
@@ -64,31 +75,60 @@ export function generateInventExpGerencialReportText(
   r += `| 🔴 CRÍTICO | ${distNiveis.CRITICO} | ${Math.round(distNiveis.CRITICO/resumo.totalConferentes*100)}% |\n`;
   r += `\n---\n\n`;
 
+  // Distribuição de perfil comportamental (somente quando tags estendidos disponíveis)
+  if (temDadosComportamentais) {
+    const distPerfil = getDistribuicaoPerfilComportamental(evaluations);
+    r += `## 2. RAIO-X COMPORTAMENTAL DA EQUIPE\n\n`;
+    r += `> Análise derivada da planilha produtividade_tag (separação de sinais do Qtd(A1)).\n`;
+    r += `> Qtd(A1) > 0 = produto pulado (omissão) | Qtd(A1) < 0 = produto duplicado (excesso)\n\n`;
+    r += `| Perfil | Conferentes | Significado |\n`;
+    r += `|--------|-------------|-------------|\n`;
+    r += `| 🚨 PULA ITENS | ${distPerfil.PULA_ITENS} | Alto índice de omissão — gera perda financeira invisível |\n`;
+    r += `| 🔄 FANTASMA | ${distPerfil.FANTASMA} | Alto índice de duplicação — capturado pela auditoria |\n`;
+    r += `| ⚠️ DESATENTO GERAL | ${distPerfil.DESATENTO_GERAL} | Omissão E excesso elevados — atenção dispersa |\n`;
+    r += `| ✅ EQUILIBRADO | ${distPerfil.EQUILIBRADO} | Ambos baixos — perfil de qualidade operacional |\n`;
+    r += `\n`;
 
-  r += `## 2. RANKING COMPLETO\n\n`;
-  r += `| # | Nome | Nível Exp. | Score | Nível | Prod | % Erro | ICV | Tags |\n`;
-  r += `|---|------|------------|-------|------|------|--------|-----|------|\n`;
+    // Destaque dos conferentes "Pula Itens" (maior risco oculto)
+    const pulaItens = evaluations.filter(e => e.perfilComportamental === "PULA_ITENS");
+    if (pulaItens.length > 0) {
+      r += `### ⚠️ Atenção — Conferentes com Alto Índice de Omissão\n\n`;
+      r += `> Esses colaboradores não recebem erro bruto individual pelo produto pulado,\n`;
+      r += `> mas cada omissão gera furo real no estoque da loja.\n\n`;
+      pulaItens.forEach(e => {
+        r += `• **${e.input.nome}** — ${e.input.itensPulados} itens pulados | Score: ${e.scoreFinal} (${e.nivel})\n`;
+      });
+      r += `\n`;
+    }
+    r += `---\n\n`;
+  }
+
+  const secaoRanking = temDadosComportamentais ? "3" : "2";
+  r += `## ${secaoRanking}. RANKING COMPLETO\n\n`;
+  r += `| # | Nome | Nível Exp. | Score | Nível | Prod | % Erro | ICV | Perfil | Tags |\n`;
+  r += `|---|------|------------|-------|-------|------|--------|-----|--------|------|\n`;
   evaluations.forEach((e, i) => {
     const icvStr = e.icv !== undefined ? Math.round(e.icv) + '%' : '-';
     const expStr = e.input.experiencia ? e.input.experiencia.toUpperCase() : '-';
+    const perfilStr = e.perfilComportamental ?? '-';
     r += `| ${i + 1} | ${e.input.nome} | ${expStr} | ${e.scoreFinal} | ${e.nivel} | ${
       e.input.produtividade
-    } | ${e.pctErro.toFixed(2)} | ${icvStr} | ${
+    } | ${e.pctErro.toFixed(2)} | ${icvStr} | ${perfilStr} | ${
       e.tags.join(" · ") || "-"
     } |\n`;
   });
   r += `\n---\n\n`;
 
-  r += `## 3. TOP 5 MELHORES\n\n`;
+  const secaoTop = String(Number(secaoRanking) + 1);
+  r += `## ${secaoTop}. TOP 5 MELHORES\n\n`;
   top5.forEach((e, i) => {
     const icvStr = e.icv !== undefined ? Math.round(e.icv) + '%' : '-';
     const expStr = e.input.experiencia ? e.input.experiencia.toUpperCase() : '-';
-    r += `**${i + 1}º - ${e.input.nome}** (Score: ${e.scoreFinal} - ${
-      e.nivel
-    })\n`;
-    r += `- Experiência: ${expStr} | Produtividade: ${e.input.produtividade} itens/h | % Erro: ${e.pctErro.toFixed(
-      2,
-    )}% | ICV: ${icvStr}\n`;
+    r += `**${i + 1}º - ${e.input.nome}** (Score: ${e.scoreFinal} - ${e.nivel})\n`;
+    r += `- Experiência: ${expStr} | Produtividade: ${e.input.produtividade} itens/h | % Erro: ${e.pctErro.toFixed(2)}% | ICV: ${icvStr}\n`;
+    if (e.perfilComportamental) {
+      r += `- Perfil Comportamental: ${e.perfilComportamental}\n`;
+    }
     if (e.tags.length > 0) {
       r += `- Tags: ${e.tags.join(" · ")}\n`;
     }
@@ -96,18 +136,18 @@ export function generateInventExpGerencialReportText(
   });
   r += `---\n\n`;
 
-  r += `## 4. CONFERENTES EM ALERTA / CRÍTICO\n\n`;
+  const secaoAlerta = String(Number(secaoTop) + 1);
+  r += `## ${secaoAlerta}. CONFERENTES EM ALERTA / CRÍTICO\n\n`;
   if (bottom5.length === 0) {
     r += `Nenhum conferente em nível crítico.\n\n`;
   } else {
     bottom5.forEach((e, i) => {
       const pos = evaluations.length - 5 + i;
-      r += `**${pos + 1}º - ${e.input.nome}** (Score: ${e.scoreFinal} - ${
-        e.nivel
-      })\n`;
-      r += `- Produtividade: ${e.input.produtividade} itens/h | % Erro: ${e.pctErro.toFixed(
-        2,
-      )}% | % Bloco: ${e.pctBloco.toFixed(1)}%\n`;
+      r += `**${pos + 1}º - ${e.input.nome}** (Score: ${e.scoreFinal} - ${e.nivel})\n`;
+      r += `- Produtividade: ${e.input.produtividade} itens/h | % Erro: ${e.pctErro.toFixed(2)}% | % Bloco: ${e.pctBloco.toFixed(1)}%\n`;
+      if (e.perfilComportamental) {
+        r += `- Perfil Comportamental: ${e.perfilComportamental}\n`;
+      }
       if (e.tags.length > 0) {
         r += `- Tags: ${e.tags.join(" · ")}\n`;
       }
@@ -116,14 +156,13 @@ export function generateInventExpGerencialReportText(
   }
   r += `---\n\n`;
 
-  r += `## 5. RADAR DE RISCO (Risco de Contagem Superficial / Nível crítico)\n\n`;
+  const secaoRisco = String(Number(secaoAlerta) + 1);
+  r += `## ${secaoRisco}. RADAR DE RISCO\n\n`;
   if (risco.length === 0) {
     r += `Nenhum conferente classificado como risco elevado.\n\n`;
   } else {
     risco.forEach((e) => {
-      r += `• ${e.input.nome} — Score ${e.scoreFinal} (${e.nivel}) | % Erro: ${e.pctErro.toFixed(
-        2,
-      )}% | % Bloco: ${e.pctBloco.toFixed(1)}% | Tags: ${
+      r += `• ${e.input.nome} — Score ${e.scoreFinal} (${e.nivel}) | % Erro: ${e.pctErro.toFixed(2)}% | % Bloco: ${e.pctBloco.toFixed(1)}% | Tags: ${
         e.tags.join(" · ") || "-"
       }\n`;
     });
@@ -131,20 +170,27 @@ export function generateInventExpGerencialReportText(
   }
   r += `---\n\n`;
 
-  r += `## 6. PLANO DE AÇÃO SUGERIDO\n\n`;
+  const secaoPlano = String(Number(secaoRisco) + 1);
+  r += `## ${secaoPlano}. PLANO DE AÇÃO SUGERIDO\n\n`;
   r += `- Reforçar reconhecimento dos Top 3 MVPs da operação.\n`;
   r += `- Para conferentes com score abaixo de 70: realizar feedback individual e plano de melhoria.\n`;
-  r += `- Para casos com tag "🚨 Risco de Contagem Superficial": revisar amostras de contagem, reforçar limite de bloco e checar se houve pressão de tempo.\n`;
+  r += `- Para casos com tag "🚨 Risco de Contagem Superficial": revisar amostras de contagem, reforçar limite de bloco.\n`;
+  if (temDadosComportamentais) {
+    r += `- Para perfil "PULA_ITENS": treinar varredura visual completa (esq→dir, cima→baixo) e uso de marcadores de seção.\n`;
+    r += `- Para perfil "FANTASMA": treinar demarcação de seções já contadas para evitar bipagem duplicada.\n`;
+    r += `- Para perfil "DESATENTO_GERAL": acompanhar individualmente no próximo inventário, considerar reposicionamento em seções de menor complexidade.\n`;
+  }
   r += `- Revisar meta de produtividade e aderência à política de contagem 1a1 conforme perfil da operação.\n\n`;
 
   r += `---\n\n`;
   r += `*Relatório gerado pela Avaliação - Módulo Avaliação (score Qualidade/Produtividade/Aderência)*\n`;
   r += `Data: ${new Date().toLocaleDateString("pt-BR")}\n`;
 
-  // MAPA DE ACURÁCIA DE SEÇÕES (opcional — só quando dados estendidos estão disponíveis)
+  // MAPA DE ACURÁCIA DE SEÇÕES (opcional — só quando dados estendidos disponíveis)
   if (sectionAccuracy && sectionAccuracy.length > 0) {
+    const secaoMapa = String(Number(secaoPlano) + 1);
     r += `\n---\n\n`;
-    r += `## 7. MAPA DE ACURÁCIA DE SEÇÕES FÍSICAS\n\n`;
+    r += `## ${secaoMapa}. MAPA DE ACURÁCIA DE SEÇÕES FÍSICAS\n\n`;
     r += `> **Como interpretar:** Acurácia = 1 - (Σ|Ajuste| / Σ Contado). \n`;
     r += `> 🚨 Crítico (<97.5%) | ⚠️ Atenção (97.5-99%) | ✅ OK (≥99%) | ⭐ Perfeito (100%)\n\n`;
     r += `| Seção | Contado | Ajuste Absoluto | Saldo Líquido | Acurácia | Status |\n`;
@@ -180,6 +226,47 @@ export function generateInventExpGerencialReportText(
   return r;
 }
 
+
+// =============================================================================
+// RELATÓRIO INDIVIDUAL
+// =============================================================================
+
+/**
+ * Labels e descrições por perfil comportamental — usados no relatório individual
+ * para transformar a análise técnica em feedback educativo para o colaborador.
+ */
+const PERFIL_LABELS: Record<PerfilComportamental, {
+  badge: string;
+  titulo: string;
+  descricao: string;
+  diretriz: string;
+}> = {
+  PULA_ITENS: {
+    badge: "🚨 PULA ITENS",
+    titulo: "Foco em Varredura Completa",
+    descricao: "Seu maior desafio é garantir que nenhum produto ou gancho fique sem o bip. Produtos pulados não aparecem como erro individual para você, mas geram furo real no estoque da loja — e o auditor vai atrás deles na recontagem.",
+    diretriz: "💡 **No próximo inventário:** faça a varredura de cada prateleira da esquerda para a direita e de cima para baixo, linha por linha, antes de avançar para o próximo espaço. Se a seção tiver múltiplos níveis de gôndola, confira cada um de forma independente.",
+  },
+  FANTASMA: {
+    badge: "🔄 DUPLICADOR",
+    titulo: "Foco em Demarcação de Seções",
+    descricao: "Você bipa com atenção e raramente esquece produtos, mas tende a recontar espaços que já foram contados — por você ou por um colega. Isso gera sobra virtual que a auditoria precisa corrigir.",
+    diretriz: "💡 **No próximo inventário:** use os marcadores/etiquetas de demarcação em cada seção que você finalizar. Antes de bipar qualquer área, verifique se já há marca de contagem naquele espaço.",
+  },
+  DESATENTO_GERAL: {
+    badge: "⚠️ DESATENTO GERAL",
+    titulo: "Ajuste de Processo Necessário",
+    descricao: "Seus números mostram dois padrões simultâneos: produtos esquecidos na gôndola E contagens duplicadas. Isso indica que o ritmo de contagem pode estar descompassado com o método. Qualidade é mais importante que velocidade.",
+    diretriz: "💡 **No próximo inventário:** reduza o ritmo e priorize a varredura metódica de cada seção. Use os marcadores de área para saber onde você está e onde já passou. Converse com a liderança para alinhar o processo antes de começar.",
+  },
+  EQUILIBRADO: {
+    badge: "✅ EQUILIBRADO",
+    titulo: "Manter o Padrão",
+    descricao: "Seus índices de omissão e duplicação estão dentro do esperado. Você demonstra atenção consistente tanto na varredura das prateleiras quanto no controle de seções já contadas.",
+    diretriz: "✅ **Continue assim:** mantenha o equilíbrio atual entre velocidade e qualidade. Seus números de atenção visual são muito bons!",
+  },
+};
+
 export function generateInventExpIndividualReportText(
   operationType: InventoryOperationType,
   ev: InventoryCheckerEvaluation,
@@ -191,6 +278,10 @@ export function generateInventExpIndividualReportText(
   const perfil = INVENTORY_PROFILES[operationType];
   const d = ev.input;
 
+  const perfilInfo = ev.perfilComportamental
+    ? PERFIL_LABELS[ev.perfilComportamental]
+    : null;
+
   let r = "";
   r += `# RELATÓRIO INDIVIDUAL - Avaliação\n`;
   r += `## Inventário: ${data}\n`;
@@ -199,8 +290,11 @@ export function generateInventExpIndividualReportText(
 
   r += `## 👤 CONFERENTE: ${d.nome}\n\n`;
   r += `Score Final: ${ev.scoreFinal} / 100 — ${ev.nivel}\n`;
-  r += `Posição no ranking: ${rank}º de ${totalConferentes}\n\n`;
-  r += `---\n\n`;
+  r += `Posição no ranking: ${rank}º de ${totalConferentes}\n`;
+  if (perfilInfo) {
+    r += `Perfil Operacional: **${perfilInfo.badge}**\n`;
+  }
+  r += `\n---\n\n`;
 
   r += `## 📊 OS SEUS NÚMEROS GERAIS\n\n`;
   r += `- Experiência reconhecida: **${(d.experiencia || 'Pleno').toUpperCase()}**\n`;
@@ -214,35 +308,48 @@ export function generateInventExpIndividualReportText(
   r += `- % Bloco: ${ev.pctBloco.toFixed(1)}% (limite recomendado: ${perfil.targets.maxBlockLimit}%)\n\n`;
   r += `---\n\n`;
 
+  // =========================================================================
+  // RAIO-X DA QUALIDADE OPERACIONAL
+  // Estrutura inspirada na análise de separação de sinais do Qtd(A1):
+  //   Erros de Execução  → planilha produtividade (erro bruto individual)
+  //   Itens Esquecidos   → produtividade_tag Qtd(A1) > 0 (omissão)
+  //   Contagens Duplic.  → produtividade_tag Qtd(A1) < 0 (excesso)
+  // =========================================================================
   r += `## 🔍 RAIO-X DA SUA QUALIDADE OPERACIONAL\n`;
   r += `Para te ajudar a entender seus pontos fortes e onde precisamos redobrar a atenção, mapeamos o comportamento das suas seções:\n\n`;
-  
-  r += `- **Erros de Execução (Quantidade direta)**: ${d.erro} erros.\n`;
-  r += `  _(Produto bipado, mas a quantidade digitada na tela foi maior/menor que o real)_\n\n`;
-  
-  r += `- **Itens Esquecidos na Gôndola (Omissão)**: ${d.itensPulados || 0} produtos.\n`;
-  r += `  _(Prateleira pulada ou produto sem bip. Afeta diretamente a quebra física da loja!)_\n\n`;
 
-  r += `- **Contagens Duplicadas (Excesso)**: ${d.itensDuplicados || 0} produtos.\n`;
-  r += `  _(Produto bipado por engano ou gancho repetido que já havia sido contado)_\n\n`;
+  r += `**1. Erros de Execução (Quantidade direta):** ${d.erro} erros\n`;
+  r += `   _(Produto bipado, mas a quantidade digitada na tela foi maior ou menor do que o real)_\n\n`;
+
+  const pulados = d.itensPulados || 0;
+  const duplicados = d.itensDuplicados || 0;
+
+  r += `**2. Itens Esquecidos na Gôndola (Omissão):** ${pulados} produto(s)\n`;
+  r += `   _(Prateleira ou gancho sem bip algum — o auditor encontrou esses produtos depois, na recontagem)_\n`;
+  if (pulados > 0) {
+    r += `   ⚠️ _Atenção: produto pulado não gera erro no seu indicador individual, mas gera furo real no estoque da loja!_\n`;
+  }
+  r += `\n`;
+
+  r += `**3. Contagens Duplicadas (Excesso):** ${duplicados} produto(s)\n`;
+  r += `   _(Produto ou gancho bipado a mais — área já contada que foi recontada por engano)_\n\n`;
 
   if (d.erroSecao !== undefined) {
-    r += `- **Erro de Seção (Σ|Ajuste Área|)**: ${d.erroSecao} unidades.\n`;
-    r += `  _(Soma dos ajustes modulares após recontagem das seções físicas)_\n\n`;
+    r += `**4. Erro de Seção (Σ|Ajuste Área|):** ${d.erroSecao} unidades\n`;
+    r += `   _(Soma dos ajustes modulares após recontagem das seções físicas)_\n\n`;
     if (ev.icsi !== undefined) {
       const icsiPct = Math.round(ev.icsi * 100);
-      r += `- **ICSI (Índice de Consistência Seção/Item)**: ${icsiPct}%\n`;
+      r += `**5. ICSI (Índice de Consistência Seção/Item):** ${icsiPct}%\n`;
       if (icsiPct >= 80) {
-        r += `  _(Alto: seus erros são diretos e identificáveis — mais fácil de corrigir com treinamento)_\n\n`;
+        r += `   _(Alto: seus erros são diretos e identificáveis — mais fácil de corrigir com treinamento)_\n\n`;
       } else if (icsiPct >= 50) {
-        r += `  _(Médio: parte dos erros se compensou internamente nas seções)_\n\n`;
+        r += `   _(Médio: parte dos erros se compensou internamente nas seções)_\n\n`;
       } else {
-        r += `  _(Baixo: erros em direções opostas dentro das seções — risco oculto na gôndola)_\n\n`;
+        r += `   _(Baixo: erros em direções opostas dentro das seções — risco oculto na gôndola)_\n\n`;
       }
     }
   }
   r += `---\n\n`;
-
 
   r += `## 🎯 COMO A SUA NOTA FOI CALCULADA\n\n`;
   r += `- Qualidade: ${Math.round(ev.scoreQualidade)} pts\n`;
@@ -255,24 +362,30 @@ export function generateInventExpIndividualReportText(
   if (ev.penalidadeVolume) r += `  - Penalidade Volume: ${ev.penalidadeVolume} pts\n`;
   r += `\n`;
 
+  // Notas de ajuste
   if (ev.pctErro > perfil.targets.erroCritico) {
     r += `• A sua taxa de erro ficou acima do limite crítico do perfil, reduzindo parte da nota de produtividade.\n`;
   }
   if (ev.pctBloco > perfil.targets.maxBlockLimit) {
     r += `• O uso de contagem em Bloco acima do limite recomendado reduziu a nota de aderência ao método.\n`;
   }
-  if (
-    d.produtividade > perfil.targets.productivity &&
-    ev.pctErro <= perfil.targets.erroTolerancia
-  ) {
+  if (d.produtividade > perfil.targets.productivity && ev.pctErro <= perfil.targets.erroTolerancia) {
     r += `• Você recebeu bônus por manter boa qualidade mesmo com produtividade acima da meta.\n`;
   }
   if (ev.tags.includes("🚨 Risco de Contagem Superficial")) {
     r += `• Foi identificado risco de contagem superficial (erro alto combinado com muito bloco). Revise os critérios de quando usar bloco.\n`;
   }
+  if (pulados > 0) {
+    r += `• Foram identificados ${pulados} item(s) pulado(s) na sua área, gerando penalidade de qualidade. Veja o direcionamento abaixo.\n`;
+  }
+  if (duplicados > 0) {
+    r += `• Foram identificadas ${duplicados} contagem(ns) duplicada(s), gerando penalidade de qualidade.\n`;
+  }
   if (
     ev.pctErro <= perfil.targets.erroTolerancia &&
-    ev.pctBloco <= perfil.targets.maxBlockLimit
+    ev.pctBloco <= perfil.targets.maxBlockLimit &&
+    pulados === 0 &&
+    duplicados === 0
   ) {
     r += `• A sua atuação está dentro dos parâmetros esperados de qualidade e aderência ao método para este perfil.\n`;
   }
@@ -286,19 +399,26 @@ export function generateInventExpIndividualReportText(
     r += `\n---\n\n`;
   }
 
+  // =========================================================================
+  // DIRECIONAMENTO — baseado no perfil comportamental
+  // =========================================================================
   r += `## 📌 DIRECIONAMENTO PARA O PRÓXIMO INVENTÁRIO\n\n`;
-  
-  const pulados = d.itensPulados || 0;
-  const duplicados = d.itensDuplicados || 0;
 
-  if (pulados > 15) {
-    r += `💡 **Foco em Varredura:** No próximo inventário, sua atenção deve ser voltada para a varredura visual completa da prateleira (da esquerda para a direita, de cima para baixo), garantindo que nenhum produto ou gancho fique para trás sem o bip.\n\n`;
-  } else if (duplicados > 20) {
-    r += `💡 **Foco em Demarcação:** Certifique-se de marcar visualmente ou usar as etiquetas de marcação nas seções para nunca recontar uma área que você ou seu colega já finalizaram.\n\n`;
-  } else if (ev.nivel === "EXCELENTE" || ev.nivel === "BOM") {
-    r += `✅ **Manter o Padrão:** Continue mantendo o equilíbrio atual entre velocidade e qualidade. Seus números de atenção visual estão muito bons!\n\n`;
+  if (perfilInfo) {
+    r += `### ${perfilInfo.titulo}\n\n`;
+    r += `${perfilInfo.descricao}\n\n`;
+    r += `${perfilInfo.diretriz}\n\n`;
   } else {
-    r += `⚠️ **Ajuste de Qualidade:** Priorize reduzir o % de erro bruto digitado. Revise junto à liderança os principais tipos de erros ocorridos hoje e reduza o uso de contagem em bloco quando não for estritamente necessário.\n\n`;
+    // Fallback para quando não há dados de tags estendidos
+    if (pulados > 15) {
+      r += `💡 **Foco em Varredura:** No próximo inventário, sua atenção deve ser voltada para a varredura visual completa da prateleira (da esquerda para a direita, de cima para baixo), garantindo que nenhum produto ou gancho fique para trás sem o bip.\n\n`;
+    } else if (duplicados > 20) {
+      r += `💡 **Foco em Demarcação:** Certifique-se de marcar visualmente ou usar as etiquetas de marcação nas seções para nunca recontar uma área que você ou seu colega já finalizaram.\n\n`;
+    } else if (ev.nivel === "EXCELENTE" || ev.nivel === "BOM") {
+      r += `✅ **Manter o Padrão:** Continue mantendo o equilíbrio atual entre velocidade e qualidade. Seus números de atenção visual estão muito bons!\n\n`;
+    } else {
+      r += `⚠️ **Ajuste de Qualidade:** Priorize reduzir o % de erro bruto digitado. Revise junto à liderança os principais tipos de erros ocorridos hoje e reduza o uso de contagem em bloco quando não for estritamente necessário.\n\n`;
+    }
   }
 
   r += `Contamos com sua atenção e evolução no próximo processo!\n`;

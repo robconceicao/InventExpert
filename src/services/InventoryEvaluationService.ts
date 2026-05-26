@@ -4,6 +4,7 @@ import type {
   InventoryCheckerEvaluation,
   InventoryCheckerInput,
   InventoryOperationType,
+  PerfilComportamental,
   SectionAccuracyRecord,
 } from "../types";
 
@@ -35,7 +36,7 @@ function calcularScoreQualidade(pctErro: number, k: number): number {
 
 function calcularPontosVolume(icv: number, nivelExperiencia: CheckerExperienceLevel): number {
   let pontos = Math.min(icv, 150);
-  
+
   const ajustes = {
     novato:  { bonus: 20, penalidade: 0.5 },
     junior:  { bonus: 10, penalidade: 0.7 },
@@ -43,17 +44,40 @@ function calcularPontosVolume(icv: number, nivelExperiencia: CheckerExperienceLe
     senior:  { bonus: -10, penalidade: 1.3 },
     expert:  { bonus: -15, penalidade: 1.5 },
   };
-  
+
   const ajuste = ajustes[nivelExperiencia] || ajustes.pleno;
-  
+
   if (icv >= 100) {
     pontos = Math.min(pontos + ajuste.bonus, 100);
   } else {
     const deficit = 100 - icv;
     pontos = icv - (deficit * ajuste.penalidade);
   }
-  
+
   return Math.max(0, Math.min(100, pontos));
+}
+
+/**
+ * Classifica o perfil comportamental do conferente com base nos padrões
+ * de omissão e excesso identificados via produtividade_tag.
+ *
+ * Lógica de sinais do Qtd(A1):
+ *   Qtd(A1) > 0 = auditor achou produto que o conferente PULOU (omissão)
+ *   Qtd(A1) < 0 = conferente bipou a mais do que existia (excesso/duplicação)
+ *
+ * Omissão é mais grave: o produto pulado gera perda financeira invisível no sistema
+ * individual, pois sem registro de bip nenhuma matrícula recebe o erro bruto.
+ */
+export function calcularPerfilComportamental(
+  itensPulados: number,
+  itensDuplicados: number,
+): PerfilComportamental {
+  const altoOmissao = itensPulados > 15;
+  const altoExcesso = itensDuplicados > 20;
+  if (altoOmissao && altoExcesso) return "DESATENTO_GERAL";
+  if (altoOmissao) return "PULA_ITENS";
+  if (altoExcesso) return "FANTASMA";
+  return "EQUILIBRADO";
 }
 
 export function evaluateChecker(
@@ -101,7 +125,7 @@ export function evaluateChecker(
   const nivelExp   = data.experiencia || "pleno";
   const fatorExp   = getExperienciaFator(nivelExp);
   const fatorTempo = duracaoRealInventario > 0 ? 5 / duracaoRealInventario : 1;
-  
+
   let minimoIndividual = 0;
   let icv             = 0;
   let pontosVolume    = 100;
@@ -179,45 +203,71 @@ export function evaluateChecker(
     }
   }
 
-  // ANÁLISE COMPORTAMENTAL (Omissão vs Excesso)
+  // =========================================================================
+  // ANÁLISE COMPORTAMENTAL — Omissão vs Excesso
+  //
+  // Fonte: produtividade_tag, coluna Qtd(A1)
+  //   Qtd(A1) > 0 → auditor achou produto que o conferente PULOU (itensPulados)
+  //   Qtd(A1) < 0 → conferente bipou A MAIS do que existia (itensDuplicados)
+  //
+  // Por que omissão é MAIS penalizada:
+  //   O conferente que pula não recebe erro bruto individual (sem bip = sem linha
+  //   de erro na matrícula). Mas o produto não contado gera furo de estoque real,
+  //   cujo custo é assumido pela loja. É uma perda financeira invisível no indicador
+  //   de produtividade, visível apenas no relatório de seções (produtividade_tag).
+  //   Esta penalidade corrige essa assimetria.
+  //
+  // Por que excesso é MENOS penalizado:
+  //   A duplicação é capturada pela auditoria de divergência antes do fechamento.
+  //   O dano financeiro direto é menor porque o ajuste é feito em tempo real.
+  // =========================================================================
   const itensPulados    = data.itensPulados    || 0;
   const itensDuplicados = data.itensDuplicados || 0;
-  
+
   if (itensPulados > 0) {
-    const penalidadeOmissao = Math.min(itensPulados * 0.5, 30);
+    // Penalidade de omissão: 0.7 pt por item pulado, máximo 40 pts
+    // (anterior: 0.5 pt, máximo 30 pts — aumentado para refletir impacto real)
+    const penalidadeOmissao = Math.min(itensPulados * 0.7, 40);
     scoreFinal -= penalidadeOmissao;
+
     if (itensPulados > 15) {
       tags.push("🚨 O 'Conferente que Pula' (Omissões altas)");
+    } else if (itensPulados > 5) {
+      tags.push("⚠️ Atenção à Varredura (Omissões moderadas)");
     }
   }
 
   if (itensDuplicados > 0) {
+    // Penalidade de excesso: 0.2 pt por item duplicado, máximo 20 pts (mantido)
     const penalidadeExcesso = Math.min(itensDuplicados * 0.2, 20);
     scoreFinal -= penalidadeExcesso;
+
     if (itensDuplicados > 20) {
       tags.push("🔄 Fantasmas (Excesso de repetições)");
     }
   }
 
+  // Perfil oposto: alta duplicação com baixa omissão (conta demais, pula pouco)
+  if (itensDuplicados > 20 && itensPulados <= 5) {
+    tags.push("🔄 O Oposto: Duplicador (bipa mais, pula menos)");
+  }
+
   // ICSI — Índice de Consistência Seção vs. Item
   // Mede se os erros individuais são "diretos" (alto ICSI) ou "ocultos por compensação" (baixo ICSI)
-  // erroSecao = Σ|Qtd(A1)| — sempre <= erro individual (os erros se compensam nas seções)
   let icsi: number | undefined;
   const erroSecao = data.erroSecao;
 
   if (erroSecao !== undefined && erro > 0) {
-    // ICSI: quanto do erro individual sobreviveu como erro de seção (sem se compensar)
-    // 1.0 = todos os erros são diretos (pior caso para o conferente)
-    // 0.0 = todos os erros se compensaram nas seções (risco oculto — seção parece boa mas não foi)
     icsi = Math.min(erroSecao / erro, 1.0);
-
-    // Risco oculto: erros altos mas ICSI baixo (compensação interna na seção mascara o problema)
     if (icsi < 0.5 && erro > 10) {
       tags.push("⚠️ Erros Compensados (risco oculto na seção)");
     }
   } else if (erroSecao !== undefined && erro === 0 && erroSecao === 0) {
-    icsi = 1.0; // zero erros em ambos = perfeito
+    icsi = 1.0;
   }
+
+  // PERFIL COMPORTAMENTAL — classificação final derivada da análise de sinais
+  const perfilComportamental = calcularPerfilComportamental(itensPulados, itensDuplicados);
 
   const scoreFinalClamped = Math.round(
     Math.max(0, Math.min(100, scoreFinal)),
@@ -265,6 +315,7 @@ export function evaluateChecker(
     nivel,
     nivelColor,
     tags,
+    perfilComportamental,
   };
 }
 
@@ -290,5 +341,21 @@ export function getDistribuicaoNiveis(evaluations: InventoryCheckerEvaluation[])
     BOM:       evaluations.filter(e => e.nivel === "BOM").length,
     ATENCAO:   evaluations.filter(e => e.nivel === "ATENCAO").length,
     CRITICO:   evaluations.filter(e => e.nivel === "CRITICO").length,
+  };
+}
+
+/**
+ * Distribui a equipe por perfil comportamental.
+ * Útil para o relatório gerencial identificar padrões de erro coletivos.
+ * Disponível apenas quando tags estendidos (produtividade_tag) foram importados.
+ */
+export function getDistribuicaoPerfilComportamental(
+  evaluations: InventoryCheckerEvaluation[],
+) {
+  return {
+    PULA_ITENS:      evaluations.filter(e => e.perfilComportamental === "PULA_ITENS").length,
+    FANTASMA:        evaluations.filter(e => e.perfilComportamental === "FANTASMA").length,
+    DESATENTO_GERAL: evaluations.filter(e => e.perfilComportamental === "DESATENTO_GERAL").length,
+    EQUILIBRADO:     evaluations.filter(e => e.perfilComportamental === "EQUILIBRADO").length,
   };
 }
