@@ -1,6 +1,8 @@
 import React from "react";
 import { Image, StyleSheet, View } from "react-native";
 
+import { Ionicons } from "@expo/vector-icons";
+
 interface AppLogoProps {
   size?: number;
   color?: string;
@@ -10,7 +12,8 @@ interface AppLogoProps {
 
 export default function AppLogo({
   size = 28,
-  glowColor = "rgba(96, 165, 250, 0.3)",
+  color = "#fff",
+  glowColor = "rgba(255, 255, 255, 0.15)",
 }: AppLogoProps) {
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -25,10 +28,7 @@ export default function AppLogo({
           },
         ]}
       />
-      <Image
-        source={require("../../assets/images/app-logo.png")}
-        style={{ width: size, height: size, resizeMode: "contain" }}
-      />
+      <Ionicons name="cube-outline" size={size} color={color} />
     </View>
   );
 }
