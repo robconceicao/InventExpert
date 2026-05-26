@@ -55,8 +55,34 @@ export default function InventExpImportScreen() {
   const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>([]);
   const [sectionAccuracy, setSectionAccuracy] = useState<SectionAccuracyRecord[]>([]);
   const [isExtendedTags, setIsExtendedTags] = useState(false);
-  /** Modalidade de contrato padrão da operação (aplicada a todos os conferentes processados) */
-  const [modalidadeContrato, setModalidadeContrato] = useState<ModalidadeContrato>("CLT");
+  /**
+   * Mapa individual de modalidade de contrato por conferente (chave = nome em minúsculas).
+   * Padrão: "CLT". Alterável por linha no ranking após processar.
+   */
+  const [modalidades, setModalidades] = useState<Record<string, ModalidadeContrato>>({});
+
+  const MODALIDADE_CYCLE: ModalidadeContrato[] = ["CLT", "INTERMITENTE", "FREELANCE"];
+  const MODALIDADE_COLOR: Record<ModalidadeContrato, string> = {
+    CLT: "#2563eb",
+    INTERMITENTE: "#059669",
+    FREELANCE: "#f59e0b",
+  };
+  const MODALIDADE_LABEL: Record<ModalidadeContrato, string> = {
+    CLT: "CLT",
+    INTERMITENTE: "INT",
+    FREELANCE: "FREE",
+  };
+
+  const getModalidade = (nome: string): ModalidadeContrato =>
+    modalidades[nome.toLowerCase().trim()] ?? "CLT";
+
+  const cycleModalidade = (nome: string) => {
+    const key = nome.toLowerCase().trim();
+    const current = modalidades[key] ?? "CLT";
+    const idx = MODALIDADE_CYCLE.indexOf(current);
+    const next = MODALIDADE_CYCLE[(idx + 1) % MODALIDADE_CYCLE.length];
+    setModalidades(prev => ({ ...prev, [key]: next }));
+  };
 
 
   const handlePickFile = async (type: 'prod' | 'tags') => {
@@ -116,7 +142,8 @@ export default function InventExpImportScreen() {
           itensDuplicados: tagsData.itensDuplicados,
           erroSecao: tagsResult.isExtended ? tagsData.erroSecao : undefined,
           numSecoes: tagsResult.isExtended ? tagsData.numSecoes : undefined,
-          modalidadeContrato,
+          // modalidadeContrato é definida individualmente no mapa `modalidades`
+          // e aplicada no momento do envio do relatório (handleSendIndividualWhatsApp)
         };
       })
     );
@@ -246,9 +273,15 @@ export default function InventExpImportScreen() {
     ev: InventoryCheckerEvaluation,
     index: number,
   ) => {
+    // Injeta a modalidade individual definida no ranking antes de gerar o relatório
+    const modalidade = getModalidade(ev.input.nome);
+    const evComModalidade: InventoryCheckerEvaluation = {
+      ...ev,
+      input: { ...ev.input, modalidadeContrato: modalidade },
+    };
     const text = generateInventExpIndividualReportText(
       operationType,
-      ev,
+      evComModalidade,
       index + 1,
       evaluations.length,
     );
@@ -259,7 +292,7 @@ export default function InventExpImportScreen() {
       () =>
         Alert.alert(
           "Erro",
-          "N\u00e3o foi poss\u00edvel abrir o WhatsApp neste dispositivo.",
+          "Não foi possível abrir o WhatsApp neste dispositivo.",
         ),
     );
   };
@@ -308,47 +341,7 @@ export default function InventExpImportScreen() {
             Erro (qtde).
           </Text>
 
-          {/* Seletor de Modalidade de Contrato */}
-          <Text style={[styles.label, { marginBottom: 6 }]}>Modalidade de Contrato</Text>
-          <Text style={[styles.subtitle, { marginTop: 0, marginBottom: 8 }]}>
-            Define o tom do relatório individual enviado via WhatsApp.
-          </Text>
-          <View style={styles.modalidadeRow}>
-            {(["CLT", "INTERMITENTE", "FREELANCE"] as ModalidadeContrato[]).map((m) => {
-              const isActive = modalidadeContrato === m;
-              const colors: Record<ModalidadeContrato, string> = {
-                CLT: "#2563eb",
-                INTERMITENTE: "#059669",
-                FREELANCE: "#f59e0b",
-              };
-              const color = colors[m];
-              return (
-                <Pressable
-                  key={m}
-                  onPress={() => setModalidadeContrato(m)}
-                  style={[
-                    styles.modalidadeBtn,
-                    isActive && { backgroundColor: color, borderColor: color },
-                  ]}
-                >
-                  <Text style={[
-                    styles.modalidadeBtnText,
-                    isActive && { color: "#fff" },
-                  ]}>
-                    {m === "INTERMITENTE" ? "INTERM." : m}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {modalidadeContrato === "FREELANCE" && (
-            <View style={styles.freelanceBanner}>
-              <Ionicons name="shield-checkmark-outline" size={16} color="#92400e" />
-              <Text style={styles.freelanceBannerText}>
-                Relatório técnico informativo — sem metas obrigatórias, sem penalidades e sem direcionamentos imperativos.
-              </Text>
-            </View>
-          )}
+
           <View style={styles.importRow}>
             <View style={{flex: 1}}>
               <Text style={styles.label}>Total de Peças</Text>
@@ -475,43 +468,63 @@ export default function InventExpImportScreen() {
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Ranking Avaliação</Text>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.th, { flex: 0.5 }]}>#</Text>
-                <Text style={[styles.th, { flex: 1.5 }]}>Conferente</Text>
-                <Text style={[styles.th, { flex: 0.7 }]}>Score</Text>
-                <Text style={[styles.th, { flex: 0.8 }]}>% Erro</Text>
-                <Text style={[styles.th, { flex: 0.9 }]}>Prod/h</Text>
-                {isExtendedTags && (
-                  <Text style={[styles.th, { flex: 0.8 }]}>Err.Seç</Text>
-                )}
+              {/* Legenda de modalidade */}
+              <View style={styles.modalidadeLegenda}>
+                <Ionicons name="information-circle-outline" size={14} color="#64748b" />
+                <Text style={styles.modalidadeLegendaText}>
+                  Toque no badge colorido para alternar o tipo de contrato de cada pessoa antes de enviar o relatório individual.
+                </Text>
               </View>
-              {evaluations.map((ev, index) => (
-                <Pressable
-                  key={ev.input.nome}
-                  style={styles.tableRow}
-                  onPress={() => handleSendIndividualWhatsApp(ev, index)}
-                >
-                  <Text style={[styles.tdRank, { flex: 0.5 }]}>{index + 1}º</Text>
-                  <Text style={[styles.tdNome, { flex: 1.5 }]}>{ev.input.nome}</Text>
-                  <Text style={[styles.tdScore, { flex: 0.7, color: ev.nivelColor }]}>
-                    {ev.scoreFinal}
-                  </Text>
-                  <Text style={[styles.td, { flex: 0.8 }]}>
-                    {ev.pctErro.toFixed(2)}%
-                  </Text>
-                  <Text style={[styles.td, { flex: 0.9 }]}>
-                    {ev.input.produtividade}
-                  </Text>
-                  {isExtendedTags && (
-                    <Text style={[
-                      styles.td,
-                      { flex: 0.8, color: ev.icsi !== undefined && ev.icsi < 0.5 ? "#f97316" : "#475569" }
-                    ]}>
-                      {ev.input.erroSecao ?? "-"}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.th, { flex: 0.4 }]}>#</Text>
+                <Text style={[styles.th, { flex: 1.4 }]}>Conferente</Text>
+                <Text style={[styles.th, { flex: 0.6 }]}>Score</Text>
+                <Text style={[styles.th, { flex: 0.7 }]}>% Erro</Text>
+                <Text style={[styles.th, { flex: 0.7 }]}>Contrato</Text>
+                {isExtendedTags && (
+                  <Text style={[styles.th, { flex: 0.7 }]}>Err.Seç</Text>
+                )}
+                <Text style={[styles.th, { flex: 0.5 }]}></Text>
+              </View>
+              {evaluations.map((ev, index) => {
+                const modalidade = getModalidade(ev.input.nome);
+                const badgeColor = MODALIDADE_COLOR[modalidade];
+                const badgeLabel = MODALIDADE_LABEL[modalidade];
+                return (
+                  <View key={ev.input.nome} style={styles.tableRow}>
+                    <Text style={[styles.tdRank, { flex: 0.4 }]}>{index + 1}º</Text>
+                    <Text style={[styles.tdNome, { flex: 1.4 }]} numberOfLines={1}>{ev.input.nome}</Text>
+                    <Text style={[styles.tdScore, { flex: 0.6, color: ev.nivelColor }]}>
+                      {ev.scoreFinal}
                     </Text>
-                  )}
-                </Pressable>
-              ))}
+                    <Text style={[styles.td, { flex: 0.7 }]}>
+                      {ev.pctErro.toFixed(2)}%
+                    </Text>
+                    {/* Badge clicável de modalidade de contrato */}
+                    <Pressable
+                      onPress={() => cycleModalidade(ev.input.nome)}
+                      style={[styles.modalidadeBadge, { backgroundColor: badgeColor, flex: 0.7 }]}
+                    >
+                      <Text style={styles.modalidadeBadgeText}>{badgeLabel}</Text>
+                    </Pressable>
+                    {isExtendedTags && (
+                      <Text style={[
+                        styles.td,
+                        { flex: 0.7, color: ev.icsi !== undefined && ev.icsi < 0.5 ? "#f97316" : "#475569" }
+                      ]}>
+                        {ev.input.erroSecao ?? "-"}
+                      </Text>
+                    )}
+                    {/* Botão de envio individual */}
+                    <Pressable
+                      onPress={() => handleSendIndividualWhatsApp(ev, index)}
+                      style={{ flex: 0.5, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
 
 
@@ -950,27 +963,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#64748b",
   },
-  // Modalidade de Contrato
-  modalidadeRow: {
+  // Modalidade de Contrato — badge individual por linha do ranking
+  modalidadeLegenda: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 10,
   },
-  modalidadeBtn: {
+  modalidadeLegendaText: {
     flex: 1,
+    fontSize: 11,
+    color: "#64748b",
+    lineHeight: 16,
+  },
+  modalidadeBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: "#cbd5e1",
-    paddingVertical: 8,
-    backgroundColor: "#f8fafc",
   },
-  modalidadeBtnText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748b",
-    letterSpacing: 0.5,
+  modalidadeBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.3,
   },
   freelanceBanner: {
     flexDirection: "row",
