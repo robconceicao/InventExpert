@@ -244,6 +244,13 @@ export interface InventoryCheckerEvaluation {
   scoreProdutividade: number;
   scoreAderencia: number;
   minimoEsperado?: number;
+  /**
+   * Meta de produtividade efetiva usada na avaliação (itens/h).
+   * Dinâmica quando total de peças é informado:
+   *   metaProdutividade = totalPecasLoja / numConferentes / duracaoPadrao
+   * Fallback: valor fixo do perfil (800/1200/1000 itens/h).
+   */
+  metaProdutividade?: number;
   icv?: number;
   pontosVolume?: number;
   bonusVolume?: number;

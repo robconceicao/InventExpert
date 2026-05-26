@@ -55,7 +55,8 @@ export function generateInventExpGerencialReportText(
   r += `| Taxa média de erro | ${resumo.taxaMediaErro}% |\n`;
   r += `| Produtividade média | ${resumo.produtividadeMedia} itens/h |\n`;
   r += `| Score médio | ${resumo.scoreMedio} |\n`;
-  r += `| Meta de produtividade | ${perfil.targets.productivity} itens/h |\n`;
+  const metaProdRef = evaluations[0]?.metaProdutividade ?? perfil.targets.productivity;
+  r += `| Meta de produtividade | ${metaProdRef} itens/h |\n`;
   r += `| Limite de bloco | ${perfil.targets.maxBlockLimit}% |\n`;
   r += `\n`;
 
@@ -321,7 +322,8 @@ function _generateFullReport(
     r += `- Meta de volume estimada para seu nível: ${ev.minimoEsperado} peças\n`;
     r += `- **ICV (Índice de Cumprimento de Volume): ${Math.round(ev.icv || 0)}%**\n`;
   }
-  r += `- Ritmo médio: ${d.produtividade} itens/h (meta do perfil: ${perfil.targets.productivity} itens/h)\n`;
+  const metaProd = ev.metaProdutividade ?? perfil.targets.productivity;
+  r += `- Ritmo médio: ${d.produtividade} itens/h (meta desta operação: ${metaProd} itens/h)\n`;
   r += `- % Erro: ${ev.pctErro.toFixed(2)}%\n`;
   r += `- % Bloco: ${ev.pctBloco.toFixed(1)}% (limite recomendado: ${perfil.targets.maxBlockLimit}%)\n\n`;
   r += `---\n\n`;
@@ -387,7 +389,7 @@ function _generateFullReport(
   if (ev.pctBloco > perfil.targets.maxBlockLimit) {
     r += `• O uso de contagem em Bloco acima do limite recomendado reduziu a nota de aderência ao método.\n`;
   }
-  if (d.produtividade > perfil.targets.productivity && ev.pctErro <= perfil.targets.erroTolerancia) {
+  if (d.produtividade > (ev.metaProdutividade ?? perfil.targets.productivity) && ev.pctErro <= perfil.targets.erroTolerancia) {
     r += `• Você recebeu bônus por manter boa qualidade mesmo com produtividade acima da meta.\n`;
   }
   if (ev.tags.includes("🚨 Risco de Contagem Superficial")) {
@@ -496,8 +498,9 @@ function _generateFreelanceTechnicalReport(
   r += `> Os valores abaixo são indicadores técnicos do serviço realizado.\n`;
   r += `> As referências de mercado indicadas são parâmetros do segmento, não metas vinculantes.\n\n`;
   r += `- Total de itens contabilizados: **${d.qtde}**\n`;
+  const metaProdRef2 = ev.metaProdutividade ?? perfil.targets.productivity;
   r += `- Ritmo de contagem: **${d.produtividade} itens/h**\n`;
-  r += `  _(Referência do segmento ${operationType}: ${perfil.targets.productivity} itens/h)_\n`;
+  r += `  _(Referência do segmento ${operationType}: ${metaProdRef2} itens/h)_\n`;
   r += `- Taxa de ajuste de quantidade: **${ev.pctErro.toFixed(2)}%**\n`;
   r += `  _(Referência de baixa variação do segmento: abaixo de ${perfil.targets.erroTolerancia}%)_\n`;
   r += `- Uso de contagem agrupada (bloco): **${ev.pctBloco.toFixed(1)}%**\n\n`;
