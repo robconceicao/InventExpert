@@ -26,6 +26,7 @@ import { getCheckerCurrentLevel } from "../services/CheckerDBService";
 import type {
     InventoryCheckerEvaluation,
     InventoryOperationType,
+    ModalidadeContrato,
     SectionAccuracyRecord,
 } from "../types";
 import { shareCsvFile, shareTextFile } from "../utils/export";
@@ -54,6 +55,8 @@ export default function InventExpImportScreen() {
   const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>([]);
   const [sectionAccuracy, setSectionAccuracy] = useState<SectionAccuracyRecord[]>([]);
   const [isExtendedTags, setIsExtendedTags] = useState(false);
+  /** Modalidade de contrato padrão da operação (aplicada a todos os conferentes processados) */
+  const [modalidadeContrato, setModalidadeContrato] = useState<ModalidadeContrato>("CLT");
 
 
   const handlePickFile = async (type: 'prod' | 'tags') => {
@@ -113,6 +116,7 @@ export default function InventExpImportScreen() {
           itensDuplicados: tagsData.itensDuplicados,
           erroSecao: tagsResult.isExtended ? tagsData.erroSecao : undefined,
           numSecoes: tagsResult.isExtended ? tagsData.numSecoes : undefined,
+          modalidadeContrato,
         };
       })
     );
@@ -303,6 +307,48 @@ export default function InventExpImportScreen() {
             CSV/Excel. Colunas: Nome, Qtde, Qtde1a1, Produtividade (itens/h),
             Erro (qtde).
           </Text>
+
+          {/* Seletor de Modalidade de Contrato */}
+          <Text style={[styles.label, { marginBottom: 6 }]}>Modalidade de Contrato</Text>
+          <Text style={[styles.subtitle, { marginTop: 0, marginBottom: 8 }]}>
+            Define o tom do relatório individual enviado via WhatsApp.
+          </Text>
+          <View style={styles.modalidadeRow}>
+            {(["CLT", "INTERMITENTE", "FREELANCE"] as ModalidadeContrato[]).map((m) => {
+              const isActive = modalidadeContrato === m;
+              const colors: Record<ModalidadeContrato, string> = {
+                CLT: "#2563eb",
+                INTERMITENTE: "#059669",
+                FREELANCE: "#f59e0b",
+              };
+              const color = colors[m];
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => setModalidadeContrato(m)}
+                  style={[
+                    styles.modalidadeBtn,
+                    isActive && { backgroundColor: color, borderColor: color },
+                  ]}
+                >
+                  <Text style={[
+                    styles.modalidadeBtnText,
+                    isActive && { color: "#fff" },
+                  ]}>
+                    {m === "INTERMITENTE" ? "INTERM." : m}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {modalidadeContrato === "FREELANCE" && (
+            <View style={styles.freelanceBanner}>
+              <Ionicons name="shield-checkmark-outline" size={16} color="#92400e" />
+              <Text style={styles.freelanceBannerText}>
+                Relatório técnico informativo — sem metas obrigatórias, sem penalidades e sem direcionamentos imperativos.
+              </Text>
+            </View>
+          )}
           <View style={styles.importRow}>
             <View style={{flex: 1}}>
               <Text style={styles.label}>Total de Peças</Text>
@@ -904,4 +950,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#64748b",
   },
+  // Modalidade de Contrato
+  modalidadeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  modalidadeBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#cbd5e1",
+    paddingVertical: 8,
+    backgroundColor: "#f8fafc",
+  },
+  modalidadeBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748b",
+    letterSpacing: 0.5,
+  },
+  freelanceBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#fef3c7",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+  },
+  freelanceBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#92400e",
+    lineHeight: 18,
+  },
 });
+

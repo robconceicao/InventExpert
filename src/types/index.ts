@@ -166,6 +166,18 @@ export interface AttendanceData {
 export type CheckerExperienceLevel = "novato" | "junior" | "pleno" | "senior" | "expert";
 
 /**
+ * Modalidade de contrato do conferente.
+ * Controla o tom e o conteúdo do relatório individual gerado pelo sistema:
+ *
+ * - CLT:          Vínculo empregatício formal — relatório completo com metas, penalidades e direcionamentos.
+ * - INTERMITENTE: Regime intermitente (CLT intermitente) — vínculo já existe, relatório completo.
+ * - FREELANCE:    Sem vínculo empregatício — relatório técnico informativo, sem metas obrigatórias,
+ *                 sem penalidades explícitas e sem direcionamentos imperativos, para evitar
+ *                 caracterização de subordinação jurídica.
+ */
+export type ModalidadeContrato = "CLT" | "INTERMITENTE" | "FREELANCE";
+
+/**
  * Perfil comportamental do conferente — derivado da análise de sinais do Qtd(A1)
  * extraído da produtividade_tag (positivo = omissão, negativo = excesso).
  *
@@ -202,6 +214,12 @@ export interface InventoryCheckerInput {
   erroSecao?: number;
   /** Número de seções físicas que o conferente trabalhou */
   numSecoes?: number;
+  /**
+   * Modalidade de contrato — controla o tom e conteúdo do relatório individual.
+   * Padrão: "CLT" (relatório completo). Use "FREELANCE" para relatório informativo
+   * sem metas e sem direcionamentos imperativos.
+   */
+  modalidadeContrato?: ModalidadeContrato;
 }
 
 export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";
