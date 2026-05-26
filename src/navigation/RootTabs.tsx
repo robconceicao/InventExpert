@@ -16,6 +16,7 @@ import AuthScreen from "../screens/AuthScreen";
 import ManagementScreen from "../screens/ManagementScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
 import CheckersScreen from "../screens/CheckersScreen";
+import InventoryDivergenceScreen from "../screens/InventoryDivergenceScreen";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 
 import AppLogo from "../components/AppLogo";
@@ -35,6 +36,7 @@ export type RootTabParamList = {
   Acompanhamento: undefined;
   ReportFarmaconde: undefined;
   Checkers: undefined;
+  InventoryDivergence: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -104,7 +106,12 @@ export default function RootTabs() {
           elevation: 0,
           shadowOpacity: 0,
           height: Platform.OS === "web" ? 56 : 60 + insets.bottom,
-          paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 10) : insets.bottom,
+          paddingBottom: Platform.OS === "android" ? Math.max(insets.bottom, 8) : insets.bottom,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "500",
         },
         tabBarIcon: ({ color, size }) => {
             const iconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
@@ -118,6 +125,7 @@ export default function RootTabs() {
               Acompanhamento: "list-outline",
               ReportFarmaconde: "medkit",
               Checkers: "people-circle-outline",
+              InventoryDivergence: "git-compare-outline",
             };
           const iconName = iconMap[route.name as keyof RootTabParamList] ?? "clipboard";
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -137,6 +145,11 @@ export default function RootTabs() {
       <Tab.Screen name="Checkers" component={CheckersScreen} options={{ title: "Conferentes" }} />
       <Tab.Screen name="InventExp" component={InventExpImportScreen} options={{ title: "Avaliação" }} />
       <Tab.Screen name="Management" component={ManagementScreen} options={{ title: "Gestão" }} />
+      <Tab.Screen
+        name="InventoryDivergence"
+        component={InventoryDivergenceScreen}
+        options={{ title: "Divergências", tabBarButton: () => null }}
+      />
       {showScanner ? (
         <Tab.Screen name="Scanner" component={ScannerScreen} options={{ title: "Scanner" }} />
       ) : null}
