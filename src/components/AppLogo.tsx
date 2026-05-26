@@ -1,7 +1,4 @@
-import React from "react";
 import { Image, StyleSheet, View } from "react-native";
-
-import { Ionicons } from "@expo/vector-icons";
 
 interface AppLogoProps {
   size?: number;
@@ -28,7 +25,10 @@ export default function AppLogo({
           },
         ]}
       />
-      <Ionicons name="cube-outline" size={size} color={color} />
+      <Image
+        source={require("../../assets/images/app-logo.png")}
+        style={{ width: size, height: size, resizeMode: "contain", tintColor: color }}
+      />
     </View>
   );
 }
