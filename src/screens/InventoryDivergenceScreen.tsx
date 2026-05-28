@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Platform,
@@ -21,6 +21,7 @@ import {
   crossReferenceInventory,
 } from "../utils/inventoryImportParsers";
 import { shareCsvFile } from "../utils/export";
+import { getCheckersDB } from "../services/CheckerDBService";
 
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────────
 
@@ -245,6 +246,47 @@ export default function InventoryDivergenceScreen() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [sectionLimits, setSectionLimits] = useState<Record<string, number>>({});
 
+  // ── Estado para busca de conferentes ──
+  const [checkerSearch, setCheckerSearch] = useState("");
+  const [checkerLimit, setCheckerLimit] = useState(50);
+
+  // ── Carregar banco de conferentes (semente CADFUN) automaticamente ──
+  useEffect(() => {
+    async function loadCheckersFromDB() {
+      try {
+        const dbList = await getCheckersDB();
+        const mappedOps: ParsedOperator[] = dbList.map((c) => ({
+          id: "",
+          name: c.nome,
+          role: c.inventarios_base === 51 ? "Líder/Coordenador (EXPERT)" : "Conferente (PLENO)",
+        }));
+        setOperators(mappedOps);
+      } catch (error) {
+        console.warn("Failed to load preloaded checkers:", error);
+      }
+    }
+    loadCheckersFromDB();
+  }, []);
+
+  // ── Conferentes filtrados (para evitar gargalo na renderização de 900+ itens) ──
+  const filteredOperators = useMemo(() => {
+    let list = operators;
+    if (checkerSearch.trim()) {
+      const q = checkerSearch.toLowerCase();
+      list = list.filter(
+        (op) =>
+          op.name.toLowerCase().includes(q) ||
+          (op.role && op.role.toLowerCase().includes(q)) ||
+          (op.id && op.id.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [operators, checkerSearch]);
+
+  const displayedOperators = useMemo(() => {
+    return filteredOperators.slice(0, checkerLimit);
+  }, [filteredOperators, checkerLimit]);
+
   // ── Detectar adaptador disponível ──
   const detectedAdapter = useMemo(
     () => InventoryImportRegistry.detect(files),
@@ -269,9 +311,18 @@ export default function InventoryDivergenceScreen() {
       } else if (key === "agentes") {
         const parsed = parseAgentes(text);
         setOperators((prev) => {
-          // Mescla: se CadFun já foi carregado, enriquece; senão usa agentes
-          if (prev.length > 0) return prev;
-          return parsed;
+          // O banco de dados já está carregado em prev.
+          // Vamos cruzar cada agente de "agentes.txt" com o banco para obter o cargo (role) e CPF.
+          return parsed.map((agent) => {
+            const dbMatch = prev.find(
+              (p) => p.name.toLowerCase().trim() === agent.name.toLowerCase().trim()
+            );
+            return {
+              ...agent,
+              role: dbMatch?.role || agent.role,
+              cpf: dbMatch?.cpf || agent.cpf,
+            };
+          });
         });
       }
     } catch {
@@ -398,7 +449,12 @@ export default function InventoryDivergenceScreen() {
           {/* Bloco Conferentes */}
           <View style={styles.adapterBlock}>
             <Text style={styles.adapterLabel}>👥 Equipe de Conferentes</Text>
-            <FileSlot label="Cadastro de Funcionários" hint="CadFun.txt — matrícula, cargo, CPF" loaded={!!files["cadFun"]} onPick={() => pickFile("cadFun", "CadFun")} />
+            <View style={styles.cadfunPreloaded}>
+              <Ionicons name="checkmark-circle" size={16} color="#059669" />
+              <Text style={styles.cadfunPreloadedText}>
+                Cadastro de Funcionários (CADFUN) integrado automaticamente.
+              </Text>
+            </View>
             <FileSlot label="Agentes do Inventário" hint="agentes.txt — IDs do ProInv" loaded={!!files["agentes"]} onPick={() => pickFile("agentes", "agentes")} />
           </View>
 
@@ -729,18 +785,30 @@ export default function InventoryDivergenceScreen() {
             {/* ── CONFERENTES ── */}
             {activeTab === "conferentes" && (
               <View style={styles.section}>
-                {operators.length === 0 ? (
+                <TextInput
+                  value={checkerSearch}
+                  onChangeText={(text) => {
+                    setCheckerSearch(text);
+                    setCheckerLimit(50); // Reseta o limite ao buscar
+                  }}
+                  placeholder="Buscar por nome ou cargo..."
+                  placeholderTextColor="#94a3b8"
+                  style={styles.searchInput}
+                />
+
+                {filteredOperators.length === 0 ? (
                   <View style={styles.emptyBox}>
                     <Ionicons name="people-outline" size={40} color="#cbd5e1" />
-                    <Text style={styles.emptyTitle}>Nenhum conferente carregado</Text>
-                    <Text style={styles.emptyHint}>
-                      Importe o arquivo CadFun.txt (ou agentes.txt) para visualizar a equipe.
-                    </Text>
+                    <Text style={styles.emptyTitle}>Nenhum conferente encontrado</Text>
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.opCount}>{fmtNum(operators.length)} colaboradores cadastrados</Text>
-                    {operators.map((op, i) => (
+                    <Text style={styles.opCount}>
+                      {checkerSearch.trim()
+                        ? `${filteredOperators.length} encontrados`
+                        : `Mostrando ${Math.min(checkerLimit, filteredOperators.length)} de ${operators.length} colaboradores`}
+                    </Text>
+                    {displayedOperators.map((op, i) => (
                       <View key={i} style={styles.opRow}>
                         <View style={styles.opAvatar}>
                           <Text style={styles.opAvatarText}>{op.name.charAt(0)}</Text>
@@ -754,6 +822,17 @@ export default function InventoryDivergenceScreen() {
                         </View>
                       </View>
                     ))}
+                    {filteredOperators.length > checkerLimit && (
+                      <Pressable
+                        style={styles.accordionShowMore}
+                        onPress={() => setCheckerLimit((prev) => prev + 50)}
+                      >
+                        <Ionicons name="chevron-down-outline" size={14} color="#2563eb" />
+                        <Text style={styles.accordionShowMoreText}>
+                          Mostrar mais {filteredOperators.length - checkerLimit} colaboradores
+                        </Text>
+                      </Pressable>
+                    )}
                   </>
                 )}
               </View>
@@ -1087,4 +1166,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   accordionShowMoreText: { fontSize: 11, fontWeight: "700", color: "#2563eb" },
+  cadfunPreloaded: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ecfdf5",
+    borderWidth: 1,
+    borderColor: "#a7f3d0",
+    borderRadius: 8,
+    padding: 10,
+    gap: 8,
+    marginBottom: 4,
+  },
+  cadfunPreloadedText: {
+    fontSize: 12,
+    color: "#065f46",
+    fontWeight: "600",
+    flex: 1,
+  },
 });

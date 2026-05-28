@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CheckerDBRecord, CheckerExperienceLevel, AttendanceData } from "../types";
+import cadfunSeed from "../config/cadfun_seed.json";
 
 const CHECKER_DB_KEY = "inventexpert:checkers_db";
 const HISTORY_KEY = "inventexpert:attendance:history";
+const SEEDED_FLAG_KEY = "inventexpert:cadfun_seeded_v1";
 
 // Helper to convert base level to number of inventories
 export function levelToBaseInventories(level: CheckerExperienceLevel): number {
@@ -34,14 +36,40 @@ export function totalInventoriesToLevel(total: number): CheckerExperienceLevel {
 export async function getCheckersDB(): Promise<CheckerDBRecord[]> {
   try {
     const stored = await AsyncStorage.getItem(CHECKER_DB_KEY);
+    let currentDb: CheckerDBRecord[] = [];
     if (stored) {
-      return JSON.parse(stored) as CheckerDBRecord[];
+      currentDb = JSON.parse(stored) as CheckerDBRecord[];
     }
+
+    // Check if we need to seed or merge CADFUN checkers
+    const alreadySeeded = await AsyncStorage.getItem(SEEDED_FLAG_KEY);
+    if (!alreadySeeded) {
+      const seed = cadfunSeed as CheckerDBRecord[];
+      const mergedMap = new Map<string, CheckerDBRecord>();
+
+      // Load seed checkers first
+      for (const item of seed) {
+        mergedMap.set(item.nome.toLowerCase().trim(), item);
+      }
+
+      // Merge with current DB records
+      for (const item of currentDb) {
+        mergedMap.set(item.nome.toLowerCase().trim(), item);
+      }
+
+      const mergedList = Array.from(mergedMap.values());
+      await AsyncStorage.setItem(CHECKER_DB_KEY, JSON.stringify(mergedList));
+      await AsyncStorage.setItem(SEEDED_FLAG_KEY, "true");
+      return mergedList;
+    }
+
+    return currentDb;
   } catch (error) {
     console.warn("Failed to load checkers DB", error);
   }
   return [];
 }
+
 
 export async function saveCheckerToDB(nome: string, level: CheckerExperienceLevel): Promise<void> {
   const db = await getCheckersDB();
