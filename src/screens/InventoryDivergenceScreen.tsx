@@ -31,7 +31,7 @@ interface ParsedOperator {
   cpf?: string;
 }
 
-type TabKey = "resumo" | "perdas" | "sobras" | "secoes" | "conferentes";
+type TabKey = "resultado_final" | "resumo" | "perdas" | "sobras" | "secoes" | "conferentes";
 type FilterStatus = "TODOS" | "PERDA" | "SOBRA" | "OK";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -139,6 +139,96 @@ function VarianceRow({ v }: { v: ProductVariance }) {
   );
 }
 
+interface AnalysisInsight {
+  type: "loss" | "surplus" | "symmetry" | "unmatched" | "general";
+  title: string;
+  description: string;
+  action: string;
+  severity: "critical" | "warning" | "info";
+}
+
+function generateAnalysisInsights(
+  result: InventoryImportResult,
+  sectionSummary: Array<{ sec: string; loss: number; surplus: number; lossU: number; surplusU: number; count: number }>
+): AnalysisInsight[] {
+  const insights: AnalysisInsight[] = [];
+  if (!result || result.variances.length === 0) return insights;
+
+  const totalSystemValue = result.variances.reduce((acc, v) => acc + (v.systemQty * v.unitCost), 0);
+  const absDiscrepancy = result.summary.totalLoss + result.summary.totalSurplus;
+  const valueAccuracy = totalSystemValue > 0 ? Math.max(0, 1 - (absDiscrepancy / totalSystemValue)) * 100 : 100;
+  
+  const okSkus = result.variances.filter(v => v.status === "OK").length;
+  const skuAccuracy = result.variances.length > 0 ? (okSkus / result.variances.length) * 100 : 100;
+
+  if (valueAccuracy < 92) {
+    insights.push({
+      type: "general",
+      title: "Baixa Acurácia Financeira",
+      description: `A acurácia financeira geral está em ${valueAccuracy.toFixed(1)}%, abaixo do recomendado (95%). O valor absoluto das divergências (perdas + sobras) soma ${fmtBrl(absDiscrepancy)}.`,
+      action: "Realizar inventários rotativos urgentes e auditar processos de movimentação de estoque.",
+      severity: "critical"
+    });
+  } else {
+    insights.push({
+      type: "general",
+      title: "Acurácia Geral Adequada",
+      description: `A acurácia financeira consolidada está em ${valueAccuracy.toFixed(1)}%, com divergência líquida de ${fmtBrl(result.summary.netBalance)}.`,
+      action: "Manter controle regular de estoque e cronograma padrão de auditorias cíclicas.",
+      severity: "info"
+    });
+  }
+
+  const topLossSection = sectionSummary[0];
+  if (topLossSection && topLossSection.loss > 300) {
+    insights.push({
+      type: "loss",
+      title: `Perda Crítica: Seção ${topLossSection.sec}`,
+      description: `A seção "${topLossSection.sec}" lidera o ranking de perdas com ${fmtBrl(topLossSection.loss)} acumulados em ${topLossSection.lossU} unidades.`,
+      action: `Aumentar o monitoramento visual e controle na área de exposição da seção ${topLossSection.sec}. Instituir contagens cíclicas frequentes.`,
+      severity: "critical"
+    });
+  }
+
+  const topSurplusSection = [...sectionSummary].sort((a, b) => b.surplus - a.surplus)[0];
+  if (topSurplusSection && topSurplusSection.surplus > 300) {
+    insights.push({
+      type: "surplus",
+      title: `Sobra Excessiva: Seção ${topSurplusSection.sec}`,
+      description: `A seção "${topSurplusSection.sec}" apresenta sobra de ${fmtBrl(topSurplusSection.surplus)} em ${topSurplusSection.surplusU} unidades.`,
+      action: `Auditar o recebimento e checagem física de notas para itens da seção ${topSurplusSection.sec}. Verificar possíveis inversões de EANs.`,
+      severity: "warning"
+    });
+  }
+
+  const totalLoss = result.summary.totalLoss;
+  const totalSurplus = result.summary.totalSurplus;
+  if (totalLoss > 500 && totalSurplus > 500) {
+    const ratio = Math.min(totalLoss, totalSurplus) / Math.max(totalLoss, totalSurplus);
+    if (ratio > 0.35) {
+      insights.push({
+        type: "symmetry",
+        title: "Inversão / Troca de Códigos Detectada",
+        description: `Simetria expressiva de perdas e sobras (Sincronia de ${(ratio * 100).toFixed(0)}%). Indica que itens similares estão sendo invertidos no momento da venda ou da contagem.`,
+        action: "Instituir bipe unitário obrigatório nas frentes de caixa e orientar a equipe a bipar cada produto individualmente no inventário.",
+        severity: "warning"
+      });
+    }
+  }
+
+  if (result.unmatched > 0) {
+    insights.push({
+      type: "unmatched",
+      title: "Divergências de Itens sem Cadastro",
+      description: `Foram contados ${result.unmatched} produtos cujo EAN não foi localizado no cadastro oficial do sistema.`,
+      action: "Executar higienização do cadastro de produtos e associar corretamente os códigos EANs correspondentes.",
+      severity: "warning"
+    });
+  }
+
+  return insights;
+}
+
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
 export default function InventoryDivergenceScreen() {
@@ -149,9 +239,11 @@ export default function InventoryDivergenceScreen() {
   const [operators, setOperators] = useState<ParsedOperator[]>([]);
   const [result, setResult] = useState<InventoryImportResult | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>("resumo");
+  const [activeTab, setActiveTab] = useState<TabKey>("resultado_final");
   const [filter, setFilter] = useState<FilterStatus>("TODOS");
   const [search, setSearch] = useState("");
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [sectionLimits, setSectionLimits] = useState<Record<string, number>>({});
 
   // ── Detectar adaptador disponível ──
   const detectedAdapter = useMemo(
@@ -202,7 +294,7 @@ export default function InventoryDivergenceScreen() {
       await new Promise<void>((res) => setTimeout(res, 30)); // yield para UI
       const r = crossReferenceInventory(adapter, files);
       setResult(r);
-      setActiveTab("resumo");
+      setActiveTab("resultado_final");
     } catch (e: any) {
       Alert.alert("Erro ao processar", String(e?.message ?? e));
     } finally {
@@ -267,9 +359,15 @@ export default function InventoryDivergenceScreen() {
     return [...map.values()].sort((a, b) => b.loss - a.loss);
   }, [result]);
 
+  const insights = useMemo(() => {
+    if (!result) return [];
+    return generateAnalysisInsights(result, sectionSummary);
+  }, [result, sectionSummary]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const TABS: { key: TabKey; label: string; icon: string }[] = [
+    { key: "resultado_final", label: "Resultado Final", icon: "document-text-outline" },
     { key: "resumo",      label: "Resumo",    icon: "pie-chart-outline" },
     { key: "perdas",      label: "Perdas",    icon: "trending-down-outline" },
     { key: "sobras",      label: "Sobras",    icon: "trending-up-outline" },
@@ -365,6 +463,198 @@ export default function InventoryDivergenceScreen() {
                 </Pressable>
               ))}
             </ScrollView>
+
+            {/* ── RESULTADO FINAL INVENTÁRIO ── */}
+            {activeTab === "resultado_final" && (
+              <View style={{ gap: 12 }}>
+                {/* 1. Indicadores de Acurácia */}
+                {(() => {
+                  const totalSystemValue = result.variances.reduce((acc, v) => acc + (v.systemQty * v.unitCost), 0);
+                  const totalCountedValue = result.variances.reduce((acc, v) => acc + (v.countedQty * v.unitCost), 0);
+                  const absDiscrepancy = result.summary.totalLoss + result.summary.totalSurplus;
+                  const valueAccuracy = totalSystemValue > 0 ? Math.max(0, 1 - (absDiscrepancy / totalSystemValue)) * 100 : 100;
+                  
+                  const okSkus = result.variances.filter(v => v.status === "OK").length;
+                  const skuAccuracy = result.variances.length > 0 ? (okSkus / result.variances.length) * 100 : 100;
+
+                  const accuracyColor = valueAccuracy >= 95 ? "#059669" : valueAccuracy >= 90 ? "#d97706" : "#ef4444";
+                  const skuAccuracyColor = skuAccuracy >= 95 ? "#059669" : skuAccuracy >= 90 ? "#d97706" : "#ef4444";
+
+                  return (
+                    <View style={styles.accuracyContainer}>
+                      <View style={styles.accuracyHeader}>
+                        <Text style={styles.accuracyTitle}>📊 Acurácia Geral do Inventário</Text>
+                        <Ionicons name="ribbon-outline" size={20} color={accuracyColor} />
+                      </View>
+                      
+                      <View style={{ gap: 8 }}>
+                        <View>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>Acurácia Financeira (Valor)</Text>
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: accuracyColor }}>{valueAccuracy.toFixed(1)}%</Text>
+                          </View>
+                          <View style={styles.accuracyProgressBg}>
+                            <View style={[styles.accuracyProgressFill, { width: `${valueAccuracy}%`, backgroundColor: accuracyColor }]} />
+                          </View>
+                        </View>
+
+                        <View>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>Acurácia de Itens (SKUs sem Divergência)</Text>
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: skuAccuracyColor }}>{skuAccuracy.toFixed(1)}%</Text>
+                          </View>
+                          <View style={styles.accuracyProgressBg}>
+                            <View style={[styles.accuracyProgressFill, { width: `${skuAccuracy}%`, backgroundColor: skuAccuracyColor }]} />
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.accuracyRow}>
+                        <View style={styles.accuracyMiniCard}>
+                          <Text style={styles.accuracyMiniLabel}>VALOR ESPERADO</Text>
+                          <Text style={styles.accuracyMiniValue}>{fmtBrl(totalSystemValue)}</Text>
+                        </View>
+                        <View style={styles.accuracyMiniCard}>
+                          <Text style={styles.accuracyMiniLabel}>VALOR CONTADO</Text>
+                          <Text style={styles.accuracyMiniValue}>{fmtBrl(totalCountedValue)}</Text>
+                        </View>
+                        <View style={styles.accuracyMiniCard}>
+                          <Text style={styles.accuracyMiniLabel}>SALDO LÍQUIDO</Text>
+                          <Text style={[styles.accuracyMiniValue, { color: result.summary.netBalance < 0 ? "#ef4444" : "#059669" }]}>
+                            {result.summary.netBalance > 0 ? "+" : ""}{fmtBrl(result.summary.netBalance)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+                {/* 2. Pré-Análise das Causas e Melhorias */}
+                {insights.length > 0 && (
+                  <View style={styles.insightSection}>
+                    <Text style={styles.insightTitle}>🔍 Pré-Análise & Diagnóstico de Divergências</Text>
+                    {insights.map((ins, idx) => {
+                      const borderColor = ins.severity === "critical" ? "#ef4444" : ins.severity === "warning" ? "#d97706" : "#2563eb";
+                      const headerColor = ins.severity === "critical" ? "#b91c1c" : ins.severity === "warning" ? "#b45309" : "#1d4ed8";
+                      const iconName = ins.severity === "critical" ? "alert-circle" : ins.severity === "warning" ? "warning" : "information-circle";
+                      return (
+                        <View key={idx} style={[styles.insightCard, { borderLeftColor: borderColor }]}>
+                          <View style={styles.insightCardHeader}>
+                            <Ionicons name={iconName as any} size={16} color={borderColor} />
+                            <Text style={[styles.insightCardTitle, { color: headerColor }]}>{ins.title}</Text>
+                          </View>
+                          <Text style={styles.insightDesc}>{ins.description}</Text>
+                          <View style={styles.insightActionBlock}>
+                            <Text style={styles.insightActionLabel}>Melhoria Recomendada</Text>
+                            <Text style={styles.insightActionText}>{ins.action}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* 3. Acordeão de Seções e Produtos */}
+                <View style={styles.accordionContainer}>
+                  <Text style={styles.accordionTitle}>📂 Divergências por Seção e Produtos</Text>
+                  {sectionSummary.map((s) => {
+                    const isExpanded = !!expandedSections[s.sec];
+                    return (
+                      <View key={s.sec} style={{ borderRadius: 10, overflow: "hidden" }}>
+                        <Pressable
+                          style={[styles.accordionHeader, isExpanded && styles.accordionHeaderExpanded]}
+                          onPress={() =>
+                            setExpandedSections((prev) => ({
+                              ...prev,
+                              [s.sec]: !prev[s.sec],
+                            }))
+                          }
+                        >
+                          <Text style={styles.accordionHeaderText} numberOfLines={1}>
+                            {s.sec}
+                          </Text>
+                          <Text style={styles.accordionHeaderSummary}>
+                            {s.loss > 0 && <Text style={{ color: "#ef4444" }}>Perda: {fmtBrl(s.loss)} ({fmtNum(s.lossU)} un)   </Text>}
+                            {s.surplus > 0 && <Text style={{ color: "#059669" }}>Sobra: {fmtBrl(s.surplus)} ({fmtNum(s.surplusU)} un)</Text>}
+                          </Text>
+                          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
+                        </Pressable>
+
+                        {isExpanded && (
+                          <View style={styles.accordionContent}>
+                            <View style={styles.accordionTableHeader}>
+                              <Text style={[styles.accordionTh, { flex: 2.2 }]}>Produto</Text>
+                              <Text style={[styles.accordionTh, { flex: 0.8, textAlign: "center" }]}>Sist.</Text>
+                              <Text style={[styles.accordionTh, { flex: 0.8, textAlign: "center" }]}>Cont.</Text>
+                              <Text style={[styles.accordionTh, { flex: 0.8, textAlign: "right" }]}>Dif.</Text>
+                              <Text style={[styles.accordionTh, { flex: 1.2, textAlign: "right" }]}>Valor</Text>
+                            </View>
+                            {(() => {
+                              const secVariances = result.variances
+                                .filter((v) => (v.section || "S/SEC") === s.sec && v.difference !== 0)
+                                .sort((a, b) => Math.abs(b.valueVariance) - Math.abs(a.valueVariance));
+
+                              if (secVariances.length === 0) {
+                                return <Text style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", paddingVertical: 8 }}>Sem divergências nesta seção.</Text>;
+                              }
+
+                              const limit = sectionLimits[s.sec] ?? 10;
+                              const displayed = secVariances.slice(0, limit);
+                              const hasMore = secVariances.length > limit;
+
+                              return (
+                                <>
+                                  {displayed.map((v, idx) => {
+                                    const isLoss = v.status === "PERDA";
+                                    const color = isLoss ? "#ef4444" : "#059669";
+                                    return (
+                                      <View key={idx} style={styles.accordionRow}>
+                                        <View style={{ flex: 2.2 }}>
+                                          <Text style={styles.accordionCellDesc} numberOfLines={1}>
+                                            {v.description}
+                                          </Text>
+                                          <Text style={styles.accordionCellMeta}>
+                                            EAN {v.ean} · Cód {v.itemCode}
+                                          </Text>
+                                        </View>
+                                        <Text style={[styles.accordionCellQty, { flex: 0.8 }]}>{fmtNum(v.systemQty)}</Text>
+                                        <Text style={[styles.accordionCellQty, { flex: 0.8 }]}>{fmtNum(v.countedQty)}</Text>
+                                        <Text style={[styles.accordionCellDiff, { flex: 0.8, color }]}>
+                                          {v.difference > 0 ? "+" : ""}{fmtNum(v.difference)}
+                                        </Text>
+                                        <Text style={[styles.accordionCellVal, { flex: 1.2, color }]}>
+                                          {v.valueVariance > 0 ? "+" : ""}{fmtBrl(v.valueVariance)}
+                                        </Text>
+                                      </View>
+                                    );
+                                  })}
+                                  {hasMore && (
+                                    <Pressable
+                                      style={styles.accordionShowMore}
+                                      onPress={() =>
+                                        setSectionLimits((prev) => ({
+                                          ...prev,
+                                          [s.sec]: limit + 15,
+                                        }))
+                                      }
+                                    >
+                                      <Ionicons name="chevron-down-outline" size={14} color="#2563eb" />
+                                      <Text style={styles.accordionShowMoreText}>
+                                        Mostrar mais {secVariances.length - limit} itens
+                                      </Text>
+                                    </Pressable>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* ── RESUMO ── */}
             {activeTab === "resumo" && (
@@ -662,4 +952,139 @@ const styles = StyleSheet.create({
   opAvatarText: { fontSize: 15, fontWeight: "700", color: "#2563eb" },
   opName:       { fontSize: 13, fontWeight: "600", color: "#1e293b" },
   opMeta:       { fontSize: 11, color: "#94a3b8", marginTop: 2 },
+
+  // Styles for Resultado Final
+  accuracyContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 4,
+  },
+  accuracyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  accuracyTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  accuracyProgressBg: {
+    height: 8,
+    backgroundColor: "#e2e8f0",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  accuracyProgressFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  accuracyRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 6,
+  },
+  accuracyMiniCard: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+  },
+  accuracyMiniLabel: { fontSize: 8, color: "#64748b", fontWeight: "700" },
+  accuracyMiniValue: { fontSize: 12, fontWeight: "700", color: "#1e293b", marginTop: 4 },
+
+  insightSection: { gap: 10, marginTop: 4 },
+  insightTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  insightCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    padding: 14,
+    gap: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  insightCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  insightCardTitle: { fontSize: 13, fontWeight: "700" },
+  insightDesc: { fontSize: 12, color: "#334155", lineHeight: 17 },
+  insightActionBlock: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 6,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    marginTop: 4,
+  },
+  insightActionLabel: { fontSize: 8, fontWeight: "800", color: "#475569", textTransform: "uppercase", letterSpacing: 0.5 },
+  insightActionText: { fontSize: 11, color: "#475569", marginTop: 2, lineHeight: 15 },
+
+  accordionContainer: { gap: 10, marginTop: 4 },
+  accordionTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  accordionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 12,
+  },
+  accordionHeaderExpanded: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomWidth: 0,
+  },
+  accordionHeaderText: { fontSize: 12, fontWeight: "700", color: "#1e293b", flex: 1 },
+  accordionHeaderSummary: { fontSize: 10, color: "#64748b", marginRight: 8, textAlign: "right" },
+  accordionContent: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  accordionTableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    paddingVertical: 6,
+    marginBottom: 4,
+  },
+  accordionTh: { fontSize: 9, fontWeight: "700", color: "#64748b" },
+  accordionRow: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    alignItems: "center",
+  },
+  accordionCellDesc: { fontSize: 11, fontWeight: "600", color: "#1e293b" },
+  accordionCellMeta: { fontSize: 9, color: "#94a3b8", marginTop: 1 },
+  accordionCellQty: { fontSize: 11, color: "#334155", textAlign: "center" },
+  accordionCellDiff: { fontSize: 11, fontWeight: "700", textAlign: "right" },
+  accordionCellVal: { fontSize: 11, fontWeight: "600", textAlign: "right" },
+  accordionShowMore: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 8,
+    gap: 4,
+  },
+  accordionShowMoreText: { fontSize: 11, fontWeight: "700", color: "#2563eb" },
 });

@@ -37,6 +37,18 @@ export default function AcompanhamentoScreen() {
         </View>
         <Ionicons name="chevron-forward" size={24} color="#fff" />
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.card, styles.cardDivergencias]}
+        onPress={() => navigation.navigate("InventoryDivergence")}
+      >
+        <Ionicons name="git-compare-outline" size={32} color="#fff" />
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>Resultado Final</Text>
+          <Text style={styles.cardDescription}>Análise de Divergências e Causas</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -72,6 +84,9 @@ const styles = StyleSheet.create({
   },
   cardFarmaconde: {
     backgroundColor: "#059669", // Emerald green for Farma
+  },
+  cardDivergencias: {
+    backgroundColor: "#7C3AED", // Violet for inventory divergence
   },
   cardContent: {
     flex: 1,
