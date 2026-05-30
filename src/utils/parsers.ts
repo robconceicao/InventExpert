@@ -365,14 +365,16 @@ const parseNumberBR = (s: string): number => {
  *   NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
  *   AMANDA DE OLIVEIRA;395,33;752;0;18;1,9;13;1,73%
  *
- * Também aceita o formato simplificado:
- *   Nome,Qtde,Qtde1a1,Produtividade,Erro
+ * Também aceita o Relatório de Produtividade (RProtmv):
+ *   Capa;Matrícula;Nome do Colaborador;Qtde;1a. Coleta;Ult. Coleta;Horas;Produtividade;Erro (Qtde);% (Erro/Qtd);…;1a1;BLOCO
+ *
+ * E o formato simplificado: Nome,Qtde,Qtde1a1,Produtividade,Erro
  *
  * Lógica:
- *  - qtde   → coluna "QTDE. VOLUMES" ou "Qtde"
- *  - qtde1a1 → coluna "1a1"
- *  - produtividade → coluna "PRODUTIVIDADE"
- *  - erro   → coluna "ERRO" (quantidade absoluta, não percentagem)
+ *  - qtde   → "Qtde" ou "QTDE. VOLUMES"
+ *  - qtde1a1 → "1a1" (não confunde com "1a. Coleta"); se ausente, deriva de Qtde − BLOCO
+ *  - produtividade → "Produtividade" / "HorasProdutividade"; senão Qtde ÷ Horas
+ *  - erro   → "Erro (Qtde)" / "ERRO" (absoluto); "% (Erro/Qtd)" só se não houver coluna de qtde de erro
  *
  * Nota: o pctBloco é REcalculado pelo sistema como (qtde - qtde1a1) / qtde,
  * ignorando a coluna "BLOCO" e "% ERRO" do CSV (usadas apenas para auditoria).
@@ -422,9 +424,41 @@ export const parseInventoryCheckersCsv = (
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 
+  type ColMap = {
+    nome: number;
+    matricula: number;
+    qtde: number;
+    qtde1a1: number;
+    produtividade: number;
+    horas: number;
+    erro: number;
+    pctErro: number;
+    bloco: number;
+  };
+
   let headerRowIndex = -1;
   let sep = /,/;
-  let col = { nome: -1, qtde: -1, qtde1a1: -1, produtividade: -1, erro: -1 };
+  let col: ColMap = {
+    nome: -1,
+    matricula: -1,
+    qtde: -1,
+    qtde1a1: -1,
+    produtividade: -1,
+    horas: -1,
+    erro: -1,
+    pctErro: -1,
+    bloco: -1,
+  };
+
+  const matchCol = (
+    header: string[],
+    patterns: RegExp[],
+    exclude?: RegExp,
+  ): number =>
+    header.findIndex((h) => {
+      if (!h || (exclude && exclude.test(h))) return false;
+      return patterns.some((p) => p.test(h));
+    });
 
   // Scan the first 30 lines to find the header row
   for (let r = 0; r < Math.min(lines.length, 30); r++) {
@@ -432,32 +466,64 @@ export const parseInventoryCheckersCsv = (
     const rawHeader = parseRow(lines[r], sep);
     const header = rawHeader.map(normalizeHeader);
 
-    const matchCol = (patterns: RegExp[], exclude?: RegExp): number => {
-      return header.findIndex((h) => {
-        if (exclude && exclude.test(h)) return false;
-        return patterns.some((p) => p.test(h));
-      });
-    };
+    const cNome = matchCol(header, [
+      /nome\s*(do\s*)?colaborador/,
+      /^nome$/,
+      /conferente/,
+      /colaborador/,
+    ]);
+    const cMatricula = matchCol(header, [/matricula/, /^matr$/]);
+    const cQtdeExact = header.findIndex((h) => /^qtde$/.test(h));
+    const cQtde =
+      cQtdeExact >= 0
+        ? cQtdeExact
+        : matchCol(
+            header,
+            [/^qtde\.?\s*volu/, /^quantidade$/, /^qtd$/, /total.*peca/, /volumes/],
+            /1a1|unit|coleta|erro|%/,
+          );
+    const cQtde1a1 = matchCol(
+      header,
+      [/^1a1$/, /^1a$/, /qtde1a1/],
+      /coleta|ult|estimada|horas|erro|%/,
+    );
+    const cHoras = matchCol(
+      header,
+      [/^horas$/, /horas\s*estimadas/, /horas\s*trab/],
+      /produtividade/,
+    );
+    const cProdutividade = matchCol(
+      header,
+      [/produtividade/, /horasprodutividade/, /ritmo/, /itens.*hora/, /prod.*hora/],
+      /^horas$/,
+    );
+    const cErro = matchCol(
+      header,
+      [/erro\s*\(qtde\)/, /erro\s*\(qtd\)/, /^erro$/, /^erros$/, /qtde.*erro/, /divergencia/],
+      /%|vlr|valor/,
+    );
+    const cPctErro = matchCol(
+      header,
+      [/%.*erro/, /erro.*qtd/, /erro.*qtde/, /taxa.*erro/],
+    );
+    const cBloco = matchCol(header, [/^bloco$/, /^f\s*bloco$/], /contagem|%/);
 
-    const cNome = matchCol([/nome/i, /conferente/i, /colaborador/i]);
-    const cQtde = matchCol([/^qtde\.?\s*volu/i, /^qtde/i, /^quantidade/i, /^qtd/i, /total.*peca/i, /volumes/i], /1a1|unit/i);
-    const cQtde1a1 = matchCol([/1\s*a\s*1/i, /1a1/i, /qtde1a1/i, /unit[aá]rio/i, /unit/i]);
-    // Produtividade: evitar "horas trabalhadas" ou "estimadas"
-    const cProdutividade = matchCol([/produtividade/i, /ritmo/i, /itens.*hora/i, /prod.*hora/i]);
-    // Erro: erro absoluto
-    const cErro = matchCol([/^erro/i, /^erros/i, /^qtde.*erro/i, /divergencia/i], /%/); 
-    const cPctErro = matchCol([/%/i, /taxa.*erro/i]); 
-
-    // Diagnóstico flexível: tenta encontrar pelo menos Nome e Quantidade
     if (cNome >= 0 && cQtde >= 0) {
-      col = { 
-        nome: cNome, 
-        qtde: cQtde, 
-        qtde1a1: cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1, 
-        produtividade: cProdutividade >= 0 && cProdutividade !== cQtde ? cProdutividade : -1, 
-        erro: cErro >= 0 ? cErro : cPctErro 
+      col = {
+        nome: cNome,
+        matricula: cMatricula,
+        qtde: cQtde,
+        qtde1a1:
+          cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1,
+        produtividade:
+          cProdutividade >= 0 && cProdutividade !== cQtde && cProdutividade !== cHoras
+            ? cProdutividade
+            : -1,
+        horas: cHoras >= 0 && cHoras !== cProdutividade ? cHoras : -1,
+        erro: cErro,
+        pctErro: cPctErro,
+        bloco: cBloco >= 0 && cBloco !== cQtde ? cBloco : -1,
       };
-
       headerRowIndex = r;
       break;
     }
@@ -467,6 +533,34 @@ export const parseInventoryCheckersCsv = (
     return [];
   }
 
+  const isSkipNome = (nome: string) =>
+    /^(nome|total|soma|media|resumo|capa|matric|page|relat)/i.test(nome);
+
+  const resolveQtde1a1 = (
+    qtde: number,
+    fromCol: number,
+    blocoVal: number,
+    has1a1Col: boolean,
+  ): number => {
+    if (has1a1Col) return Math.min(Math.max(0, fromCol), qtde);
+    if (blocoVal > 0 && qtde > 0) {
+      return Math.min(Math.max(0, qtde - blocoVal), qtde);
+    }
+    return 0;
+  };
+
+  const resolveProdutividade = (
+    qtde: number,
+    fromCol: number,
+    horas: number,
+  ): number => {
+    if (fromCol > 0) return fromCol;
+    if (horas > 0 && qtde > 0) {
+      return Math.round((qtde / horas) * 100) / 100;
+    }
+    return 0;
+  };
+
   const result: InventoryCheckerInput[] = [];
 
   for (let i = headerRowIndex + 1; i < lines.length; i++) {
@@ -474,65 +568,84 @@ export const parseInventoryCheckersCsv = (
       (c ?? "").replace(/^"|"$/g, "").trim(),
     );
 
-    // HEURÍSTICA DIRETA PARA O EXCEL DO CLIENTE:
-    // Evita o problema de colunas desalinhadas (merged cells) no Excel.
-    const nonEmpties = cells.filter(c => c !== "");
-    if (nonEmpties.length >= 10 && /^\d+$/.test(nonEmpties[0]) && /^\d+$/.test(nonEmpties[1]) && /\d{2}\/\d{2}\/\d{4}/.test(nonEmpties[4])) {
+    const nonEmpties = cells.filter((c) => c !== "");
+    const hasDate = nonEmpties.some((c) => /\d{2}\/\d{2}\/\d{4}/.test(c));
+    if (
+      nonEmpties.length >= 9 &&
+      /^\d+$/.test(nonEmpties[0]) &&
+      /^\d+$/.test(nonEmpties[1]) &&
+      hasDate
+    ) {
       const nome = nonEmpties[2];
-      if (/^(nome|total|soma|media|resumo)/i.test(nome)) continue;
-      
+      if (!nome || isSkipNome(nome)) continue;
+
       const qtde = parseNumberBR(nonEmpties[3]);
-      const produtividade = parseNumberBR(nonEmpties[7]);
-      const erro = parseNumberBR(nonEmpties[8]);
-      const qtde1a1 = nonEmpties.length > 13 ? parseNumberBR(nonEmpties[13]) : 0;
+      if (qtde <= 0) continue;
+
+      const horas = nonEmpties.length > 6 ? parseNumberBR(nonEmpties[6]) : 0;
+      const prodCol = nonEmpties.length > 7 ? parseNumberBR(nonEmpties[7]) : 0;
+      const produtividade = resolveProdutividade(qtde, prodCol, horas);
+      const erro = nonEmpties.length > 8 ? parseNumberBR(nonEmpties[8]) : 0;
+      const has1a1Col = nonEmpties.length > 13;
+      const qtde1a1Col = has1a1Col ? parseNumberBR(nonEmpties[13]) : 0;
+      const blocoCol = nonEmpties.length > 14 ? parseNumberBR(nonEmpties[14]) : 0;
+      const qtde1a1 = resolveQtde1a1(qtde, qtde1a1Col, blocoCol, has1a1Col);
 
       result.push({
         nome,
-        qtde: Math.max(0, qtde),
-        qtde1a1: Math.max(0, qtde1a1),
-        produtividade: Math.max(0, produtividade),
-        erro: Math.max(0, erro),
+        matricula: nonEmpties[1],
+        qtde,
+        qtde1a1,
+        produtividade,
+        erro: Math.min(Math.max(0, erro), qtde),
       });
       continue;
     }
 
-    // FALLBACK ORIGINAL (Para CSVs normais ou colados à mão)
     const nome = (cells[col.nome] ?? "").trim();
-    if (!nome) continue;
-    if (/^(nome|total|soma|media|resumo)/i.test(nome)) continue;
+    if (!nome || isSkipNome(nome)) continue;
 
     const qtde = parseNumberBR(cells[col.qtde] ?? "");
-    const qtde1a1Raw = col.qtde1a1 >= 0 ? parseNumberBR(cells[col.qtde1a1] ?? "") : 0;
-    const qtde1a1 = Math.max(0, qtde1a1Raw);
-    const produtividade = col.produtividade >= 0 ? parseNumberBR(cells[col.produtividade] ?? "") : 0;
+    if (qtde <= 0) continue;
+
+    const blocoVal =
+      col.bloco >= 0 ? parseNumberBR(cells[col.bloco] ?? "") : 0;
+    const qtde1a1Raw =
+      col.qtde1a1 >= 0 ? parseNumberBR(cells[col.qtde1a1] ?? "") : 0;
+    const qtde1a1 = resolveQtde1a1(
+      qtde,
+      qtde1a1Raw,
+      blocoVal,
+      col.qtde1a1 >= 0,
+    );
+
+    const horas = col.horas >= 0 ? parseNumberBR(cells[col.horas] ?? "") : 0;
+    const prodCol =
+      col.produtividade >= 0
+        ? parseNumberBR(cells[col.produtividade] ?? "")
+        : 0;
+    const produtividade = resolveProdutividade(qtde, prodCol, horas);
+
     let erro = 0;
     if (col.erro >= 0) {
-      const rawErro = cells[col.erro] ?? "";
-      const valErro = parseNumberBR(rawErro);
-      // Se a coluna lida for a de porcentagem (ex: 1,73%), precisamos calcular o valor absoluto
-      if (rawErro.includes('%') || valErro < 5) { // heurística: se erro for um número muito baixo com casas decimais
-        // É provável que seja um percentual, então calculamos: qtde * (valErro / 100)
-        // A menos que não tenha o sinal de %, aí usamos o valErro como absoluto (pode ser 1 ou 2)
-        if (rawErro.includes('%')) {
-          erro = Math.round(qtde * (valErro / 100));
-        } else {
-          erro = valErro;
-        }
-      } else {
-        erro = valErro;
-      }
+      erro = parseNumberBR(cells[col.erro] ?? "");
+    } else if (col.pctErro >= 0) {
+      const rawPct = cells[col.pctErro] ?? "";
+      const pct = parseNumberBR(rawPct.replace("%", ""));
+      erro = Math.round(qtde * (pct / 100));
     }
-    
-    erro = Math.max(0, erro);
+    erro = Math.min(Math.max(0, erro), qtde);
 
-    if (qtde <= 0) continue;
+    const matricula =
+      col.matricula >= 0 ? (cells[col.matricula] ?? "").trim() : undefined;
 
     result.push({
       nome,
+      ...(matricula ? { matricula } : {}),
       qtde,
-      qtde1a1: Math.min(qtde1a1, qtde),
+      qtde1a1,
       produtividade,
-      erro: Math.min(erro, qtde),
+      erro,
     });
   }
 

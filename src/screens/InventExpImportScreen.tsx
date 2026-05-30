@@ -38,8 +38,8 @@ import {
 import { parseInventoryCheckersCsv, parseTagsExtended } from "../utils/parsers";
 
 
-const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
-AMANDA DE OLIVEIRA P...;395,33;752;0;18;1,9;13;1,73%`;
+const EXAMPLE_INVENTEXP_CSV = `Capa;Matrícula;Nome do Colaborador;Qtde;1a. Coleta;Ult. Coleta;Horas;Produtividade;Erro (Qtde);% (Erro/Qtd)
+0001;12345678901;AMANDA DE OLIVEIRA;752;01/01/2026 08:00;01/01/2026 10:00;1,9;395,33;13;1,73%`;
 
 const EXAMPLE_TAGS_CSV = `Nome;Qtd(A1)
 AMANDA DE OLIVEIRA P...;15
@@ -120,7 +120,7 @@ export default function InventExpImportScreen() {
     if (parsed.length === 0) {
       Alert.alert(
         "Dados inválidos",
-        "Cole a tabela ou anexe CSV/Excel de Produtividade.",
+        "Não foi possível ler conferentes. Use o Relatório de Produtividade (CSV/Excel) com colunas como: Nome do Colaborador, Qtde, Horas, Produtividade, Erro (Qtde) — ou o formato simplificado Nome;Qtde;1a1;Produtividade;Erro.",
       );
       return;
     }
@@ -336,9 +336,9 @@ export default function InventExpImportScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Importar dados dos conferentes</Text>
           <Text style={styles.subtitle}>
-            Cole a tabela (vírgula, ponto e vírgula ou tab) ou anexe arquivo
-            CSV/Excel. Colunas: Nome, Qtde, Qtde1a1, Produtividade (itens/h),
-            Erro (qtde).
+            Cole ou anexe o Relatório de Produtividade (CSV/Excel). Reconhece
+            Nome do Colaborador, Qtde, Horas, Produtividade, Erro (Qtde), 1a1 e
+            BLOCO — ou formato simplificado com as mesmas métricas.
           </Text>
 
 
