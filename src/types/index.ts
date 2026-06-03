@@ -142,8 +142,12 @@ export type ReportBMode = "farmacias" | "mercados" | "outros";
 export type ReportB = ReportBFarmacias | ReportBMercados | ReportBOutros;
 
 // Mantido para compatibilidade com imports existentes no parsers.ts
-export interface ReportC { _removed: true; }
-export interface ReportD { _removed: true; }
+export interface ReportC {
+  _removed: true;
+}
+export interface ReportD {
+  _removed: true;
+}
 
 export interface AttendanceCollaborator {
   id: string;
@@ -163,7 +167,12 @@ export interface AttendanceData {
 
 // ========== INVENTEXP - AVALIAÇÃO DE CONFERENTES ==========
 
-export type CheckerExperienceLevel = "novato" | "junior" | "pleno" | "senior" | "expert";
+export type CheckerExperienceLevel =
+  | "novato"
+  | "junior"
+  | "pleno"
+  | "senior"
+  | "expert";
 
 /**
  * Modalidade de contrato do conferente.
@@ -207,6 +216,8 @@ export interface InventoryCheckerInput {
   qtde1a1: number;
   produtividade: number;
   erro: number;
+  /** Horas estimadas do conferente (extraído da coluna Horas) */
+  horas?: number;
   experiencia?: CheckerExperienceLevel;
   itensPulados?: number;
   itensDuplicados?: number;
@@ -227,12 +238,44 @@ export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";
 /** Acurácia de uma seção física da loja para o relatório gerencial */
 export interface SectionAccuracyRecord {
   area: string;
-  totalC1: number;       // soma Qtd(C1) da seção
+  totalC1: number; // soma Qtd(C1) da seção
   ajusteAbsoluto: number; // soma |Qtd(A1)| da seção
   ajusteLiquido: number; // soma Qtd(A1) com sinal (saldo final)
-  acuracidade: number;   // % 0-100
+  acuracidade: number; // % 0-100
   /** Colaboradores que trabalharam na seção */
   colaboradores: string[];
+}
+
+export type EvolucaoPeriodo = "DIARIO" | "QUINZENAL" | "MENSAL";
+
+export interface AvaliacaoHistoricoRecord {
+  id: string;
+  nome: string;
+  matricula?: string;
+  dataInventario: string;
+  operationType: InventoryOperationType;
+  scoreFinal: number;
+  nivel: InventoryScoreLevel;
+  pctErro: number;
+  produtividade: number;
+  itensPulados: number;
+  itensDuplicados: number;
+  perfilComportamental?: PerfilComportamental;
+}
+
+export interface EvolucaoPeriodoResumo {
+  label: string;
+  scoreMedio: number;
+  erroMedio: number;
+  prodMedia: number;
+  totalInventarios: number;
+}
+
+export interface EvolucaoConferente {
+  nome: string;
+  periodos: EvolucaoPeriodoResumo[];
+  tendencia: "MELHORA" | "ESTAVEL" | "PIORA";
+  variacaoScore: number;
 }
 
 export interface InventoryCheckerEvaluation {
@@ -289,12 +332,12 @@ export interface Cliente {
   updated_at: string;
 }
 
-export type ClienteInput = Omit<Cliente, 'id' | 'created_at' | 'updated_at'>;
+export type ClienteInput = Omit<Cliente, "id" | "created_at" | "updated_at">;
 
 // ---------------------------------------------------------------------------
 // COLABORADORES
 // ---------------------------------------------------------------------------
-export type ColaboradorFuncao = 'LIDER' | 'CONFERENTE';
+export type ColaboradorFuncao = "LIDER" | "CONFERENTE";
 
 export interface Colaborador {
   id: string;
@@ -308,7 +351,10 @@ export interface Colaborador {
   updated_at: string;
 }
 
-export type ColaboradorInput = Omit<Colaborador, 'id' | 'created_at' | 'updated_at'>;
+export type ColaboradorInput = Omit<
+  Colaborador,
+  "id" | "created_at" | "updated_at"
+>;
 
 // ---------------------------------------------------------------------------
 // HISTÓRICO DE PRODUTIVIDADE
@@ -317,10 +363,10 @@ export interface Produtividade {
   id: string;
   colaborador_id: string;
   inventario_ref?: string;
-  data_inventario: string;        // ISO date string
+  data_inventario: string; // ISO date string
   qtde: number;
   qtde1a1: number;
-  produtividade_ph: number;       // itens/hora
+  produtividade_ph: number; // itens/hora
   erro: number;
   horas_estimadas?: number;
   operacao_tipo?: InventoryOperationType;
@@ -329,17 +375,21 @@ export interface Produtividade {
   created_at: string;
 }
 
-export type ProdutividadeInput = Omit<Produtividade, 'id' | 'created_at'>;
+export type ProdutividadeInput = Omit<Produtividade, "id" | "created_at">;
 
 // ---------------------------------------------------------------------------
 // INVENTÁRIOS
 // ---------------------------------------------------------------------------
-export type InventarioStatus = 'AGENDADO' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO';
+export type InventarioStatus =
+  | "AGENDADO"
+  | "EM_ANDAMENTO"
+  | "CONCLUIDO"
+  | "CANCELADO";
 
 export interface Inventario {
   id: string;
   cliente_id: string;
-  data: string;                   // ISO date string
+  data: string; // ISO date string
   hora_inicio?: string;
   tipo_operacao: InventoryOperationType;
   headcount: number;
@@ -349,15 +399,18 @@ export interface Inventario {
   created_at: string;
   updated_at: string;
   // Joins opcionais
-  clientes?: Pick<Cliente, 'id' | 'nome' | 'cidade' | 'estado'>;
+  clientes?: Pick<Cliente, "id" | "nome" | "cidade" | "estado">;
 }
 
-export type InventarioInput = Omit<Inventario, 'id' | 'created_at' | 'updated_at' | 'clientes'>;
+export type InventarioInput = Omit<
+  Inventario,
+  "id" | "created_at" | "updated_at" | "clientes"
+>;
 
 // ---------------------------------------------------------------------------
 // ESCALA
 // ---------------------------------------------------------------------------
-export type EscalaPapel = 'LIDER' | 'CONFERENTE' | 'RESERVA';
+export type EscalaPapel = "LIDER" | "CONFERENTE" | "RESERVA";
 
 export interface EscalaItem {
   id: string;
@@ -369,7 +422,10 @@ export interface EscalaItem {
   confirmado: boolean;
   observacoes?: string;
   // Joins opcionais
-  colaboradores?: Pick<Colaborador, 'id' | 'nome' | 'funcao' | 'cidade' | 'matricula'>;
+  colaboradores?: Pick<
+    Colaborador,
+    "id" | "nome" | "funcao" | "cidade" | "matricula"
+  >;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +482,6 @@ export interface ICrudResult<T = void> {
 export class EscalaInsuficienteError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'EscalaInsuficienteError';
+    this.name = "EscalaInsuficienteError";
   }
 }

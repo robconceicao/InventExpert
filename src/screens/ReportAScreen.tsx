@@ -82,7 +82,6 @@ const MONITORED_ADVANCES = [
   { label: "04h00", hour: 4, minute: 0 },
 ];
 
-// Retorna true se agora está entre 14-15 min antes do horário alvo
 const isWarningTime = (targetHour: number, targetMin: number): boolean => {
   const now = new Date();
   const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -93,7 +92,28 @@ const isWarningTime = (targetHour: number, targetMin: number): boolean => {
     targetMins += 1440;
   }
   const diff = targetMins - nowMins;
-  return diff >= 14 && diff < 15;
+  // Dá uma janela maior de 10 a 15 minutos antes para garantir que o timer não perca
+  return diff >= 10 && diff <= 15;
+};
+
+const playAirportJoke = () => {
+  if (Platform.OS !== "web") {
+    void Speech.stop().then(() => {
+      const msg = "Atenção. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores.";
+      Speech.speak(msg, {
+        language: "pt-BR",
+        rate: 0.85,
+        pitch: 0.9,
+      });
+    });
+  } else {
+    const msg = "Atenção. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores.";
+    Speech.speak(msg, {
+      language: "pt-BR",
+      rate: 0.85,
+      pitch: 0.9,
+    });
+  }
 };
 
 export default function ReportAScreen() {
@@ -550,6 +570,14 @@ export default function ReportAScreen() {
                 </Text>
               </Pressable>
             </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>7. Avisos de Voz</Text>
+            <Pressable style={[styles.buttonPrimary, { backgroundColor: "#10b981", marginTop: 0 }]} onPress={playAirportJoke}>
+              <Ionicons name="megaphone-outline" size={20} color="#fff" />
+              <Text style={styles.btnText}>Aviso Aeroporto (Brincadeira)</Text>
+            </Pressable>
           </View>
 
           <Pressable style={styles.buttonPrimary} onPress={() => setPreviewVisible(true)}>

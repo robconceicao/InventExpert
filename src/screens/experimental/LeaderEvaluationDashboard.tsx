@@ -13,18 +13,18 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { CheckerFeedbackReport } from "../components/CheckerFeedbackReport";
-import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
+import { CheckerFeedbackReport } from "../../components/CheckerFeedbackReport";
+import { INVENTORY_PROFILES } from "../../config/inventoryEvalConfig";
 import {
     evaluateChecker,
     sortRanking,
-} from "../services/InventoryEvaluationService";
-import { analyzeTeamPerformance } from "../services/deepseek";
+} from "../../services/InventoryEvaluationService";
+import { analyzeTeamPerformance } from "../../services/deepseek";
 import type {
     InventoryCheckerEvaluation,
     InventoryCheckerInput,
     InventoryOperationType,
-} from "../types";
+} from "../../types";
 
 const SAMPLE_CHECKERS: InventoryCheckerInput[] = [
   { nome: "Ana Souza", qtde: 3200, qtde1a1: 2900, produtividade: 950, erro: 4 },
@@ -76,7 +76,7 @@ export default function LeaderEvaluationDashboard() {
   const top3 = ranking.slice(0, 3);
 
   const radarRisco = ranking.filter(
-    (e) =>
+    (e: InventoryCheckerEvaluation) =>
       e.nivel === "CRITICO" ||
       e.tags.includes("🚨 Risco de Contagem Superficial"),
   );
@@ -91,7 +91,7 @@ export default function LeaderEvaluationDashboard() {
     try {
       const rankingText = ranking
         .map(
-          (ev, index) =>
+          (ev: InventoryCheckerEvaluation, index: number) =>
             `${index + 1}º ${ev.input.nome}: Score ${ev.scoreFinal} (${ev.nivel}) | Qtd Contada: ${ev.input.qtde} | Erros: ${ev.input.erro} (${ev.pctErro.toFixed(2)}%) | Prod/h: ${ev.input.produtividade} | Bloco: ${ev.pctBloco.toFixed(1)}%`
         )
         .join("\n");
@@ -169,7 +169,7 @@ export default function LeaderEvaluationDashboard() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Top 3 MVPs</Text>
           <View style={styles.mvpRow}>
-            {top3.map((ev, index) => (
+            {top3.map((ev: InventoryCheckerEvaluation, index: number) => (
               <View key={ev.input.nome} style={styles.mvpCard}>
                 <Text style={styles.mvpRank}>{index + 1}º</Text>
                 <Text style={styles.mvpName}>{ev.input.nome}</Text>
@@ -192,7 +192,7 @@ export default function LeaderEvaluationDashboard() {
             <Text style={[styles.th, { flex: 1.1 }]}>Prod/h</Text>
             <Text style={[styles.th, { flex: 1 }]}>Bloco%</Text>
           </View>
-          {ranking.map((ev, index) => (
+          {ranking.map((ev: InventoryCheckerEvaluation, index: number) => (
             <View key={ev.input.nome} style={styles.tableRow}>
               <Text style={[styles.tdRank, { flex: 0.4 }]}>{index + 1}º</Text>
               <Text style={[styles.tdNome, { flex: 1.6 }]}>
@@ -284,7 +284,7 @@ export default function LeaderEvaluationDashboard() {
               Conferentes com risco de contagem superficial ou classificação
               crítica.
             </Text>
-            {radarRisco.map((ev) => (
+            {radarRisco.map((ev: InventoryCheckerEvaluation) => (
               <View key={ev.input.nome} style={styles.riskRow}>
                 <View style={styles.riskHeader}>
                   <View

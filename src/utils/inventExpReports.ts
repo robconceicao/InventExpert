@@ -55,8 +55,7 @@ export function generateInventExpGerencialReportText(
   r += `| Taxa média de erro | ${resumo.taxaMediaErro}% |\n`;
   r += `| Produtividade média | ${resumo.produtividadeMedia} itens/h |\n`;
   r += `| Score médio | ${resumo.scoreMedio} |\n`;
-  const metaProdRef = evaluations[0]?.metaProdutividade ?? perfil.targets.productivity;
-  r += `| Meta de produtividade | ${metaProdRef} itens/h |\n`;
+  r += `| Meta de produtividade | ${perfil.targets.productivity} itens/h |\n`;
   r += `| Limite de bloco | ${perfil.targets.maxBlockLimit}% |\n`;
   r += `\n`;
 
@@ -275,24 +274,6 @@ export function generateInventExpIndividualReportText(
   totalConferentes: number,
   dataInventario?: string,
 ): string {
-  const modalidade = ev.input.modalidadeContrato ?? "CLT";
-  const isFreelance = modalidade === "FREELANCE";
-
-  return isFreelance
-    ? _generateFreelanceTechnicalReport(operationType, ev, rank, totalConferentes, dataInventario)
-    : _generateFullReport(operationType, ev, rank, totalConferentes, dataInventario);
-}
-
-// =============================================================================
-// RELATÓRIO COMPLETO (CLT / INTERMITENTE)
-// =============================================================================
-function _generateFullReport(
-  operationType: InventoryOperationType,
-  ev: InventoryCheckerEvaluation,
-  rank: number,
-  totalConferentes: number,
-  dataInventario?: string,
-): string {
   const data = dataInventario ?? new Date().toLocaleDateString("pt-BR");
   const perfil = INVENTORY_PROFILES[operationType];
   const d = ev.input;
@@ -322,8 +303,7 @@ function _generateFullReport(
     r += `- Meta de volume estimada para seu nível: ${ev.minimoEsperado} peças\n`;
     r += `- **ICV (Índice de Cumprimento de Volume): ${Math.round(ev.icv || 0)}%**\n`;
   }
-  const metaProd = ev.metaProdutividade ?? perfil.targets.productivity;
-  r += `- Ritmo médio: ${d.produtividade} itens/h (meta desta operação: ${metaProd} itens/h)\n`;
+  r += `- Ritmo médio: ${d.produtividade} itens/h (meta do perfil: ${perfil.targets.productivity} itens/h)\n`;
   r += `- % Erro: ${ev.pctErro.toFixed(2)}%\n`;
   r += `- % Bloco: ${ev.pctBloco.toFixed(1)}% (limite recomendado: ${perfil.targets.maxBlockLimit}%)\n\n`;
   r += `---\n\n`;
@@ -389,7 +369,7 @@ function _generateFullReport(
   if (ev.pctBloco > perfil.targets.maxBlockLimit) {
     r += `• O uso de contagem em Bloco acima do limite recomendado reduziu a nota de aderência ao método.\n`;
   }
-  if (d.produtividade > (ev.metaProdutividade ?? perfil.targets.productivity) && ev.pctErro <= perfil.targets.erroTolerancia) {
+  if (d.produtividade > perfil.targets.productivity && ev.pctErro <= perfil.targets.erroTolerancia) {
     r += `• Você recebeu bônus por manter boa qualidade mesmo com produtividade acima da meta.\n`;
   }
   if (ev.tags.includes("🚨 Risco de Contagem Superficial")) {
@@ -445,139 +425,6 @@ function _generateFullReport(
   r += `\n---\n\n`;
 
   r += `*Relatório gerado pela Avaliação - Módulo Avaliação (Qualidade · Produtividade · Aderência)*\n`;
-  r += `Data: ${new Date().toLocaleDateString("pt-BR")}\n`;
-
-  return r;
-}
-
-// =============================================================================
-// RELATÓRIO TÉCNICO INFORMATIVO (FREELANCE)
-//
-// Finalidade: Preservar a natureza informativa do documento para prestadores
-// de serviço sem vínculo empregatício (freelancers / autônomos / MEI).
-//
-// O que este relatório NÃO contém (para não caracterizar subordinação):
-//   ✗ Metas obrigatórias ("você deve atingir X")
-//   ✗ Penalidades explícitas e sua pontuação
-//   ✗ Direcionamentos imperativos ("faça assim no próximo inventário")
-//   ✗ Score final como "nota" de gestão de pessoal
-//
-// O que contém (apenas dados técnicos do serviço prestado):
-//   ✓ Indicadores de qualidade da contagem realizada (referência de mercado)
-//   ✓ Perfil de comportamento operacional observado (omissão/excesso)
-//   ✓ Posição comparativa informativa (sem ranqueamento punitivo)
-//   ✓ Observações técnicas em linguagem neutra
-//   ✓ Rodapé com disclaimer jurídico
-// =============================================================================
-function _generateFreelanceTechnicalReport(
-  operationType: InventoryOperationType,
-  ev: InventoryCheckerEvaluation,
-  rank: number,
-  totalConferentes: number,
-  dataInventario?: string,
-): string {
-  const data = dataInventario ?? new Date().toLocaleDateString("pt-BR");
-  const perfil = INVENTORY_PROFILES[operationType];
-  const d = ev.input;
-  const pulados = d.itensPulados || 0;
-  const duplicados = d.itensDuplicados || 0;
-
-  let r = "";
-  r += `# RELATÓRIO TÉCNICO DE QUALIDADE — PRESTAÇÃO DE SERVIÇO\n`;
-  r += `## Inventário: ${data}\n`;
-  r += `## Tipo de Operação: ${operationType}\n\n`;
-  r += `---\n\n`;
-
-  r += `## 👤 PRESTADOR: ${d.nome}\n\n`;
-  r += `Posição comparativa no grupo: ${rank}º de ${totalConferentes} prestadores nesta operação.\n`;
-  r += `Referência de qualidade da operação: **${ev.nivel}**\n\n`;
-  r += `---\n\n`;
-
-  // Indicadores técnicos — sem framing de "meta obrigatória"
-  r += `## 📊 INDICADORES TÉCNICOS DA CONTAGEM\n\n`;
-  r += `> Os valores abaixo são indicadores técnicos do serviço realizado.\n`;
-  r += `> As referências de mercado indicadas são parâmetros do segmento, não metas vinculantes.\n\n`;
-  r += `- Total de itens contabilizados: **${d.qtde}**\n`;
-  const metaProdRef2 = ev.metaProdutividade ?? perfil.targets.productivity;
-  r += `- Ritmo de contagem: **${d.produtividade} itens/h**\n`;
-  r += `  _(Referência do segmento ${operationType}: ${metaProdRef2} itens/h)_\n`;
-  r += `- Taxa de ajuste de quantidade: **${ev.pctErro.toFixed(2)}%**\n`;
-  r += `  _(Referência de baixa variação do segmento: abaixo de ${perfil.targets.erroTolerancia}%)_\n`;
-  r += `- Uso de contagem agrupada (bloco): **${ev.pctBloco.toFixed(1)}%**\n\n`;
-  r += `---\n\n`;
-
-  // Análise de comportamento — neutra, sem imperativos
-  r += `## 🔍 ANÁLISE DE COMPORTAMENTO OPERACIONAL\n\n`;
-  r += `**Ajustes de quantidade registrados (erros de execução):** ${d.erro}\n`;
-  r += `_(Itens contabilizados com discrepância de quantidade em relação ao físico)_\n\n`;
-
-  r += `**Itens não registrados identificados na recontagem (omissão):** ${pulados}\n`;
-  if (pulados > 0) {
-    r += `_(Produtos localizados na gôndola que não foram bipados durante a contagem)_\n\n`;
-  } else {
-    r += `_(Nenhuma omissão identificada na recontagem — indicador dentro do esperado)_\n\n`;
-  }
-
-  r += `**Registros duplicados identificados na recontagem (excesso):** ${duplicados}\n`;
-  if (duplicados > 0) {
-    r += `_(Produtos registrados mais de uma vez na mesma área de contagem)_\n\n`;
-  } else {
-    r += `_(Nenhuma duplicação identificada — indicador dentro do esperado)_\n\n`;
-  }
-
-  // Perfil comportamental — apenas informativo
-  if (ev.perfilComportamental && ev.perfilComportamental !== "EQUILIBRADO") {
-    const PERFIL_DESCRICAO_NEUTRA: Record<string, string> = {
-      PULA_ITENS:      "O padrão observado indica maior ocorrência de omissões do que de duplicações na operação realizada.",
-      FANTASMA:        "O padrão observado indica maior ocorrência de registros duplicados do que de omissões na operação realizada.",
-      DESATENTO_GERAL: "O padrão observado indica ocorrências simultâneas de omissões e registros duplicados na operação realizada.",
-    };
-    const desc = PERFIL_DESCRICAO_NEUTRA[ev.perfilComportamental];
-    if (desc) {
-      r += `**Padrão operacional identificado:** ${desc}\n\n`;
-    }
-  }
-
-  // Tags técnicas — apenas as informativas, sem as punitivas
-  const tagsInformativas = ev.tags.filter(t =>
-    !t.includes("🚨") && !t.includes("Risco") && !t.includes("Fraude") && !t.includes("Impossível")
-  );
-  if (tagsInformativas.length > 0) {
-    r += `**Destaques técnicos observados:**\n`;
-    tagsInformativas.forEach(tag => { r += `• ${tag}\n`; });
-    r += `\n`;
-  }
-
-  if (d.erroSecao !== undefined) {
-    r += `**Variação de seção (Σ|Ajuste por área|):** ${d.erroSecao} unidades\n\n`;
-  }
-
-  r += `---\n\n`;
-
-  // Observações técnicas — linguagem neutra, sem imperativos
-  r += `## 📋 OBSERVAÇÕES TÉCNICAS\n\n`;
-
-  if (pulados === 0 && duplicados === 0 && ev.pctErro <= perfil.targets.erroTolerancia) {
-    r += `Os indicadores desta operação estão dentro dos parâmetros de referência do segmento para o tipo de contagem realizada.\n\n`;
-  } else {
-    r += `Os indicadores desta operação foram registrados para fins de histórico e acompanhamento técnico da qualidade do serviço prestado.\n\n`;
-    if (pulados > 5) {
-      r += `• Foram identificadas omissões na contagem desta operação. A referência técnica do segmento indica que a varredura sequencial de prateleiras (esquerda-direita, cima-baixo) reduz significativamente este tipo de ocorrência.\n\n`;
-    }
-    if (duplicados > 10) {
-      r += `• Foram identificadas duplicações de registros nesta operação. A referência técnica do segmento indica que a demarcação visual de áreas já contadas reduz significativamente este tipo de ocorrência.\n\n`;
-    }
-    if (ev.pctErro > perfil.targets.erroTolerancia) {
-      r += `• A taxa de ajuste de quantidade observada ficou acima da referência de baixa variação do segmento (${perfil.targets.erroTolerancia}%). Este indicador é registrado para histórico de qualidade do serviço.\n\n`;
-    }
-  }
-
-  r += `---\n\n`;
-
-  // Rodapé com disclaimer jurídico
-  r += `*Este documento é um relatório técnico informativo referente ao serviço de contagem de inventário realizado.*\n`;
-  r += `*Não caracteriza relação de emprego, subordinação ou vínculo empregatício de qualquer natureza.*\n`;
-  r += `*Os indicadores apresentados são de caráter exclusivamente técnico e informativo.*\n`;
   r += `Data: ${new Date().toLocaleDateString("pt-BR")}\n`;
 
   return r;

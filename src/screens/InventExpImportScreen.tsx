@@ -1,42 +1,29 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
-import React, { useMemo, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import React from "react";
 import {
-    Alert,
-    Linking,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { CheckerFeedbackReport } from "../components/CheckerFeedbackReport";
-import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
-import {
-    evaluateChecker,
-    sortRanking,
-    getDistribuicaoNiveis,
-} from "../services/InventoryEvaluationService";
-import { getCheckerCurrentLevel } from "../services/CheckerDBService";
+import { useInventExpEvaluations } from "../hooks/inventExp/useInventExpEvaluations";
+import { useInventExpExport } from "../hooks/inventExp/useInventExpExport";
+import { useInventExpImport } from "../hooks/inventExp/useInventExpImport";
+import type { RootTabParamList } from "../navigation/RootTabs";
 import type {
-    InventoryCheckerEvaluation,
-    InventoryOperationType,
-    ModalidadeContrato,
-    SectionAccuracyRecord,
+  InventoryCheckerEvaluation,
+  InventoryOperationType,
+  SectionAccuracyRecord,
 } from "../types";
-import { shareCsvFile, shareTextFile } from "../utils/export";
-import { readFileAsCsvText } from "../utils/fileImport";
-import {
-    generateInventExpGerencialReportText,
-    generateInventExpIndividualReportText,
-} from "../utils/inventExpReports";
-import { parseInventoryCheckersCsv, parseTagsExtended } from "../utils/parsers";
-
 
 const EXAMPLE_INVENTEXP_CSV = `Capa;Matrícula;Nome do Colaborador;Qtde;1a. Coleta;Ult. Coleta;Horas;Produtividade;Erro (Qtde);% (Erro/Qtd)
 0001;12345678901;AMANDA DE OLIVEIRA;752;01/01/2026 08:00;01/01/2026 10:00;1,9;395,33;13;1,73%`;
@@ -46,255 +33,61 @@ AMANDA DE OLIVEIRA P...;15
 CAMILA FERREIRA;-5`;
 
 export default function InventExpImportScreen() {
-  const [operationType, setOperationType] =
-    useState<InventoryOperationType>("FARMACIA");
-  const [rawText, setRawText] = useState("");
-  const [tagsText, setTagsText] = useState("");
-  const [totalPecas, setTotalPecas] = useState("");
-  const [duracaoReal, setDuracaoReal] = useState("");
-  const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>([]);
-  const [sectionAccuracy, setSectionAccuracy] = useState<SectionAccuracyRecord[]>([]);
-  const [isExtendedTags, setIsExtendedTags] = useState(false);
-  /**
-   * Mapa individual de modalidade de contrato por conferente (chave = nome em minúsculas).
-   * Padrão: "CLT". Alterável por linha no ranking após processar.
-   */
-  const [modalidades, setModalidades] = useState<Record<string, ModalidadeContrato>>({});
+  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
+  const {
+    operationType,
+    setOperationType,
+    rawText,
+    setRawText,
+    tagsText,
+    setTagsText,
+    totalPecas,
+    setTotalPecas,
+    duracaoReal,
+    setDuracaoReal,
+    evaluations,
+    sectionAccuracy,
+    isExtendedTags,
+    processing,
+    previewProd,
+    previewTags,
+    handlePickFile,
+    handleProcess,
+  } = useInventExpImport();
 
-  const MODALIDADE_CYCLE: ModalidadeContrato[] = ["CLT", "INTERMITENTE", "FREELANCE"];
-  const MODALIDADE_COLOR: Record<ModalidadeContrato, string> = {
-    CLT: "#2563eb",
-    INTERMITENTE: "#059669",
-    FREELANCE: "#f59e0b",
-  };
-  const MODALIDADE_LABEL: Record<ModalidadeContrato, string> = {
-    CLT: "CLT",
-    INTERMITENTE: "INT",
-    FREELANCE: "FREE",
-  };
+  const {
+    resumo,
+    top3,
+    radarRisco,
+    getModalidade,
+    cycleModalidade,
+    MODALIDADE_COLOR,
+    MODALIDADE_LABEL,
+  } = useInventExpEvaluations(evaluations, operationType, setOperationType);
 
-  const getModalidade = (nome: string): ModalidadeContrato =>
-    modalidades[nome.toLowerCase().trim()] ?? "CLT";
-
-  const cycleModalidade = (nome: string) => {
-    const key = nome.toLowerCase().trim();
-    const current = modalidades[key] ?? "CLT";
-    const idx = MODALIDADE_CYCLE.indexOf(current);
-    const next = MODALIDADE_CYCLE[(idx + 1) % MODALIDADE_CYCLE.length];
-    setModalidades(prev => ({ ...prev, [key]: next }));
-  };
-
-
-  const handlePickFile = async (type: 'prod' | 'tags') => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "text/csv",
-          "text/plain",
-          "application/vnd.ms-excel",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const file = result.assets[0];
-      const text = await readFileAsCsvText(
-        file.uri,
-        file.mimeType ?? undefined,
-      );
-      if (type === 'prod') setRawText(text);
-      else setTagsText(text);
-      Alert.alert(
-        "Arquivo carregado",
-        `${file.name} importado para ${type === 'prod' ? 'Produtividade' : 'Tags'}.`,
-      );
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível ler o arquivo.");
-    }
-  };
-
-  const handleProcess = async () => {
-    const parsed = parseInventoryCheckersCsv(rawText);
-    const tagsResult = parseTagsExtended(tagsText);
-
-    if (parsed.length === 0) {
-      Alert.alert(
-        "Dados inválidos",
-        "Não foi possível ler conferentes. Use o Relatório de Produtividade (CSV/Excel) com colunas como: Nome do Colaborador, Qtde, Horas, Produtividade, Erro (Qtde) — ou o formato simplificado Nome;Qtde;1a1;Produtividade;Erro.",
-      );
-      return;
-    }
-    const pecas = parseInt(totalPecas.replace(/\D/g, "")) || 0;
-    const duracao = parseFloat(duracaoReal.replace(",", ".")) || 5;
-    const totalConferentes = parsed.length;
-
-    const parsedWithExp = await Promise.all(
-      parsed.map(async (item) => {
-        const exp = await getCheckerCurrentLevel(item.nome);
-        const nomeKey = item.nome.toLowerCase().trim();
-        const tagsData = tagsResult.porColaborador[nomeKey] || {
-          itensPulados: 0, itensDuplicados: 0, erroSecao: undefined, numSecoes: undefined,
-        };
-        return {
-          ...item,
-          experiencia: exp,
-          itensPulados: tagsData.itensPulados,
-          itensDuplicados: tagsData.itensDuplicados,
-          erroSecao: tagsResult.isExtended ? tagsData.erroSecao : undefined,
-          numSecoes: tagsResult.isExtended ? tagsData.numSecoes : undefined,
-          // modalidadeContrato é definida individualmente no mapa `modalidades`
-          // e aplicada no momento do envio do relatório (handleSendIndividualWhatsApp)
-        };
-      })
-    );
-
-    const evaluated = parsedWithExp.map((item) =>
-      evaluateChecker(item, operationType, pecas, duracao, totalConferentes),
-    );
-    setEvaluations(sortRanking(evaluated));
-
-    // Salva dados de acurácia de seções quando formato estendido
-    if (tagsResult.isExtended && tagsResult.porArea.length > 0) {
-      setSectionAccuracy(tagsResult.porArea);
-      setIsExtendedTags(true);
-    } else {
-      setSectionAccuracy([]);
-      setIsExtendedTags(false);
-    }
-  };
-
-
-  const resumo = useMemo(() => {
-    if (evaluations.length === 0) return null;
-    const totalConferentes = evaluations.length;
-    const totalItens = evaluations.reduce((s, e) => s + e.input.qtde, 0);
-    const totalErros = evaluations.reduce((s, e) => s + e.input.erro, 0);
-    const taxaMediaErro = totalItens > 0 ? (totalErros / totalItens) * 100 : 0;
-    const produtividadeMedia =
-      evaluations.reduce((s, e) => s + e.input.produtividade, 0) /
-      evaluations.length;
-    const scoreMedio =
-      evaluations.reduce((s, e) => s + e.scoreFinal, 0) / evaluations.length;
-    const dist = getDistribuicaoNiveis(evaluations);
-    return {
-      totalConferentes,
-      totalItens,
-      taxaMediaErro: Math.round(taxaMediaErro * 100) / 100,
-      produtividadeMedia: Math.round(produtividadeMedia * 10) / 10,
-      scoreMedio: Math.round(scoreMedio * 10) / 10,
-      dist,
-    };
-  }, [evaluations]);
-
-
-  const handleExportCsv = async () => {
-    if (evaluations.length === 0) {
-      Alert.alert("Sem dados", "Processe os dados primeiro.");
-      return;
-    }
-    const headers = [
-      "Rank",
-      "Operacao",
-      "Nome",
-      "Qtde",
-      "Qtde1a1",
-      "Produtividade_itens_h",
-      "Erro",
-      "Pct_Erro_%",
-      "Pct_Bloco_%",
-      "Score_Qualidade",
-      "Score_Produtividade",
-      "Score_Aderencia",
-      "Score_Final",
-      "Nivel",
-      "Tags",
-    ];
-    const rows = evaluations.map((e, i) => [
-      i + 1,
-      e.operationType,
-      e.input.nome,
-      e.input.qtde,
-      e.input.qtde1a1,
-      e.input.produtividade,
-      e.input.erro,
-      e.pctErro.toFixed(2),
-      e.pctBloco.toFixed(2),
-      Math.round(e.scoreQualidade),
-      Math.round(e.scoreProdutividade),
-      Math.round(e.scoreAderencia),
-      e.scoreFinal,
-      e.nivel,
-      e.tags.join(" | "),
-    ]);
-    await shareCsvFile(
-      `resultado_avaliacao_${new Date().toISOString().slice(0, 10)}.csv`,
-      headers,
-      rows,
-    );
-  };
-
-  const top3 = useMemo(() => evaluations.slice(0, 3), [evaluations]);
-
-  const radarRisco = useMemo(
-    () =>
-      evaluations.filter(
-        (e) =>
-          e.nivel === "CRITICO" ||
-          e.tags.includes("🚨 Risco de Contagem Superficial"),
-      ),
-    [evaluations],
+  const {
+    handleExportCsv,
+    handleExportGerencial,
+    handleExportGerencialPdf,
+    showIndividualReportOptions,
+    handleSendAllWhatsApp,
+  } = useInventExpExport(
+    evaluations,
+    operationType,
+    resumo,
+    sectionAccuracy,
+    isExtendedTags,
+    getModalidade,
   );
 
-  const profile = INVENTORY_PROFILES[operationType];
-
-  const handleExportGerencial = async () => {
-    if (!resumo || evaluations.length === 0) {
-      Alert.alert("Sem dados", "Processe os dados primeiro.");
-      return;
-    }
-    const text = generateInventExpGerencialReportText(
-      operationType,
-      evaluations,
-      resumo,
-      undefined,
-      isExtendedTags ? sectionAccuracy : undefined,
-    );
-    await shareTextFile(
-      `relatorio_gerencial_avaliacao_${new Date()
-        .toISOString()
-        .slice(0, 10)}.txt`,
-      text,
-      "Exportar Relatório Gerencial Avaliação",
-    );
-  };
-
-
-  const handleSendIndividualWhatsApp = (
-    ev: InventoryCheckerEvaluation,
-    index: number,
-  ) => {
-    // Injeta a modalidade individual definida no ranking antes de gerar o relatório
-    const modalidade = getModalidade(ev.input.nome);
-    const evComModalidade: InventoryCheckerEvaluation = {
-      ...ev,
-      input: { ...ev.input, modalidadeContrato: modalidade },
-    };
-    const text = generateInventExpIndividualReportText(
-      operationType,
-      evComModalidade,
-      index + 1,
-      evaluations.length,
-    );
-    const waUrl = Platform.OS === "web"
-      ? `https://wa.me/?text=${encodeURIComponent(text)}`
-      : `whatsapp://send?text=${encodeURIComponent(text)}`;
-    Linking.openURL(waUrl).catch(
-      () =>
-        Alert.alert(
-          "Erro",
-          "Não foi possível abrir o WhatsApp neste dispositivo.",
-        ),
-    );
+  // Helper for fuzzy name matching (used when matching tags and leader)
+  const matchNomeFuzzy = (nomeProd: string, nomeTag: string): boolean => {
+    const a = nomeProd.toLowerCase().trim();
+    const b = nomeTag.toLowerCase().trim();
+    if (a === b) return true;
+    const MIN = 12;
+    if (a.length < MIN || b.length < MIN) return a === b;
+    return a.startsWith(b.slice(0, MIN)) || b.startsWith(a.slice(0, MIN));
   };
 
   return (
@@ -302,6 +95,16 @@ export default function InventExpImportScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#1d4ed8" />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Pressable
+          onPress={() => navigation.navigate("InventExpEvolution")}
+          style={styles.btnEvolucao}
+        >
+          <Ionicons name="trending-up-outline" size={18} color="#1d4ed8" />
+          <Text style={styles.btnEvolucaoText}>
+            Ver evolução (diário / quinzenal / mensal)
+          </Text>
+        </Pressable>
+
         <View style={styles.segmentContainer}>
           {(
             [
@@ -341,25 +144,44 @@ export default function InventExpImportScreen() {
             BLOCO — ou formato simplificado com as mesmas métricas.
           </Text>
 
-
           <View style={styles.importRow}>
-            <View style={{flex: 1}}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.label}>Total de Peças</Text>
-              <TextInput value={totalPecas} onChangeText={setTotalPecas} placeholder="Ex: 15000" keyboardType="numeric" style={styles.input} />
+              <TextInput
+                value={totalPecas}
+                onChangeText={setTotalPecas}
+                placeholder="Ex: 15000"
+                keyboardType="numeric"
+                style={styles.input}
+              />
             </View>
-            <View style={{flex: 1, marginLeft: 12}}>
+            <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.label}>Duração (horas)</Text>
-              <TextInput value={duracaoReal} onChangeText={setDuracaoReal} placeholder="Ex: 5.5" keyboardType="numeric" style={styles.input} />
+              <TextInput
+                value={duracaoReal}
+                onChangeText={setDuracaoReal}
+                placeholder="Ex: 5.5 ou 5:30 (horas)"
+                keyboardType="numeric"
+                style={styles.input}
+              />
             </View>
           </View>
           <View style={styles.importRow}>
-            <Pressable onPress={() => handlePickFile('prod')} style={styles.btnAttach}>
+            <Pressable
+              onPress={() => handlePickFile("prod")}
+              style={styles.btnAttach}
+            >
               <Ionicons name="attach" size={20} color="#2563EB" />
               <Text style={styles.btnAttachText}>Anexar Produtividade</Text>
             </Pressable>
-            <Pressable onPress={() => handlePickFile('tags')} style={[styles.btnAttach, { marginLeft: 10 }]}>
+            <Pressable
+              onPress={() => handlePickFile("tags")}
+              style={[styles.btnAttach, { marginLeft: 10 }]}
+            >
               <Ionicons name="attach" size={20} color="#059669" />
-              <Text style={[styles.btnAttachText, { color: "#059669" }]}>Anexar Tags (Omissão/Excesso)</Text>
+              <Text style={[styles.btnAttachText, { color: "#059669" }]}>
+                Anexar Tags (Omissão/Excesso)
+              </Text>
             </Pressable>
           </View>
           <Text style={styles.label}>1. Produtividade (Geral)</Text>
@@ -372,7 +194,20 @@ export default function InventExpImportScreen() {
             style={styles.textArea}
             textAlignVertical="top"
           />
-          <Text style={[styles.label, { marginTop: 12 }]}>2. Produtividade Tags (Qtd A1)</Text>
+          {previewProd !== null && (
+            <Text
+              style={
+                previewProd.count > 0 ? styles.previewOk : styles.previewWarn
+              }
+            >
+              {previewProd.count > 0
+                ? `✅ ${previewProd.count} conferente(s) detectado(s) na produtividade`
+                : "⚠️ Nenhum conferente detectado — confira o cabeçalho e o separador"}
+            </Text>
+          )}
+          <Text style={[styles.label, { marginTop: 12 }]}>
+            2. Produtividade Tags (Qtd A1)
+          </Text>
           <TextInput
             value={tagsText}
             onChangeText={setTagsText}
@@ -382,9 +217,30 @@ export default function InventExpImportScreen() {
             style={[styles.textArea, { minHeight: 80 }]}
             textAlignVertical="top"
           />
-          <Pressable onPress={() => void handleProcess()} style={styles.btnPrimary}>
-            <Ionicons name="calculator-outline" size={20} color="#fff" />
-            <Text style={styles.btnTextWhite}>Processar Avaliação</Text>
+          {previewTags !== null && (
+            <Text
+              style={
+                previewTags.count > 0 ? styles.previewOk : styles.previewWarn
+              }
+            >
+              {previewTags.count > 0
+                ? `✅ ${previewTags.count} colaborador(es) nas tags${previewTags.extended ? " (formato por seção)" : ""}`
+                : "⚠️ Nenhuma tag detectada — opcional se não houver arquivo de omissão/excesso"}
+            </Text>
+          )}
+          <Pressable
+            onPress={() => void handleProcess()}
+            style={styles.btnPrimary}
+            disabled={processing}
+          >
+            {processing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Ionicons name="calculator-outline" size={20} color="#fff" />
+            )}
+            <Text style={styles.btnTextWhite}>
+              {processing ? "Processando…" : "Processar Avaliação"}
+            </Text>
           </Pressable>
         </View>
 
@@ -394,7 +250,9 @@ export default function InventExpImportScreen() {
               <Text style={styles.cardTitle}>Resumo da Avaliação</Text>
               <View style={styles.resumoGrid}>
                 <View style={styles.resumoItem}>
-                  <Text style={styles.resumoValue}>{resumo.totalConferentes}</Text>
+                  <Text style={styles.resumoValue}>
+                    {resumo.totalConferentes}
+                  </Text>
                   <Text style={styles.resumoLabel}>Conferentes</Text>
                 </View>
                 <View style={styles.resumoItem}>
@@ -404,11 +262,15 @@ export default function InventExpImportScreen() {
                   <Text style={styles.resumoLabel}>Itens contados</Text>
                 </View>
                 <View style={styles.resumoItem}>
-                  <Text style={styles.resumoValue}>{resumo.taxaMediaErro}%</Text>
+                  <Text style={styles.resumoValue}>
+                    {resumo.taxaMediaErro}%
+                  </Text>
                   <Text style={styles.resumoLabel}>Taxa média erro</Text>
                 </View>
                 <View style={styles.resumoItem}>
-                  <Text style={styles.resumoValue}>{resumo.produtividadeMedia}</Text>
+                  <Text style={styles.resumoValue}>
+                    {resumo.produtividadeMedia}
+                  </Text>
                   <Text style={styles.resumoLabel}>Prod/h média</Text>
                 </View>
                 <View style={styles.resumoItem}>
@@ -420,26 +282,36 @@ export default function InventExpImportScreen() {
               {resumo.dist && (
                 <View style={styles.distRow}>
                   {resumo.dist.EXCELENTE > 0 && (
-                    <View style={[styles.distPill, { backgroundColor: "#16a34a" }]}>
+                    <View
+                      style={[styles.distPill, { backgroundColor: "#16a34a" }]}
+                    >
                       <Text style={styles.distPillText}>
                         {resumo.dist.EXCELENTE} EXCELENTE
                       </Text>
                     </View>
                   )}
                   {resumo.dist.BOM > 0 && (
-                    <View style={[styles.distPill, { backgroundColor: "#2563eb" }]}>
-                      <Text style={styles.distPillText}>{resumo.dist.BOM} BOM</Text>
+                    <View
+                      style={[styles.distPill, { backgroundColor: "#2563eb" }]}
+                    >
+                      <Text style={styles.distPillText}>
+                        {resumo.dist.BOM} BOM
+                      </Text>
                     </View>
                   )}
                   {resumo.dist.ATENCAO > 0 && (
-                    <View style={[styles.distPill, { backgroundColor: "#f97316" }]}>
+                    <View
+                      style={[styles.distPill, { backgroundColor: "#f97316" }]}
+                    >
                       <Text style={styles.distPillText}>
                         {resumo.dist.ATENCAO} ATENÇÃO
                       </Text>
                     </View>
                   )}
                   {resumo.dist.CRITICO > 0 && (
-                    <View style={[styles.distPill, { backgroundColor: "#dc2626" }]}>
+                    <View
+                      style={[styles.distPill, { backgroundColor: "#dc2626" }]}
+                    >
                       <Text style={styles.distPillText}>
                         {resumo.dist.CRITICO} CRÍTICO
                       </Text>
@@ -449,11 +321,10 @@ export default function InventExpImportScreen() {
               )}
             </View>
 
-
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Top 3 MVPs</Text>
               <View style={styles.mvpRow}>
-                {top3.map((ev, index) => (
+                {top3.map((ev: InventoryCheckerEvaluation, index: number) => (
                   <View key={ev.input.nome} style={styles.mvpCard}>
                     <Text style={styles.mvpRank}>{index + 1}º</Text>
                     <Text style={styles.mvpName}>{ev.input.nome}</Text>
@@ -468,11 +339,30 @@ export default function InventExpImportScreen() {
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Ranking Avaliação</Text>
+              <Text style={styles.rankingHint}>
+                Toque no ícone WhatsApp ou na linha para escolher: texto
+                completo, resumo ou PDF.
+              </Text>
+              {evaluations.length > 1 && (
+                <Pressable
+                  onPress={handleSendAllWhatsApp}
+                  style={styles.btnSendAll}
+                >
+                  <Text style={styles.btnSendAllText}>
+                    Enviar resumo para todos ({evaluations.length})
+                  </Text>
+                </Pressable>
+              )}
               {/* Legenda de modalidade */}
               <View style={styles.modalidadeLegenda}>
-                <Ionicons name="information-circle-outline" size={14} color="#64748b" />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={14}
+                  color="#64748b"
+                />
                 <Text style={styles.modalidadeLegendaText}>
-                  Toque no badge colorido para alternar o tipo de contrato de cada pessoa antes de enviar o relatório individual.
+                  Toque no badge colorido para alternar o tipo de contrato de
+                  cada pessoa antes de enviar o relatório individual.
                 </Text>
               </View>
               <View style={styles.tableHeader}>
@@ -486,47 +376,89 @@ export default function InventExpImportScreen() {
                 )}
                 <Text style={[styles.th, { flex: 0.5 }]}></Text>
               </View>
-              {evaluations.map((ev, index) => {
-                const modalidade = getModalidade(ev.input.nome);
-                const badgeColor = MODALIDADE_COLOR[modalidade];
-                const badgeLabel = MODALIDADE_LABEL[modalidade];
-                return (
-                  <View key={ev.input.nome} style={styles.tableRow}>
-                    <Text style={[styles.tdRank, { flex: 0.4 }]}>{index + 1}º</Text>
-                    <Text style={[styles.tdNome, { flex: 1.4 }]} numberOfLines={1}>{ev.input.nome}</Text>
-                    <Text style={[styles.tdScore, { flex: 0.6, color: ev.nivelColor }]}>
-                      {ev.scoreFinal}
-                    </Text>
-                    <Text style={[styles.td, { flex: 0.7 }]}>
-                      {ev.pctErro.toFixed(2)}%
-                    </Text>
-                    {/* Badge clicável de modalidade de contrato */}
+              {evaluations.map(
+                (ev: InventoryCheckerEvaluation, index: number) => {
+                  const modalidade = getModalidade(ev.input.nome);
+                  const badgeColor = MODALIDADE_COLOR[modalidade];
+                  const badgeLabel = MODALIDADE_LABEL[modalidade];
+                  return (
                     <Pressable
-                      onPress={() => cycleModalidade(ev.input.nome)}
-                      style={[styles.modalidadeBadge, { backgroundColor: badgeColor, flex: 0.7 }]}
+                      key={ev.input.nome}
+                      onPress={() => showIndividualReportOptions(ev, index)}
+                      style={styles.tableRow}
                     >
-                      <Text style={styles.modalidadeBadgeText}>{badgeLabel}</Text>
-                    </Pressable>
-                    {isExtendedTags && (
-                      <Text style={[
-                        styles.td,
-                        { flex: 0.7, color: ev.icsi !== undefined && ev.icsi < 0.5 ? "#f97316" : "#475569" }
-                      ]}>
-                        {ev.input.erroSecao ?? "-"}
+                      <Text style={[styles.tdRank, { flex: 0.4 }]}>
+                        {index + 1}º
                       </Text>
-                    )}
-                    {/* Botão de envio individual */}
-                    <Pressable
-                      onPress={() => handleSendIndividualWhatsApp(ev, index)}
-                      style={{ flex: 0.5, alignItems: "center", justifyContent: "center" }}
-                    >
-                      <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+                      <Text
+                        style={[styles.tdNome, { flex: 1.4 }]}
+                        numberOfLines={1}
+                      >
+                        {ev.input.nome}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdScore,
+                          { flex: 0.6, color: ev.nivelColor },
+                        ]}
+                      >
+                        {ev.scoreFinal}
+                      </Text>
+                      <Text style={[styles.td, { flex: 0.7 }]}>
+                        {ev.pctErro.toFixed(2)}%
+                      </Text>
+                      {/* Badge clicável de modalidade de contrato */}
+                      <Pressable
+                        onPress={() => cycleModalidade(ev.input.nome)}
+                        style={[
+                          styles.modalidadeBadge,
+                          { backgroundColor: badgeColor, flex: 0.7 },
+                        ]}
+                      >
+                        <Text style={styles.modalidadeBadgeText}>
+                          {badgeLabel}
+                        </Text>
+                      </Pressable>
+                      {isExtendedTags && (
+                        <Text
+                          style={[
+                            styles.td,
+                            {
+                              flex: 0.7,
+                              color:
+                                ev.icsi !== undefined && ev.icsi < 0.5
+                                  ? "#f97316"
+                                  : "#475569",
+                            },
+                          ]}
+                        >
+                          {ev.input.erroSecao ?? "-"}
+                        </Text>
+                      )}
+                      {/* Botão de envio individual */}
+                      <View
+                        style={{
+                          flex: 0.5,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons
+                          name="logo-whatsapp"
+                          size={20}
+                          color="#25D366"
+                        />
+                        <Ionicons
+                          name="chevron-forward"
+                          size={14}
+                          color="#94a3b8"
+                        />
+                      </View>
                     </Pressable>
-                  </View>
-                );
-              })}
+                  );
+                },
+              )}
             </View>
-
 
             {radarRisco.length > 0 && (
               <View style={styles.card}>
@@ -535,7 +467,7 @@ export default function InventExpImportScreen() {
                   Conferentes com risco de contagem superficial ou classificação
                   crítica.
                 </Text>
-                {radarRisco.map((ev) => (
+                {radarRisco.map((ev: InventoryCheckerEvaluation) => (
                   <View key={ev.input.nome} style={styles.riskRow}>
                     <View style={styles.riskHeader}>
                       <View
@@ -562,7 +494,9 @@ export default function InventExpImportScreen() {
 
             {evaluations[0] && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Exemplo de recibo do conferente</Text>
+                <Text style={styles.cardTitle}>
+                  Exemplo de recibo do conferente
+                </Text>
                 <CheckerFeedbackReport
                   evaluation={evaluations[0]}
                   operationType={operationType}
@@ -573,23 +507,39 @@ export default function InventExpImportScreen() {
             {/* Card Mapa de Acurácia de Seções */}
             {isExtendedTags && sectionAccuracy.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>🇳🇪 Mapa de Acurácia de Seções</Text>
-                <Text style={styles.cardSubtitle}>
-                  Acurácia = 1 − (|Σ Ajuste| ÷ Total Contado). Ordenado do mais crítico ao perfeito.
+                <Text style={styles.cardTitle}>
+                  🇳🇪 Mapa de Acurácia de Seções
                 </Text>
-                {sectionAccuracy.map((s) => {
+                <Text style={styles.cardSubtitle}>
+                  Acurácia = 1 − (|Σ Ajuste| ÷ Total Contado). Ordenado do mais
+                  crítico ao perfeito.
+                </Text>
+                {sectionAccuracy.map((s: SectionAccuracyRecord) => {
                   const isRisk = s.acuracidade < 97.5;
-                  const isOk   = s.acuracidade >= 99;
-                  const dotColor = s.acuracidade === 100 ? "#16a34a" :
-                                   isOk ? "#2563eb" :
-                                   isRisk ? "#dc2626" : "#f97316";
+                  const isOk = s.acuracidade >= 99;
+                  const dotColor =
+                    s.acuracidade === 100
+                      ? "#16a34a"
+                      : isOk
+                        ? "#2563eb"
+                        : isRisk
+                          ? "#dc2626"
+                          : "#f97316";
                   return (
-                    <View key={s.area} style={[
-                      styles.sectionRow,
-                      isRisk && { backgroundColor: "#fef2f2" },
-                    ]}>
+                    <View
+                      key={s.area}
+                      style={[
+                        styles.sectionRow,
+                        isRisk && { backgroundColor: "#fef2f2" },
+                      ]}
+                    >
                       <View style={styles.sectionHeader}>
-                        <View style={[styles.sectionDot, { backgroundColor: dotColor }]} />
+                        <View
+                          style={[
+                            styles.sectionDot,
+                            { backgroundColor: dotColor },
+                          ]}
+                        />
                         <Text style={styles.sectionName}>{s.area}</Text>
                         <Text style={[styles.sectionAcc, { color: dotColor }]}>
                           {s.acuracidade.toFixed(2)}%
@@ -602,10 +552,21 @@ export default function InventExpImportScreen() {
                         <Text style={styles.sectionMetaText}>
                           Ajuste: {s.ajusteAbsoluto.toFixed(0)}
                         </Text>
-                        <Text style={[styles.sectionMetaText, {
-                          color: s.ajusteLiquido < 0 ? "#dc2626" : s.ajusteLiquido > 0 ? "#f97316" : "#64748b"
-                        }]}>
-                          Saldo: {s.ajusteLiquido >= 0 ? "+" : ""}{s.ajusteLiquido.toFixed(0)}
+                        <Text
+                          style={[
+                            styles.sectionMetaText,
+                            {
+                              color:
+                                s.ajusteLiquido < 0
+                                  ? "#dc2626"
+                                  : s.ajusteLiquido > 0
+                                    ? "#f97316"
+                                    : "#64748b",
+                            },
+                          ]}
+                        >
+                          Saldo: {s.ajusteLiquido >= 0 ? "+" : ""}
+                          {s.ajusteLiquido.toFixed(0)}
                         </Text>
                       </View>
                     </View>
@@ -620,16 +581,26 @@ export default function InventExpImportScreen() {
                 style={styles.btnExport}
               >
                 <Ionicons name="download-outline" size={20} color="#fff" />
-                <Text style={styles.btnTextWhite}>Exportar CSV Avaliação</Text>
+                <Text style={styles.btnTextWhite}>Exportar CSV</Text>
               </Pressable>
               <Pressable
                 onPress={() => void handleExportGerencial()}
                 style={[styles.btnExport, { backgroundColor: "#4f46e5" }]}
               >
                 <Ionicons name="document-text-outline" size={20} color="#fff" />
-                <Text style={styles.btnTextWhite}>Relatório Gerencial</Text>
+                <Text style={styles.btnTextWhite}>Gerencial (texto)</Text>
               </Pressable>
             </View>
+            <Pressable
+              onPress={() => void handleExportGerencialPdf()}
+              style={[
+                styles.btnExport,
+                { backgroundColor: "#7c3aed", marginTop: 0 },
+              ]}
+            >
+              <Ionicons name="document-outline" size={20} color="#fff" />
+              <Text style={styles.btnTextWhite}>Gerencial (PDF)</Text>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -665,6 +636,31 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 16,
   },
+  btnEvolucao: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  btnEvolucaoText: {
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
+  },
+  btnSendAll: {
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#ecfdf5",
+    marginBottom: 8,
+  },
+  btnSendAllText: { fontSize: 12, color: "#059669", fontWeight: "600" },
   segmentContainer: {
     flexDirection: "row",
     backgroundColor: "#dbeafe",
@@ -708,6 +704,21 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     color: "#64748b",
+  },
+  previewOk: {
+    fontSize: 12,
+    color: "#059669",
+    marginTop: 4,
+  },
+  previewWarn: {
+    fontSize: 12,
+    color: "#d97706",
+    marginTop: 4,
+  },
+  rankingHint: {
+    fontSize: 12,
+    color: "#64748b",
+    marginBottom: 4,
   },
   importRow: {
     flexDirection: "row",
@@ -1010,4 +1021,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

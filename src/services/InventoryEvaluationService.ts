@@ -36,7 +36,7 @@ function calcularScoreQualidade(pctErro: number, k: number): number {
 
 function calcularPontosVolume(icv: number, nivelExperiencia: CheckerExperienceLevel): number {
   let pontos = Math.min(icv, 150);
-
+  
   const ajustes = {
     novato:  { bonus: 20, penalidade: 0.5 },
     junior:  { bonus: 10, penalidade: 0.7 },
@@ -44,16 +44,16 @@ function calcularPontosVolume(icv: number, nivelExperiencia: CheckerExperienceLe
     senior:  { bonus: -10, penalidade: 1.3 },
     expert:  { bonus: -15, penalidade: 1.5 },
   };
-
+  
   const ajuste = ajustes[nivelExperiencia] || ajustes.pleno;
-
+  
   if (icv >= 100) {
     pontos = Math.min(pontos + ajuste.bonus, 100);
   } else {
     const deficit = 100 - icv;
     pontos = icv - (deficit * ajuste.penalidade);
   }
-
+  
   return Math.max(0, Math.min(100, pontos));
 }
 
@@ -90,12 +90,6 @@ export function evaluateChecker(
   const profile = INVENTORY_PROFILES[operationType];
   const { weights, targets, alerts } = profile;
   const k = (profile as any).qualityDecayRate ?? 1.0;
-  /**
-   * Duração padrão da operação definida no perfil:
-   *   FARMACIA = 5h | SUPERMERCADO = 8h | LOJA_GERAL = 6h
-   * Substitui o valor fixo 5 que era usado antes para todas as operações.
-   */
-  const duracaoPadrao = (profile as any).duracaoPadrao ?? 5;
 
   const qtde        = data.qtde > 0 ? data.qtde : 0;
   const qtde1a1     = Math.min(Math.max(data.qtde1a1, 0), qtde);
@@ -109,22 +103,10 @@ export function evaluateChecker(
   let scoreQualidade = calcularScoreQualidade(pctErro, k);
 
   // PRODUTIVIDADE
-  //
-  // Quando o total de peças da loja é informado, a meta dinâmica é calculada como:
-  //   metaDinamica = totalPecasLoja / numConferentes / duracaoPadrao
-  //
-  // Isso garante que a meta de produtividade (items/h) seja exatamente igual
-  // ao mínimo individual esperado, conforme solicitado.
-  // Quando não há dados de total de peças, usa o valor fixo do perfil como fallback.
-  const metaProdutividadeBase =
-    totalPecasLoja > 0 && numeroConferentes > 0
-      ? totalPecasLoja / numeroConferentes / duracaoPadrao
-      : targets.productivity;
-
   let scoreProdutividade = Math.min(
     100,
-    metaProdutividadeBase > 0
-      ? (produtividade / metaProdutividadeBase) * 100
+    targets.productivity > 0
+      ? (produtividade / targets.productivity) * 100
       : 100,
   );
 
@@ -142,9 +124,8 @@ export function evaluateChecker(
   // CÁLCULO DE VOLUME (ICV)
   const nivelExp   = data.experiencia || "pleno";
   const fatorExp   = getExperienciaFator(nivelExp);
-  // fatorTempo agora usa duracaoPadrao do perfil (5h/8h/6h) em vez de 5 fixo
-  const fatorTempo = duracaoRealInventario > 0 ? duracaoPadrao / duracaoRealInventario : 1;
-
+  const fatorTempo = duracaoRealInventario > 0 ? 5 / duracaoRealInventario : 1;
+  
   let minimoIndividual = 0;
   let icv             = 0;
   let pontosVolume    = 100;
@@ -198,7 +179,7 @@ export function evaluateChecker(
     tags.push("⭐ Qualidade Premium (Zero Erro)");
   }
 
-  if (produtividade > metaProdutividadeBase && pctErro <= targets.erroTolerancia) {
+  if (produtividade > targets.productivity && pctErro <= targets.erroTolerancia) {
     scoreFinal += 3;
     tags.push("🚀 The Flash Sniper");
   }
@@ -216,7 +197,7 @@ export function evaluateChecker(
     if (icv > 200 && pctErro < 0.5) {
       tags.push("🚨 Volume Irreal (Investigar Fraude)");
     }
-    const prodMax = metaProdutividadeBase * 3;
+    const prodMax = targets.productivity * 3;
     if (produtividade > prodMax) {
       tags.push("🚨 Produtividade Impossível");
     }
@@ -325,7 +306,6 @@ export function evaluateChecker(
     scoreProdutividade,
     scoreAderencia,
     minimoEsperado: minimoIndividual,
-    metaProdutividade: Math.round(metaProdutividadeBase),
     icv,
     pontosVolume,
     bonusVolume,

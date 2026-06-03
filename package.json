@@ -11,7 +11,9 @@
     "build": "npx expo export -p web && node -e \"const fs=require('fs'); if(fs.existsSync('public')) fs.rmSync('public', {recursive:true, force:true}); if(fs.existsSync('dist')) fs.renameSync('dist', 'public')\"",
     "predeploy": "npx expo export -p web",
     "deploy": "node ./scripts/inject-base.js && copy dist\\index.html dist\\404.html && gh-pages --nojekyll --dotfiles -d dist",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -61,10 +63,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "gh-pages": "^6.3.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~54.0.0",
     "react-native-dotenv": "^3.4.11",
     "typescript": "~5.9.2"
   },

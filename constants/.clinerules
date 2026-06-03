@@ -1,0 +1,29 @@
+# Projeto: InventExpert
+
+## Visão geral
+App React Native + TypeScript para gestão de inventário.
+Hooks principais em src/hooks/inventExp/
+Telas principais em src/screens/
+
+## Arquivos críticos
+- src/screens/InventExpImportScreen.tsx (tela principal de importação)
+- src/hooks/inventExp/useInventExpImport.ts (hook de importação)
+- src/hooks/inventExp/useInventExpExport.ts (hook de exportação)
+- src/hooks/inventExp/useInventExpEvaluations.ts (hook de avaliações)
+- src/types/ (tipos globais do projeto)
+
+## Regras importantes
+- Sempre rodar npx tsc --noEmit após modificações para verificar erros TypeScript
+- Nunca usar implicit any — todos os parâmetros de map/filter precisam de tipo explícito
+- Ao corrigir imports, verificar se o membro realmente é exportado pelo hook antes de importar
+- LeaderEvaluationDashboard fica em src/screens/experimental/ — imports usam ../../ não ../
+
+## Estado atual (atualizar conforme evolução)
+- Projeto compila sem erros TypeScript ✅
+- useInventExpImport refatorado com melhor tipagem ✅
+- InventExpImportScreen com imports corrigidos ✅
+
+## Instruções para o Cline
+- Leia apenas os arquivos necessários para a tarefa atual
+- Não varrer pastas inteiras desnecessariamente
+- Ao iniciar, pergunte qual é a tarefa antes de ler arquivos

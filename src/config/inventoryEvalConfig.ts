@@ -31,7 +31,7 @@ export const INVENTORY_PROFILES = {
     duracaoPadrao: 5,
   },
   SUPERMERCADO: {
-    weights: { quality: 0.45, productivity: 0.35, adherence: 0.10, volume: 0.10 },
+    weights: { quality: 0.52, productivity: 0.28, adherence: 0.10, volume: 0.10 },
     targets: {
       productivity: 1200,
       maxBlockLimit: 50,

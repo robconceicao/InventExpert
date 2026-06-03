@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SyncStatus from "../components/SyncStatus";
 import AttendanceScreen from "../screens/AttendanceScreen";
 import InventExpImportScreen from "../screens/InventExpImportScreen";
+import InventExpEvolutionScreen from "../screens/InventExpEvolutionScreen";
 import ReportAScreen from "../screens/ReportAScreen";
 import ReportBScreen from "../screens/ReportBScreen";
 import ReportFarmacondeScreen from "../screens/ReportFarmacondeScreen";
@@ -31,6 +32,7 @@ export type RootTabParamList = {
   Attendance: undefined;
   Escala: undefined;
   InventExp: undefined;
+  InventExpEvolution: undefined;
   Management: undefined;
   Scanner: undefined;
   Acompanhamento: undefined;
@@ -120,6 +122,7 @@ export default function RootTabs() {
               Attendance: "checkmark-circle-outline",
               Escala: "calendar",
               InventExp: "analytics",
+              InventExpEvolution: "trending-up",
               Management: "briefcase",
               Scanner: "scan",
               Acompanhamento: "list-outline",
@@ -144,6 +147,11 @@ export default function RootTabs() {
       <Tab.Screen name="Escala" component={EscalaDashboardScreen} options={{ title: "Escala" }} />
       <Tab.Screen name="Checkers" component={CheckersScreen} options={{ title: "Conferentes" }} />
       <Tab.Screen name="InventExp" component={InventExpImportScreen} options={{ title: "Avaliação" }} />
+      <Tab.Screen
+        name="InventExpEvolution"
+        component={InventExpEvolutionScreen}
+        options={{ title: "Evolução", tabBarButton: () => null }}
+      />
       <Tab.Screen name="Management" component={ManagementScreen} options={{ title: "Gestão" }} />
       <Tab.Screen
         name="InventoryDivergence"

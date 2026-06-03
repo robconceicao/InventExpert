@@ -8,13 +8,23 @@ import type {
   ReportBOutros,
 } from "../types";
 
+// Result type for full inventory parsing
+export interface ParseInventoryResult {
+  conferentes: InventoryCheckerInput[];
+  totalPecasDetectado: number;
+  duracaoDetectada: number;
+}
+
 // ==========================
 // FORMATAÇÃO GERAL
 // ==========================
 const parseNum = (s: string | number): number => {
-  const v = String(s ?? "").replace(/%/g, "").trim();
+  const v = String(s ?? "")
+    .replace(/%/g, "")
+    .trim();
   if (!v) return 0;
-  if (v.includes(",")) return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+  if (v.includes(","))
+    return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
   return parseFloat(v) || 0;
 };
 
@@ -30,7 +40,8 @@ const fmtMoeda = (val: string | number | "") =>
         .toFixed(2)
         .replace(".", ",")
         .replace(/\B(?=(\d{3})+(?!\d))/g, ".")}*`;
-const fmtVal = (val: string | number | boolean | null | undefined) => (!val && val !== 0 ? "" : `*${val}*`);
+const fmtVal = (val: string | number | boolean | null | undefined) =>
+  !val && val !== 0 ? "" : `*${val}*`;
 const fmtBool = (val: boolean | null) =>
   val === true ? "*Sim*" : val === false ? "*Não*" : "*N/A*";
 
@@ -61,7 +72,10 @@ export const parseWhatsAppScale = (text: string): AttendanceData => {
     const matchNum = line.match(/^(\d+)[\s.-]*(.*)/);
     if (matchNum && matchNum[2]?.trim()) {
       const num = parseInt(matchNum[1], 10);
-      const cleanName = matchNum[2].trim().replace(/\s*[✅❌]\s*$/, "").trim();
+      const cleanName = matchNum[2]
+        .trim()
+        .replace(/\s*[✅❌]\s*$/, "")
+        .trim();
       if (cleanName.length > 2) {
         nomes.push({
           id: Date.now().toString() + Math.random().toString(),
@@ -77,7 +91,10 @@ export const parseWhatsAppScale = (text: string): AttendanceData => {
 
     const matchBkp = line.match(/^BKP\s+(.+)/i);
     if (matchBkp && matchBkp[1]?.trim()) {
-      const cleanName = matchBkp[1].trim().replace(/\s*[✅❌]\s*$/, "").trim();
+      const cleanName = matchBkp[1]
+        .trim()
+        .replace(/\s*[✅❌]\s*$/, "")
+        .trim();
       if (cleanName.length > 2) {
         nomes.push({
           id: Date.now().toString() + Math.random().toString(),
@@ -124,7 +141,6 @@ export const formatTimeNow = (): string => {
   return `${h}:${m}`;
 };
 
-
 export const formatAttendanceMessage = (data: AttendanceData): string => {
   const icon = (c: AttendanceCollaborator) =>
     c.status === "PRESENTE" ? " ✅" : c.status === "AUSENTE" ? " ❌" : "";
@@ -134,7 +150,7 @@ export const formatAttendanceMessage = (data: AttendanceData): string => {
     const c = data.colaboradores[i];
     const num = c.numero ?? currentNum;
     currentNum = num + 1;
-    
+
     const sub = (c.substituto ?? "").trim();
     if (sub) {
       linhas.push(`${num} ${c.nome} ❌`);
@@ -162,13 +178,14 @@ const timeToMinutes = (t: string): number => {
 
 export const formatReportA = (r: ReportA): string => {
   // Monta os avanços padrão como pares [hora_str, minutos, valor]
-  const avancos: { label: string; mins: number; val: string | number | "" }[] = [
-    { label: "22h00", mins: timeToMinutes("22:00"), val: r.avanco22h },
-    { label: "00h00", mins: timeToMinutes("00:00"), val: r.avanco00h },
-    { label: "01h00", mins: timeToMinutes("01:00"), val: r.avanco01h },
-    { label: "03h00", mins: timeToMinutes("03:00"), val: r.avanco03h },
-    { label: "04h00", mins: timeToMinutes("04:00"), val: r.avanco04h },
-  ];
+  const avancos: { label: string; mins: number; val: string | number | "" }[] =
+    [
+      { label: "22h00", mins: timeToMinutes("22:00"), val: r.avanco22h },
+      { label: "00h00", mins: timeToMinutes("00:00"), val: r.avanco00h },
+      { label: "01h00", mins: timeToMinutes("01:00"), val: r.avanco01h },
+      { label: "03h00", mins: timeToMinutes("03:00"), val: r.avanco03h },
+      { label: "04h00", mins: timeToMinutes("04:00"), val: r.avanco04h },
+    ];
   if (r.avancoExtraHora && r.avancoExtraValor !== "") {
     avancos.push({
       label: r.avancoExtraHora.replace(":", "h"),
@@ -313,7 +330,9 @@ Fim Inventário: ${fmtTime(r.terminoInventario)}`;
 
 // Aliases mantidos para não quebrar imports de arquivos antigos
 /** @deprecated use formatReportBFarmacias */
-export const formatReportB = formatReportBFarmacias as unknown as (r: never) => string;
+export const formatReportB = formatReportBFarmacias as unknown as (
+  r: never,
+) => string;
 /** @deprecated ReportC removido */
 export const formatReportC = (_r: unknown): string => "";
 /** @deprecated ReportD removido */
@@ -322,9 +341,11 @@ export const formatReportD = (_r: unknown): string => "";
 // Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 1,770.65 -> 1770.65
 // Também lida com strings de percentagem "1,73%" -> 1.73
 const parseNumberBR = (s: string): number => {
-  const v = String(s ?? "").replace(/%/g, "").trim();
+  const v = String(s ?? "")
+    .replace(/%/g, "")
+    .trim();
   if (!v) return 0;
-  
+
   // Detectar formato US exportado pelo XLSX (vírgula antes de ponto): "1,770.65"
   const commaIdx = v.indexOf(",");
   const dotIdx = v.indexOf(".");
@@ -337,7 +358,7 @@ const parseNumberBR = (s: string): number => {
       return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
     }
   }
-  
+
   // Apenas vírgula: "395,33" (BR) ou "5,647" (US thousand?)
   // Se termina com exatos 3 dígitos após a vírgula, e tem formato de milhar, pode ser US.
   // Mas no Brasil, usamos vírgula como decimal na maioria dos textos colados.
@@ -351,7 +372,7 @@ const parseNumberBR = (s: string): number => {
     // BR decimal
     return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
   }
-  
+
   return parseFloat(v) || 0;
 };
 
@@ -391,8 +412,8 @@ export const parseInventoryCheckersCsv = (
   // Detecta o separador dominante numa linha
   const detectSeparator = (line: string): RegExp => {
     const semicolons = (line.match(/;/g) ?? []).length;
-    const tabs       = (line.match(/\t/g) ?? []).length;
-    const commas     = (line.match(/,/g) ?? []).length;
+    const tabs = (line.match(/\t/g) ?? []).length;
+    const commas = (line.match(/,/g) ?? []).length;
     if (semicolons >= tabs && semicolons >= commas) return /;/;
     if (tabs >= commas) return /\t/;
     return /,/;
@@ -407,7 +428,10 @@ export const parseInventoryCheckersCsv = (
     let inQuotes = false;
     for (let i = 0; i < row.length; i++) {
       const c = row[i];
-      if (c === '"') { inQuotes = !inQuotes; continue; }
+      if (c === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
       if (sep.test(c) && !inQuotes) {
         result.push(current.trim());
         current = "";
@@ -420,9 +444,12 @@ export const parseInventoryCheckersCsv = (
   };
 
   const normalizeHeader = (h: string): string =>
-    h.replace(/^"|"$/g, "").trim().toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
+    h
+      .replace(/^"|"$/g, "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
   type ColMap = {
     nome: number;
@@ -479,7 +506,13 @@ export const parseInventoryCheckersCsv = (
         ? cQtdeExact
         : matchCol(
             header,
-            [/^qtde\.?\s*volu/, /^quantidade$/, /^qtd$/, /total.*peca/, /volumes/],
+            [
+              /^qtde\.?\s*volu/,
+              /^quantidade$/,
+              /^qtd$/,
+              /total.*peca/,
+              /volumes/,
+            ],
             /1a1|unit|coleta|erro|%/,
           );
     const cQtde1a1 = matchCol(
@@ -494,18 +527,33 @@ export const parseInventoryCheckersCsv = (
     );
     const cProdutividade = matchCol(
       header,
-      [/produtividade/, /horasprodutividade/, /ritmo/, /itens.*hora/, /prod.*hora/],
+      [
+        /produtividade/,
+        /horasprodutividade/,
+        /ritmo/,
+        /itens.*hora/,
+        /prod.*hora/,
+      ],
       /^horas$/,
     );
     const cErro = matchCol(
       header,
-      [/erro\s*\(qtde\)/, /erro\s*\(qtd\)/, /^erro$/, /^erros$/, /qtde.*erro/, /divergencia/],
+      [
+        /erro\s*\(qtde\)/,
+        /erro\s*\(qtd\)/,
+        /^erro$/,
+        /^erros$/,
+        /qtde.*erro/,
+        /divergencia/,
+      ],
       /%|vlr|valor/,
     );
-    const cPctErro = matchCol(
-      header,
-      [/%.*erro/, /erro.*qtd/, /erro.*qtde/, /taxa.*erro/],
-    );
+    const cPctErro = matchCol(header, [
+      /%.*erro/,
+      /erro.*qtd/,
+      /erro.*qtde/,
+      /taxa.*erro/,
+    ]);
     const cBloco = matchCol(header, [/^bloco$/, /^f\s*bloco$/], /contagem|%/);
 
     if (cNome >= 0 && cQtde >= 0) {
@@ -513,10 +561,11 @@ export const parseInventoryCheckersCsv = (
         nome: cNome,
         matricula: cMatricula,
         qtde: cQtde,
-        qtde1a1:
-          cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1,
+        qtde1a1: cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1,
         produtividade:
-          cProdutividade >= 0 && cProdutividade !== cQtde && cProdutividade !== cHoras
+          cProdutividade >= 0 &&
+          cProdutividade !== cQtde &&
+          cProdutividade !== cHoras
             ? cProdutividade
             : -1,
         horas: cHoras >= 0 && cHoras !== cProdutividade ? cHoras : -1,
@@ -570,12 +619,13 @@ export const parseInventoryCheckersCsv = (
 
     const nonEmpties = cells.filter((c) => c !== "");
     const hasDate = nonEmpties.some((c) => /\d{2}\/\d{2}\/\d{4}/.test(c));
-    if (
-      nonEmpties.length >= 9 &&
+    // Layout fixo só com ≥15 colunas preenchidas (evita deslize de índice 1a1/BLOCO)
+    const useExcelFixedLayout =
+      nonEmpties.length >= 15 &&
       /^\d+$/.test(nonEmpties[0]) &&
       /^\d+$/.test(nonEmpties[1]) &&
-      hasDate
-    ) {
+      hasDate;
+    if (useExcelFixedLayout) {
       const nome = nonEmpties[2];
       if (!nome || isSkipNome(nome)) continue;
 
@@ -588,7 +638,8 @@ export const parseInventoryCheckersCsv = (
       const erro = nonEmpties.length > 8 ? parseNumberBR(nonEmpties[8]) : 0;
       const has1a1Col = nonEmpties.length > 13;
       const qtde1a1Col = has1a1Col ? parseNumberBR(nonEmpties[13]) : 0;
-      const blocoCol = nonEmpties.length > 14 ? parseNumberBR(nonEmpties[14]) : 0;
+      const blocoCol =
+        nonEmpties.length > 14 ? parseNumberBR(nonEmpties[14]) : 0;
       const qtde1a1 = resolveQtde1a1(qtde, qtde1a1Col, blocoCol, has1a1Col);
 
       result.push({
@@ -608,8 +659,7 @@ export const parseInventoryCheckersCsv = (
     const qtde = parseNumberBR(cells[col.qtde] ?? "");
     if (qtde <= 0) continue;
 
-    const blocoVal =
-      col.bloco >= 0 ? parseNumberBR(cells[col.bloco] ?? "") : 0;
+    const blocoVal = col.bloco >= 0 ? parseNumberBR(cells[col.bloco] ?? "") : 0;
     const qtde1a1Raw =
       col.qtde1a1 >= 0 ? parseNumberBR(cells[col.qtde1a1] ?? "") : 0;
     const qtde1a1 = resolveQtde1a1(
@@ -628,7 +678,13 @@ export const parseInventoryCheckersCsv = (
 
     let erro = 0;
     if (col.erro >= 0) {
-      erro = parseNumberBR(cells[col.erro] ?? "");
+      const rawErro = cells[col.erro] ?? "";
+      if (rawErro.includes("%")) {
+        const pct = parseNumberBR(rawErro.replace("%", ""));
+        erro = Math.round(qtde * (pct / 100));
+      } else {
+        erro = parseNumberBR(rawErro);
+      }
     } else if (col.pctErro >= 0) {
       const rawPct = cells[col.pctErro] ?? "";
       const pct = parseNumberBR(rawPct.replace("%", ""));
@@ -652,25 +708,42 @@ export const parseInventoryCheckersCsv = (
   return result;
 };
 
+// Export parseInventoryFull
+export const parseInventoryFull = (text: string): ParseInventoryResult => {
+  const conferentes = parseInventoryCheckersCsv(text);
+  const totalPecasDetectado = conferentes.reduce(
+    (s, c) => s + (c.qtde ?? 0),
+    0,
+  );
+  const duracaoDetectada = conferentes.reduce(
+    (max, c) => Math.max(max, c.horas ?? 0),
+    0,
+  );
+  return { conferentes, totalPecasDetectado, duracaoDetectada };
+};
+
 // ==========================
 // PARSER INVENTEXP - TAGS (CSV/Excel) — Formato simples (backward-compat)
 // ==========================
 export const parseTagsCsv = (
   text: string,
 ): Record<string, { itensPulados: number; itensDuplicados: number }> => {
-  const result: Record<string, { itensPulados: number; itensDuplicados: number }> = {};
-  
+  const result: Record<
+    string,
+    { itensPulados: number; itensDuplicados: number }
+  > = {};
+
   const lines = text
     .split(/[\r\n]+/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
-    
+
   if (lines.length < 2) return result;
 
   const detectSeparator = (line: string): RegExp => {
     const semicolons = (line.match(/;/g) ?? []).length;
-    const tabs       = (line.match(/\t/g) ?? []).length;
-    const commas     = (line.match(/,/g) ?? []).length;
+    const tabs = (line.match(/\t/g) ?? []).length;
+    const commas = (line.match(/,/g) ?? []).length;
     if (semicolons >= tabs && semicolons >= commas) return /;/;
     if (tabs >= commas) return /\t/;
     return /,/;
@@ -685,7 +758,10 @@ export const parseTagsCsv = (
     let inQuotes = false;
     for (let i = 0; i < row.length; i++) {
       const c = row[i];
-      if (c === '"') { inQuotes = !inQuotes; continue; }
+      if (c === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
       if (sep.test(c) && !inQuotes) {
         res.push(current.trim());
         current = "";
@@ -698,8 +774,12 @@ export const parseTagsCsv = (
   };
 
   const normalizeHeader = (h: string): string =>
-    h.replace(/^"|"$/g, "").trim().toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    h
+      .replace(/^"|"$/g, "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
   let headerRowIndex = -1;
   let sep = /,/;
@@ -709,7 +789,9 @@ export const parseTagsCsv = (
     sep = detectSeparator(lines[r]);
     const header = parseRow(lines[r], sep).map(normalizeHeader);
 
-    const cNome = header.findIndex((h) => /nome|conferente|colaborador/i.test(h));
+    const cNome = header.findIndex((h) =>
+      /nome|conferente|colaborador/i.test(h),
+    );
     const cQtdA1 = header.findIndex((h) => /qtd.*a1/i.test(h));
 
     if (cNome >= 0 && cQtdA1 >= 0) {
@@ -728,10 +810,10 @@ export const parseTagsCsv = (
 
     const nomeRaw = (cells[col.nome] ?? "").trim();
     if (!nomeRaw || /^(nome|total|soma|media|resumo)/i.test(nomeRaw)) continue;
-    
+
     // Simplificar o nome para facilitar o matching
     const nomeKey = nomeRaw.toLowerCase().trim();
-    
+
     const qtdStr = cells[col.qtdA1] ?? "0";
     const qtdA1 = parseNumberBR(qtdStr); // parseNumberBR suporta virgula decimal e negativo
 
@@ -754,13 +836,16 @@ export const parseTagsCsv = (
 // ==========================
 export interface TagsExtendedResult {
   /** Por colaborador: erroSecao = Σ|Qtd(A1)|, numSecoes */
-  porColaborador: Record<string, {
-    erroSecao: number;
-    numSecoes: number;
-    itensPulados: number;
-    itensDuplicados: number;
-    matricula?: string;
-  }>;
+  porColaborador: Record<
+    string,
+    {
+      erroSecao: number;
+      numSecoes: number;
+      itensPulados: number;
+      itensDuplicados: number;
+      matricula?: string;
+    }
+  >;
   /** Por área física: acurácia de estoque */
   porArea: Array<{
     area: string;
@@ -810,10 +895,18 @@ export const parseTagsExtended = (text: string): TagsExtendedResult => {
     row.split(sep).map((c) => c.replace(/^"|"$/g, "").trim());
 
   const normalizeH = (h: string): string =>
-    h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    h
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
 
   const parseBR = (s: string): number => {
-    const v = String(s ?? "").replace(/%/g, "").replace(/\s/g, "").trim();
+    const v = String(s ?? "")
+      .replace(/%/g, "")
+      .replace(/\s/g, "")
+      .trim();
     if (!v) return 0;
     if (v.includes(",")) {
       return parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
@@ -824,23 +917,34 @@ export const parseTagsExtended = (text: string): TagsExtendedResult => {
   // Procura header do formato estendido (AREA, NOME, Qtd(C1), Qtd(A1))
   let headerIdx = -1;
   let sep = /\t/;
-  let cArea = -1, cMatricula = -1, cNome = -1, cSecoes = -1, cC1 = -1, cA1 = -1;
+  let cArea = -1,
+    cMatricula = -1,
+    cNome = -1,
+    cSecoes = -1,
+    cC1 = -1,
+    cA1 = -1;
 
   for (let r = 0; r < Math.min(lines.length, 20); r++) {
     sep = detectSeparator(lines[r]);
     const raw = parseRow(lines[r], sep);
     const hdr = raw.map(normalizeH);
 
-    const iArea     = hdr.findIndex(h => /^area$/.test(h));
-    const iNome     = hdr.findIndex(h => /^nome$/.test(h));
-    const iC1       = hdr.findIndex(h => /qtd.*c1/i.test(h));
-    const iA1       = hdr.findIndex(h => /qtd.*a1/i.test(h));
-    const iMatr     = hdr.findIndex(h => /matricula/i.test(h));
-    const iSecoes   = hdr.findIndex(h => /sec[oa]es\s*contadas|secoes/i.test(h));
+    const iArea = hdr.findIndex((h) => /^area$/.test(h));
+    const iNome = hdr.findIndex((h) => /^nome$/.test(h));
+    const iC1 = hdr.findIndex((h) => /qtd.*c1/i.test(h));
+    const iA1 = hdr.findIndex((h) => /qtd.*a1/i.test(h));
+    const iMatr = hdr.findIndex((h) => /matricula/i.test(h));
+    const iSecoes = hdr.findIndex((h) =>
+      /sec[oa]es\s*contadas|secoes/i.test(h),
+    );
 
     if (iArea >= 0 && iNome >= 0 && iC1 >= 0 && iA1 >= 0) {
-      cArea = iArea; cNome = iNome; cC1 = iC1; cA1 = iA1;
-      cMatricula = iMatr; cSecoes = iSecoes;
+      cArea = iArea;
+      cNome = iNome;
+      cC1 = iC1;
+      cA1 = iA1;
+      cMatricula = iMatr;
+      cSecoes = iSecoes;
       headerIdx = r;
       break;
     }
@@ -857,19 +961,31 @@ export const parseTagsExtended = (text: string): TagsExtendedResult => {
   }
 
   // Estruturas de acumulação
-  const colabMap: Record<string, {
-    erroSecao: number; numSecoes: number;
-    itensPulados: number; itensDuplicados: number; matricula?: string;
-  }> = {};
-  const areaMap: Record<string, {
-    totalC1: number; ajusteAbsoluto: number; ajusteLiquido: number; colaboradores: Set<string>;
-  }> = {};
+  const colabMap: Record<
+    string,
+    {
+      erroSecao: number;
+      numSecoes: number;
+      itensPulados: number;
+      itensDuplicados: number;
+      matricula?: string;
+    }
+  > = {};
+  const areaMap: Record<
+    string,
+    {
+      totalC1: number;
+      ajusteAbsoluto: number;
+      ajusteLiquido: number;
+      colaboradores: Set<string>;
+    }
+  > = {};
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const cells = parseRow(lines[i], sep);
 
-    const area  = (cells[cArea] ?? "").trim();
-    const nome  = (cells[cNome] ?? "").trim();
+    const area = (cells[cArea] ?? "").trim();
+    const nome = (cells[cNome] ?? "").trim();
     const c1Raw = cells[cC1] ?? "";
     const a1Raw = cells[cA1] ?? "";
 
@@ -880,15 +996,24 @@ export const parseTagsExtended = (text: string): TagsExtendedResult => {
 
     const c1 = parseBR(c1Raw);
     const a1 = parseBR(a1Raw);
-    const secoes = cSecoes >= 0 ? (parseBR(cells[cSecoes] ?? "0") || 1) : 1;
-    const matricula = cMatricula >= 0 ? (cells[cMatricula] ?? "").trim() || undefined : undefined;
+    const secoes = cSecoes >= 0 ? parseBR(cells[cSecoes] ?? "0") || 1 : 1;
+    const matricula =
+      cMatricula >= 0
+        ? (cells[cMatricula] ?? "").trim() || undefined
+        : undefined;
 
     if (c1 <= 0 && a1 === 0) continue; // linha de subtotal sem dados reais
 
     // Acumula por colaborador (chave normalizada = lowercase)
     const nomeKey = nome.toLowerCase().trim();
     if (!colabMap[nomeKey]) {
-      colabMap[nomeKey] = { erroSecao: 0, numSecoes: 0, itensPulados: 0, itensDuplicados: 0, matricula };
+      colabMap[nomeKey] = {
+        erroSecao: 0,
+        numSecoes: 0,
+        itensPulados: 0,
+        itensDuplicados: 0,
+        matricula,
+      };
     }
     colabMap[nomeKey].erroSecao += Math.abs(a1);
     colabMap[nomeKey].numSecoes += secoes;
@@ -898,7 +1023,12 @@ export const parseTagsExtended = (text: string): TagsExtendedResult => {
     // Acumula por área (apenas linhas com nome de colaborador, não subtotais)
     const areaKey = area.toUpperCase().trim();
     if (!areaMap[areaKey]) {
-      areaMap[areaKey] = { totalC1: 0, ajusteAbsoluto: 0, ajusteLiquido: 0, colaboradores: new Set() };
+      areaMap[areaKey] = {
+        totalC1: 0,
+        ajusteAbsoluto: 0,
+        ajusteLiquido: 0,
+        colaboradores: new Set(),
+      };
     }
     areaMap[areaKey].totalC1 += c1;
     areaMap[areaKey].ajusteAbsoluto += Math.abs(a1);
@@ -913,9 +1043,10 @@ export const parseTagsExtended = (text: string): TagsExtendedResult => {
       totalC1: d.totalC1,
       ajusteAbsoluto: d.ajusteAbsoluto,
       ajusteLiquido: d.ajusteLiquido,
-      acuracidade: d.totalC1 > 0
-        ? Math.max(0, Math.min(100, (1 - d.ajusteAbsoluto / d.totalC1) * 100))
-        : 100,
+      acuracidade:
+        d.totalC1 > 0
+          ? Math.max(0, Math.min(100, (1 - d.ajusteAbsoluto / d.totalC1) * 100))
+          : 100,
       colaboradores: Array.from(d.colaboradores),
     }))
     .sort((a, b) => a.acuracidade - b.acuracidade);
