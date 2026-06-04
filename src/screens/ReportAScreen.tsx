@@ -97,22 +97,21 @@ const isWarningTime = (targetHour: number, targetMin: number): boolean => {
 };
 
 const playAirportJoke = () => {
-  if (Platform.OS !== "web") {
-    void Speech.stop().then(() => {
-      const msg = "Atenção. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores.";
-      Speech.speak(msg, {
-        language: "pt-BR",
-        rate: 0.85,
-        pitch: 0.9,
-      });
-    });
-  } else {
-    const msg = "Atenção. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores.";
-    Speech.speak(msg, {
-      language: "pt-BR",
-      rate: 0.85,
-      pitch: 0.9,
-    });
+  const msg = "Atenção. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores. Conferentes, favor exportarem os dados dos coletores.";
+  const options = {
+    language: "pt-BR",
+    rate: 0.85,
+    pitch: 0.9,
+  };
+  // Play the message three times with a short pause between each utterance
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => {
+      if (Platform.OS !== "web") {
+        void Speech.stop().then(() => Speech.speak(msg, options));
+      } else {
+        Speech.speak(msg, options);
+      }
+    }, i * 1500);
   }
 };
 
