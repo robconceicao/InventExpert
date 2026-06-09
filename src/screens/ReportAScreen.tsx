@@ -267,13 +267,24 @@ export default function ReportAScreen() {
     </View>
   );
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const msg = formatReportA(report);
     const waUrl =
       Platform.OS === "web"
         ? `https://wa.me/?text=${encodeURIComponent(msg)}`
         : `whatsapp://send?text=${encodeURIComponent(msg)}`;
-    Linking.openURL(waUrl);
+    try {
+      if (Platform.OS !== "web") {
+        const canOpen = await Linking.canOpenURL(waUrl);
+        if (!canOpen) {
+          Alert.alert("WhatsApp não encontrado", "O WhatsApp não está instalado neste dispositivo.");
+          return;
+        }
+      }
+      await Linking.openURL(waUrl);
+    } catch {
+      Alert.alert("Erro ao abrir WhatsApp", "Não foi possível abrir o WhatsApp. Tente novamente.");
+    }
   };
 
   const handleArchive = async (clearForm: boolean) => {
