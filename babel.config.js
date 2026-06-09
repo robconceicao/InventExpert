@@ -1,5 +1,14 @@
 module.exports = function (api) {
-  api.cache(true);
+  api.cache.using(() => {
+    try {
+      return require('fs').readFileSync(
+        require('path').resolve(__dirname, '.env'),
+        'utf8'
+      );
+    } catch {
+      return '';
+    }
+  });
   return {
     presets: ['babel-preset-expo'],
     plugins: [
