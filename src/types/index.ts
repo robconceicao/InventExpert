@@ -347,3 +347,13 @@ export class EscalaInsuficienteError extends Error {
     this.name = 'EscalaInsuficienteError';
   }
 }
+
+// ---------------------------------------------------------------------------
+// PRC — Contagem Detalhada por Conferente/Seção
+// ---------------------------------------------------------------------------
+export interface ContagemDetalhada {
+  area_codigo: string;   // código de seção/área (ex: "003029")
+  barcode: string;       // EAN/código do produto
+  quantidade: number;    // quantidade contada no bip
+  matricula: string;     // matrícula do operador
+}
