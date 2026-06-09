@@ -27,11 +27,14 @@ import type {
 } from "../types";
 import { shareCsvFile, shareTextFile } from "../utils/export";
 import { readFileAsCsvText } from "../utils/fileImport";
+import { readFileAsText } from "../utils/fileImport";
 import {
     generateInventExpGerencialReportText,
     generateInventExpIndividualReportText,
 } from "../utils/inventExpReports";
 import { parseInventoryCheckersCsv } from "../utils/parsers";
+import { parsePrcFile } from "../utils/prcParser";
+import type { ContagemDetalhada } from "../types";
 
 
 const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
@@ -46,6 +49,8 @@ export default function InventExpImportScreen() {
   const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>(
     [],
   );
+  const [prcInfo, setPrcInfo] = useState<{ count: number; totalLines: number } | null>(null);
+  const [prcContagens, setPrcContagens] = useState<ContagemDetalhada[]>([]);
 
 
   const handlePickFile = async () => {
@@ -72,6 +77,30 @@ export default function InventExpImportScreen() {
       );
     } catch (e) {
       Alert.alert("Erro", "Não foi possível ler o arquivo. Tente CSV.");
+    }
+  };
+
+  const handlePickPrcFiles = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+      if (result.canceled) return;
+
+      const arquivos = result.assets;
+      const allContagens: ContagemDetalhada[] = [];
+
+      for (const arquivo of arquivos) {
+        const conteudo = await readFileAsText(arquivo.uri);
+        allContagens.push(...parsePrcFile(conteudo));
+      }
+
+      setPrcContagens(allContagens);
+      setPrcInfo({ count: arquivos.length, totalLines: allContagens.length });
+    } catch {
+      Alert.alert("Erro", "Não foi possível ler os arquivos .prc.");
     }
   };
 
@@ -255,11 +284,24 @@ export default function InventExpImportScreen() {
             Erro (qtde).
           </Text>
           <View style={styles.importRow}>
-            <Pressable onPress={handlePickFile} style={styles.btnAttach}>
+            <Pressable onPress={() => void handlePickFile()} style={styles.btnAttach}>
               <Ionicons name="attach" size={20} color="#2563EB" />
               <Text style={styles.btnAttachText}>Anexar CSV/Excel</Text>
             </Pressable>
+            <Pressable onPress={() => void handlePickPrcFiles()} style={[styles.btnAttach, styles.btnAttachGreen]}>
+              <Ionicons name="document-outline" size={20} color="#059669" />
+              <Text style={[styles.btnAttachText, styles.btnAttachTextGreen]}>.prc (Bloco)</Text>
+            </Pressable>
           </View>
+          {prcInfo && (
+            <Text style={styles.prcPreview}>
+              ✓{" "}
+              {prcInfo.count === 1
+                ? "1 arquivo"
+                : `${prcInfo.count} arquivos`}{" "}
+              · {prcInfo.totalLines.toLocaleString("pt-BR")} linhas
+            </Text>
+          )}
           <TextInput
             value={rawText}
             onChangeText={setRawText}
@@ -511,6 +553,8 @@ const styles = StyleSheet.create({
   },
   importRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     marginTop: 8,
     marginBottom: 8,
   },
@@ -529,6 +573,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     color: "#2563EB",
+  },
+  btnAttachGreen: {
+    borderColor: "#059669",
+    backgroundColor: "#f0fdf4",
+  },
+  btnAttachTextGreen: {
+    color: "#059669",
+  },
+  prcPreview: {
+    fontSize: 12,
+    color: "#059669",
+    fontWeight: "600",
+    marginBottom: 4,
   },
   textArea: {
     marginTop: 8,
