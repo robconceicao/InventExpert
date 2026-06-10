@@ -76,13 +76,14 @@ const initialState: ReportA = {
 
 // Horários monitorados para aviso (15 min antes)
 const MONITORED_ADVANCES = [
+  { label: "22h00", hour: 22, minute: 0 },
   { label: "00h00", hour: 0, minute: 0 },
   { label: "01h00", hour: 1, minute: 0 },
   { label: "03h00", hour: 3, minute: 0 },
   { label: "04h00", hour: 4, minute: 0 },
 ];
 
-// Retorna true se agora está entre 14-15 min antes do horário alvo
+// Retorna true se agora está entre 0 e 15 min antes do horário alvo (janela de aviso)
 const isWarningTime = (targetHour: number, targetMin: number): boolean => {
   const now = new Date();
   const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -93,7 +94,77 @@ const isWarningTime = (targetHour: number, targetMin: number): boolean => {
     targetMins += 1440;
   }
   const diff = targetMins - nowMins;
-  return diff >= 14 && diff < 15;
+  return diff >= 0 && diff <= 15;
+};
+
+// Retorna true se agora está próximo da janela de aviso (de 17 min antes a 5 min depois)
+const isNearWarningTime = (targetHour: number, targetMin: number): boolean => {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  let targetMins = targetHour * 60 + targetMin;
+  if (targetHour < 18 && now.getHours() >= 18) {
+    targetMins += 1440;
+  }
+  const diff = targetMins - nowMins;
+  return diff >= -5 && diff <= 17;
+};
+
+// Configura e agenda alarmes no nível do Sistema Operacional (iOS/Android)
+const scheduleAdvanceAlerts = async () => {
+  if (Platform.OS === "web") return;
+
+  const { status } = await Notifications.requestPermissionsAsync();
+  if (status !== "granted") {
+    console.warn("[ReportA] Permissão de notificação negada.");
+    return;
+  }
+
+  // Configura canal de notificação prioritário para Android (necessário para som/vibração a partir da API 26)
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("alarms", {
+      name: "Alarme de Avanços",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7A",
+      sound: "default",
+    });
+  }
+
+  // Cancela agendamentos anteriores para evitar duplicados acumulados
+  await Notifications.cancelAllScheduledNotificationsAsync();
+
+  // Agenda alarmes diários recorrentes exatamente 15 minutos antes de cada avanço
+  for (const adv of MONITORED_ADVANCES) {
+    let alarmHour = adv.hour;
+    let alarmMinute = adv.minute - 15;
+    if (alarmMinute < 0) {
+      alarmMinute += 60;
+      alarmHour -= 1;
+      if (alarmHour < 0) {
+        alarmHour += 24;
+      }
+    }
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `⏰ Avanço ${adv.label} em 15 minutos`,
+          body: ALARM_VOICE_MSG,
+          sound: true,
+          data: { label: adv.label },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: alarmHour,
+          minute: alarmMinute,
+          channelId: "alarms",
+        } as any,
+      });
+    } catch (err) {
+      console.warn(`[ReportA] Erro ao agendar alarme para ${adv.label}:`, err);
+    }
+  }
+  console.log("[ReportA] Todos os alarmes diários de OS agendados!");
 };
 
 export default function ReportAScreen() {
@@ -123,9 +194,9 @@ export default function ReportAScreen() {
 
   const [alarmActive, setAlarmActive] = useState(false);
   const [alarmLabel, setAlarmLabel] = useState("");
-  const alarmTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const monitorTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const firedRef = useRef<Set<string>>(new Set());
+  const [selectedVoice, setSelectedVoice] = useState<string | undefined>(undefined);
 
   // ── Carrega dados salvos (apenas na montagem, sem auto-save no mount)
   useEffect(() => {
@@ -133,6 +204,75 @@ export default function ReportAScreen() {
       if (res) setReport(JSON.parse(res));
     });
   }, []);
+
+  // ── Carrega a melhor voz masculina em português disponível no sistema
+  useEffect(() => {
+    const initVoice = async () => {
+      try {
+        const voices = await Speech.getAvailableVoicesAsync();
+        const ptVoices = voices.filter((v) => v.language.startsWith("pt"));
+        
+        // Prioridade para vozes masculinas conhecidas (Daniel no iOS ou Google TTS no Android)
+        const male = ptVoices.find((v) => {
+          const name = v.name.toLowerCase();
+          const id = v.identifier.toLowerCase();
+          return (
+            name.includes("daniel") ||
+            name.includes("male") ||
+            name.includes("masculino") ||
+            id.includes("daniel") ||
+            id.includes("male") ||
+            id.includes("pt-br-x-gfs") ||
+            id.includes("pt-br-x-afs") ||
+            id.includes("pt-br-x-cts")
+          );
+        });
+
+        if (male) {
+          setSelectedVoice(male.identifier);
+          console.log("[ReportA] Voz masculina configurada:", male.name);
+        } else {
+          // Fallback para a primeira voz pt-BR aprimorada ou genérica
+          const fallback = ptVoices.find((v) => v.quality === "Enhanced") || ptVoices[0];
+          setSelectedVoice(fallback?.identifier);
+          console.log("[ReportA] Usando fallback de voz pt-BR:", fallback?.name || "Padrão OS");
+        }
+      } catch (err) {
+        console.warn("[ReportA] Erro ao carregar vozes do dispositivo:", err);
+      }
+    };
+    void initVoice();
+  }, []);
+
+  // ── Carrega alarmes disparados hoje do AsyncStorage para evitar disparos na inicialização
+  useEffect(() => {
+    const loadFiredAlarms = async () => {
+      try {
+        const stored = await AsyncStorage.getItem("inventexpert:fired_alarms");
+        if (stored) {
+          const parsed = JSON.parse(stored) as string[];
+          const today = new Date().toDateString();
+          // Mantém apenas os alarmes do dia de hoje no cache para evitar crescimento infinito
+          const todayAlarms = parsed.filter((key) => key.startsWith(today));
+          firedRef.current = new Set(todayAlarms);
+          await AsyncStorage.setItem("inventexpert:fired_alarms", JSON.stringify(todayAlarms));
+          console.log("[ReportA] Cache persistente de alarmes carregado:", todayAlarms);
+        }
+      } catch (err) {
+        console.warn("[ReportA] Erro ao carregar cache de alarmes:", err);
+      }
+    };
+    void loadFiredAlarms();
+  }, []);
+
+  const persistFiredAlarm = async (key: string) => {
+    firedRef.current.add(key);
+    try {
+      await AsyncStorage.setItem("inventexpert:fired_alarms", JSON.stringify(Array.from(firedRef.current)));
+    } catch (err) {
+      console.warn("[ReportA] Erro ao persistir alarme disparado:", err);
+    }
+  };
 
   // ── Auto-save sempre que report muda, e sincroniza com ReportB
   useEffect(() => {
@@ -163,22 +303,54 @@ export default function ReportAScreen() {
     });
   }, [report]);
 
-  // ── Monitor de avanços: verifica a cada 30s
+  // ── Inicializa permissões, agenda alarmes de OS e escuta eventos de notificações
   useEffect(() => {
-    const requestPermission = async () => {
-      if (Platform.OS !== "web") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status !== "granted") {
-          console.warn("[ReportA] Permissão de notificação negada.");
+    // Agenda alarmes no nível do SO
+    void scheduleAdvanceAlerts();
+
+    // Ouvinte para quando a notificação é recebida em primeiro plano (foreground)
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      const label = notification.request.content.data?.label;
+      if (label) {
+        const adv = MONITORED_ADVANCES.find((a) => a.label === label);
+        if (adv && isNearWarningTime(adv.hour, adv.minute)) {
+          const dateStr = new Date().toDateString();
+          const key = `${dateStr}_${label}`;
+          if (!firedRef.current.has(key)) {
+            void persistFiredAlarm(key);
+            triggerAlarm(label);
+          }
+        } else {
+          console.log(`[ReportA] Ignorando notificação descompassada recebida para ${label}`);
         }
       }
-    };
-    void requestPermission();
+    });
 
+    // Ouvinte para quando o usuário clica na notificação (trazendo o app de background/fechado)
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const label = response.notification.request.content.data?.label;
+      if (label) {
+        const adv = MONITORED_ADVANCES.find((a) => a.label === label);
+        if (adv && isNearWarningTime(adv.hour, adv.minute)) {
+          const dateStr = new Date().toDateString();
+          const key = `${dateStr}_${label}`;
+          if (!firedRef.current.has(key)) {
+            void persistFiredAlarm(key);
+            triggerAlarm(label);
+          }
+        } else {
+          console.log(`[ReportA] Ignorando clique de notificação descompassada para ${label}`);
+        }
+      }
+    });
+
+    // Polling secundário local em primeiro plano a cada 30s como contingência elegante
     monitorTimerRef.current = setInterval(() => {
+      const dateStr = new Date().toDateString();
       for (const adv of MONITORED_ADVANCES) {
-        if (!firedRef.current.has(adv.label) && isWarningTime(adv.hour, adv.minute)) {
-          firedRef.current.add(adv.label);
+        const key = `${dateStr}_${adv.label}`;
+        if (!firedRef.current.has(key) && isWarningTime(adv.hour, adv.minute)) {
+          void persistFiredAlarm(key);
           triggerAlarm(adv.label);
           break;
         }
@@ -186,33 +358,41 @@ export default function ReportAScreen() {
     }, 30_000);
 
     return () => {
+      receivedSubscription.remove();
+      responseSubscription.remove();
       if (monitorTimerRef.current) clearInterval(monitorTimerRef.current);
       stopAlarm();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedVoice]); // Recria ouvintes caso a voz mude
 
   const triggerAlarm = (label: string) => {
+    // Se o alarme já estiver ativo para este mesmo rótulo, evita reinstanciar
+    if (alarmActive && alarmLabel === label) {
+      return;
+    }
+
+    // Garante a parada absoluta de qualquer aviso anterior
+    stopAlarm();
+
     setAlarmLabel(label);
     setAlarmActive(true);
 
-    // Notificação local (bipe do sistema)
+    // Dispara balão local imediato caso o app esteja ativo
     if (Platform.OS !== "web") {
       void Notifications.scheduleNotificationAsync({
         content: {
           title: `⏰ Avanço ${label} em 15 minutos`,
           body: ALARM_VOICE_MSG,
           sound: true,
+          data: { label },
         },
         trigger: null,
       });
     }
 
-    // Voz repetitiva a cada 30s enquanto alarme ativo
+    // Voz sintetizada imediata executada exatamente UMA vez (sem loop infinito irritante)
     speakWarning();
-    alarmTimerRef.current = setInterval(() => {
-      speakWarning();
-    }, 30_000);
   };
 
   const speakWarning = () => {
@@ -222,16 +402,13 @@ export default function ReportAScreen() {
           language: "pt-BR",
           rate: 0.9,
           pitch: 1.0,
+          voice: selectedVoice,
         });
       });
     }
   };
 
   const stopAlarm = () => {
-    if (alarmTimerRef.current) {
-      clearInterval(alarmTimerRef.current);
-      alarmTimerRef.current = null;
-    }
     if (Platform.OS !== "web") {
       void Speech.stop();
     }

@@ -12,9 +12,6 @@
 
 import { GEMINI_API_KEY } from '@env';
 
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
 export type GeminiEraseResult =
   | { success: true; html: string }
   | { success: false; error: string };
@@ -47,87 +44,115 @@ Sua missão é gerar um documento HTML limpo que seja a RECONSTRUÇÃO DIGITAL e
 
 Retorne APENAS o código HTML completo e válido (começando com <!DOCTYPE html> e terminando com </html>), sem blocos de código Markdown ou qualquer outro texto explicativo.`;
 
-  try {
-    const body = {
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Image,
+  // Lista de modelos que suportam visão na API do Gemini.
+  // Caso ocorra erro de limite de cota (HTTP 429) ou qualquer outro erro em um modelo,
+  // o sistema tentará automaticamente o próximo da lista de forma totalmente transparente para o usuário!
+  const models = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash-8b"
+  ];
+
+  let lastError = "Nenhum modelo foi executado.";
+
+  for (const model of models) {
+    const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+    console.log(`[Gemini] Tentando processar remoção de escrita com o modelo: ${model}`);
+
+    try {
+      const body = {
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Image,
+                },
               },
-            },
-            { text: prompt },
-          ],
+              { text: prompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.8,
+          maxOutputTokens: 8192,
         },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        topP: 0.8,
-        maxOutputTokens: 8192,
-      },
-      safetySettings: [
-        {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_ONLY_HIGH",
-        },
-        {
-          category: "HARM_CATEGORY_HATE_SPEECH",
-          threshold: "BLOCK_ONLY_HIGH",
-        },
-        {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_ONLY_HIGH",
-        },
-        {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_ONLY_HIGH",
-        },
-      ],
-    };
-
-    console.log("[Gemini] Sending payload to:", GEMINI_API_URL);
-    console.log("[Gemini] Base64 Image length:", base64Image.length);
-
-    const response = await fetch(GEMINI_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    console.log("[Gemini] Response status:", response.status);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("[Gemini] Error Response:", errText);
-      return { success: false, error: `HTTP ${response.status}: ${errText}` };
-    }
-
-    const json = (await response.json()) as GeminiApiResponse;
-    console.log("[Gemini] Success Response (truncated):", JSON.stringify(json).slice(0, 800));
-
-    // Extrai o texto gerado
-    const parts = json?.candidates?.[0]?.content?.parts ?? [];
-    const textPart = parts.find((p) => typeof p.text === "string");
-    
-    if (textPart?.text) {
-      let html = textPart.text.trim();
-      html = html.replace(/```html/ig, "").replace(/```/g, "").trim();
-
-      return {
-        success: true,
-        html: html,
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_ONLY_HIGH",
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_ONLY_HIGH",
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_ONLY_HIGH",
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_ONLY_HIGH",
+          },
+        ],
       };
-    }
 
-    console.error("[Gemini] Candidates content missing. Full Response:", JSON.stringify(json));
-    return { success: false, error: "Resposta inesperada do Gemini (sem texto)." };
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[Gemini] Exception during API call:", msg);
-    return { success: false, error: `Erro de rede: ${msg}` };
+      const response = await fetch(apiURL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      console.log(`[Gemini] Status do modelo ${model}:`, response.status);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`[Gemini] Modelo ${model} falhou com erro:`, errText);
+        
+        let errorMsg = `HTTP ${response.status}`;
+        try {
+          const parsed = JSON.parse(errText);
+          if (parsed?.error?.message) {
+            errorMsg = parsed.error.message;
+          }
+        } catch {
+          errorMsg = errText;
+        }
+        
+        lastError = `Modelo ${model}: ${errorMsg}`;
+        continue; // Tenta o próximo modelo
+      }
+
+      const json = (await response.json()) as GeminiApiResponse;
+      const parts = json?.candidates?.[0]?.content?.parts ?? [];
+      const textPart = parts.find((p) => typeof p.text === "string");
+
+      if (textPart?.text) {
+        let html = textPart.text.trim();
+        // Remove markdown tags se houverem
+        html = html.replace(/```html/ig, "").replace(/```/g, "").trim();
+
+        console.log(`[Gemini] Sucesso absoluto ao processar com o modelo: ${model}`);
+        return {
+          success: true,
+          html: html,
+        };
+      }
+
+      console.warn(`[Gemini] Resposta sem texto para o modelo ${model}`);
+      lastError = `Modelo ${model}: Resposta vazia ou malformada da API.`;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[Gemini] Exceção no modelo ${model}:`, msg);
+      lastError = `Modelo ${model}: Erro de conexão/rede: ${msg}`;
+    }
   }
+
+  // Se todos falharam, retorna o último erro consolidado
+  return { success: false, error: lastError };
 }
 
 // ---------------------------------------------------------------------------
