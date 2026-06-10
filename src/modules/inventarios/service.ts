@@ -205,7 +205,7 @@ export class InventariosService {
       if (!input.tipo_operacao) {
         return {
           sucesso: false,
-          erro: 'O tipo de operação é obrigatório (FARMACIA, SUPERMERCADO ou LOJA_GERAL).',
+          erro: 'O tipo de operação é obrigatório (FARMACIA, SUPERMERCADO, LOJA_GERAL ou ATACADO).',
         };
       }
 

@@ -29,6 +29,16 @@ export const INVENTORY_PROFILES = {
     },
     alerts: { criticalBlockLimit: 65 },
   },
+  ATACADO: {
+    weights: { quality: 0.45, productivity: 0.4, adherence: 0.15 },
+    targets: {
+      productivity: 1500,
+      maxBlockLimit: 100,
+      erroTolerancia: 1.5,
+      erroCritico: 3.0,
+    },
+    alerts: { criticalBlockLimit: 100 },
+  },
 } as const;
 
 export type InventoryOperationType = keyof typeof INVENTORY_PROFILES;

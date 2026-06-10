@@ -20,7 +20,7 @@ export interface ICliente extends Cliente {
   /** Contacto telefónico da loja. Requer migration. */
   telefone?: string;
   /** Segmento de negócio */
-  segmento?: 'FARMACIA' | 'SUPERMERCADO' | 'LOJA_GERAL';
+  segmento?: 'FARMACIA' | 'SUPERMERCADO' | 'LOJA_GERAL' | 'ATACADO';
 }
 
 /** Input para criação — omite campos gerados automaticamente */

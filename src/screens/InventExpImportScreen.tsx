@@ -250,6 +250,7 @@ export default function InventExpImportScreen() {
             [
               "FARMACIA",
               "SUPERMERCADO",
+              "ATACADO",
               "LOJA_GERAL",
             ] as InventoryOperationType[]
           ).map((type) => {

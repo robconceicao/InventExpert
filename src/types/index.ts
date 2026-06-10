@@ -163,7 +163,7 @@ export interface AttendanceData {
 
 // ========== INVENTEXP - AVALIAÇÃO DE CONFERENTES ==========
 
-export type InventoryOperationType = "FARMACIA" | "SUPERMERCADO" | "LOJA_GERAL";
+export type InventoryOperationType = "FARMACIA" | "SUPERMERCADO" | "LOJA_GERAL" | "ATACADO";
 
 export interface InventoryCheckerInput {
   nome: string;

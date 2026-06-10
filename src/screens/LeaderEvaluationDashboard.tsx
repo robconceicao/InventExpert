@@ -125,6 +125,7 @@ export default function LeaderEvaluationDashboard() {
             [
               "FARMACIA",
               "SUPERMERCADO",
+              "ATACADO",
               "LOJA_GERAL",
             ] as InventoryOperationType[]
           ).map((type) => {
