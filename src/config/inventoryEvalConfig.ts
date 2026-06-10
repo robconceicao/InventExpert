@@ -43,3 +43,54 @@ export const INVENTORY_PROFILES = {
 
 export type InventoryOperationType = keyof typeof INVENTORY_PROFILES;
 
+import type { ViolacaoBloco } from "../types";
+
+export interface RegraBlocoArea {
+  limite: number;
+  critica: boolean;
+}
+
+export const LIMITES_BLOCO_FARMACIA: Record<string, RegraBlocoArea> = {
+  "MEDICAMENTOS": { limite: 0, critica: true },
+  "PSICOTRÓPICOS": { limite: 0, critica: true },
+  "ANTIBIÓTICOS": { limite: 0, critica: true },
+  "GELADEIRAS MEDICAMENTOS": { limite: 0, critica: true },
+  "SALA DE APLICAÇÃO": { limite: 0, critica: true },
+  "MEDICAMENTOS CARTELADOS": { limite: 30, critica: false },
+  "OTC / MIP (CAIXA)": { limite: 5, critica: false },
+  "ESTOQUE FRENTE DE CAIXA": { limite: 90, critica: false },
+  "FRENTE DE CAIXA": { limite: 15, critica: false },
+  "GELADEIRAS FRENTE CAIXA": { limite: 15, critica: false },
+};
+
+export function getViolacoesBloco(
+  secoes: { area: string; pctBloco: number }[],
+  operationType: InventoryOperationType
+): ViolacaoBloco[] {
+  if (operationType !== "FARMACIA") {
+    return [];
+  }
+
+  const violacoes: ViolacaoBloco[] = [];
+
+  for (const sec of secoes) {
+    const areaUpper = sec.area.toUpperCase();
+    let regra = LIMITES_BLOCO_FARMACIA[areaUpper];
+
+    if (!regra) {
+      console.warn(`[InventoryEval] Área sem entrada na tabela de limites: "${sec.area}"`);
+      regra = { limite: 20, critica: false };
+    }
+
+    if (sec.pctBloco > regra.limite) {
+      violacoes.push({
+        area: sec.area,
+        pctBloco: sec.pctBloco,
+        limitePermitido: regra.limite,
+        critica: regra.critica,
+      });
+    }
+  }
+
+  return violacoes;
+}
