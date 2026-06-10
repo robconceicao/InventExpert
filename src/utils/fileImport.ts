@@ -23,3 +23,9 @@ export async function readFileAsCsvText(uri: string, mimeType?: string): Promise
   });
   return text;
 }
+
+export async function readFileAsText(uri: string): Promise<string> {
+  return FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
