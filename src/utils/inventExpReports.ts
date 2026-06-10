@@ -1,7 +1,9 @@
 import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
 import type {
-    InventoryCheckerEvaluation,
-    InventoryOperationType,
+  InventoryCheckerEvaluation,
+  InventoryOperationType,
+  SectionAccuracyRecord,
+  ViolacaoBloco,
 } from "../types";
 
 export function generateInventExpGerencialReportText(
@@ -123,14 +125,16 @@ export function generateInventExpGerencialReportText(
 }
 
 export function generateInventExpIndividualReportText(
-  operationType: InventoryOperationType,
+  operationType: string,
   ev: InventoryCheckerEvaluation,
   rank: number,
   totalConferentes: number,
   dataInventario?: string,
+  secoesLegacy?: SectionAccuracyRecord[],
+  violacoesLegacy?: ViolacaoBloco[]
 ): string {
   const data = dataInventario ?? new Date().toLocaleDateString("pt-BR");
-  const perfil = INVENTORY_PROFILES[operationType];
+  const perfil = INVENTORY_PROFILES[operationType as InventoryOperationType] || INVENTORY_PROFILES["FARMACIA"];
   const d = ev.input;
   const mod = d.modalidadeContrato || "CLT";
 
@@ -141,7 +145,7 @@ export function generateInventExpIndividualReportText(
   r += `---\n\n`;
 
   // Cabeçalho por modalidade
-  if (mod === "FREE_LANCE") {
+  if (mod === "FREE_LANCE" || mod === "FREELANCE") {
     r += `## 👤 PRESTADOR: ${d.nome}\n\n`;
   } else if (mod === "INTERMITENTE") {
     r += `## 👤 COLABORADOR INTERMITENTE: ${d.nome}\n\n`;
@@ -153,8 +157,11 @@ export function generateInventExpIndividualReportText(
   r += `Posição no ranking: ${rank}º de ${totalConferentes}\n\n`;
   r += `---\n\n`;
 
+  const finalViolacoes = (ev.violacoes && ev.violacoes.length > 0) ? ev.violacoes : violacoesLegacy;
+  const finalSecoes = (ev.secoes && ev.secoes.length > 0) ? ev.secoes : secoesLegacy;
+
   // Alerta Crítico (deve aparecer ANTES do bloco de números gerais)
-  const temViolacaoCritica = ev.violacoes && ev.violacoes.some(v => v.critica);
+  const temViolacaoCritica = finalViolacoes && finalViolacoes.some(v => v.critica || (v as any).area_critica);
   if (temViolacaoCritica) {
     r += `🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA 🚨\n`;
     if (mod === "CLT") {
@@ -164,7 +171,7 @@ export function generateInventExpIndividualReportText(
     } else {
       r += `Houve registro de contagem em bloco acima do limite em áreas restritas. Isso compromete a qualidade da prestação de serviço.\n\n`;
     }
-    const criticas = ev.violacoes!.filter(v => v.critica).map(v => v.area);
+    const criticas = finalViolacoes!.filter(v => v.critica || (v as any).area_critica).map(v => v.area || (v as any).area_nome || '');
     r += `Áreas impactadas: ${criticas.join(', ')}\n\n---\n\n`;
   }
 
@@ -198,16 +205,25 @@ export function generateInventExpIndividualReportText(
   r += `\n---\n\n`;
 
   // SUAS SEÇÕES — ACURÁCIA
-  if (ev.secoes && ev.secoes.length > 0) {
+  if (finalSecoes && finalSecoes.length > 0) {
     r += `## 🎯 SUAS SEÇÕES — ACURÁCIA\n\n`;
     r += `| Seção | Itens | % Erro | % Bloco | Status |\n`;
     r += `|-------|-------|--------|---------|--------|\n`;
-    ev.secoes.forEach(sec => {
+    finalSecoes.forEach(sec => {
+      const isLegacyCritica = (sec as any).area_critica === true;
+      const hasLegacyViolacao = (sec as any).violacao_bloco === true;
+      
       let status = "✅";
       if (sec.violacaoBloco) {
         status = sec.violacaoBloco.critica ? "🚨" : "⚠️";
+      } else if (hasLegacyViolacao) {
+        status = isLegacyCritica ? "🚨" : "⚠️";
       }
-      r += `| ${sec.area} | ${sec.totalItens} | ${sec.pctErro.toFixed(1)}% | ${sec.pctBloco.toFixed(1)}% | ${status} |\n`;
+      const pctE = sec.pctErro ?? (sec.acuracidade !== undefined ? 100 - sec.acuracidade : 0);
+      const pctB = sec.pctBloco ?? sec.bloco_pct ?? 0;
+      const totalIt = sec.totalItens ?? sec.qtd_final ?? sec.totalC1 ?? 0;
+      const areaName = sec.area || (sec as any).area_nome || '';
+      r += `| ${areaName} | ${totalIt} | ${pctE.toFixed(1)}% | ${pctB.toFixed(1)}% | ${status} |\n`;
     });
     r += `\n---\n\n`;
   }
@@ -218,8 +234,8 @@ export function generateInventExpIndividualReportText(
   
   // Qualidade
   r += `1. **Qualidade (${Math.round(ev.scoreQualidade)} pts):** Baseado na ausência de erros e perfil de execução.\n`;
-  if (ev.violacoes && ev.violacoes.length > 0) {
-    const areas = ev.violacoes.map(v => v.area).join(", ");
+  if (finalViolacoes && finalViolacoes.length > 0) {
+    const areas = finalViolacoes.map(v => v.area || (v as any).area_nome || '').join(", ");
     r += `   - Motivo da pontuação: Bloco acima do limite em ${areas}.\n`;
   } else if (errosExecucao === 0) {
     r += `   - Motivo da pontuação: Excelente acurácia.\n`;
@@ -274,8 +290,8 @@ export function generateInventExpIndividualReportText(
     r += `- Seu ritmo de ${d.produtividade} foi baixo. Tente focar para aumentar a produtividade.\n`;
   }
 
-  if (ev.violacoes && ev.violacoes.length > 0) {
-    const areas = ev.violacoes.map(v => v.area).join(", ");
+  if (finalViolacoes && finalViolacoes.length > 0) {
+    const areas = finalViolacoes.map(v => v.area || (v as any).area_nome || '').join(", ");
     r += `- Reduzir o uso de contagem em bloco nas áreas restritas como ${areas}.\n`;
     if (mod === "CLT") {
       r += `- Atenção: A violação em ${areas} foi registrada formalmente.\n`;
@@ -289,8 +305,8 @@ export function generateInventExpIndividualReportText(
   r += `\n---\n\n`;
 
   // FOOTER
-  if (mod === "FREE_LANCE") {
-    r += `*Documento de avaliação da prestação de serviço*\n`;
+  if (mod === "FREE_LANCE" || mod === "FREELANCE") {
+    r += `*Relatório de prestação de serviço - Evento: Avaliação (Qualidade · Produtividade · Aderência)*\n`;
     r += `Evento: ${data}\n`;
   } else if (mod === "INTERMITENTE") {
     r += `*Relatório de qualidade da convocação intermitente*\n`;

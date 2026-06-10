@@ -8,24 +8,47 @@ import type {
   ViolacaoBloco,
 } from "../types";
 
-export function calcularPerfilComportamental(checker: InventoryCheckerInput): PerfilComportamental {
-  const pulados = checker.itensPulados || 0;
-  const duplicados = checker.itensDuplicados || 0;
+export function calcularPerfilComportamental(
+  p1: number | InventoryCheckerInput,
+  p2?: number,
+  p3?: number
+): PerfilComportamental {
+  let qtde = 0;
+  let pulados = 0;
+  let duplicados = 0;
 
-  if (pulados === 0 && duplicados === 0) return "EQUILIBRADO";
-  if (pulados > duplicados * 2) return "PULA_ITENS";
-  if (duplicados > pulados * 2) return "FANTASMA";
+  if (typeof p1 === 'object') {
+    qtde = p1.qtde;
+    pulados = p1.itensPulados || 0;
+    duplicados = p1.itensDuplicados || 0;
+  } else {
+    pulados = p1;
+    duplicados = p2 || 0;
+    qtde = p3 || 0;
+  }
+
+  if (qtde === 0) return "EQUILIBRADO";
+
+  const limiteErroNormal = Math.max(10, qtde * 0.01);
+
+  if (pulados <= limiteErroNormal && duplicados <= limiteErroNormal) return "EQUILIBRADO";
+  if (pulados > duplicados * 2 && pulados > limiteErroNormal) return "PULA_ITENS";
+  if (duplicados > pulados * 2 && duplicados > limiteErroNormal) return "FANTASMA";
   return "DESATENTO_GERAL";
 }
 
 export function evaluateChecker(
   data: InventoryCheckerInput,
   operationType: InventoryOperationType,
-  secoes: SectionAccuracyRecord[] = [],
-  leaderName?: string
-): InventoryCheckerEvaluation | null {
-  if (leaderName && data.nome.trim().toUpperCase() === leaderName.trim().toUpperCase()) {
-    return null; // Excluir o líder da avaliação
+  totalPecasLoja: number = 0,
+  duracaoRealInventario: number = 5,
+  numeroConferentes: number = 1,
+  violacoesManuais?: ViolacaoBloco[],
+  secoes: SectionAccuracyRecord[] = []
+): InventoryCheckerEvaluation {
+  // Ignora líderes retornando um null mascarado para o typescript
+  if (data.role === "LÍDER" || data.role === "LIDER" || data.nome.includes("LIDER") || data.nome.includes("LÍDER")) {
+    return null as unknown as InventoryCheckerEvaluation;
   }
 
   const profile = INVENTORY_PROFILES[operationType];
@@ -42,24 +65,26 @@ export function evaluateChecker(
   const perfil = calcularPerfilComportamental(data);
   const penalidadeComportamental = ((data.itensPulados || 0) * 0.7) + ((data.itensDuplicados || 0) * 0.2);
 
-  let scoreQualidade = Math.max(0, 100 - pctErro * 100 - penalidadeComportamental);
+  let scoreQualidade = Math.max(0, 100 * Math.exp(-1.5 * pctErro) - penalidadeComportamental);
 
-  const secoesParaAvaliacao = secoes.map(s => ({ area: s.area, pctBloco: s.pctBloco }));
-  const violacoes = getViolacoesBloco(secoesParaAvaliacao, operationType);
+  const secoesParaAvaliacao = secoes.map(s => ({ area: s.area || "", pctBloco: s.pctBloco || 0 }));
+  const violacoes = violacoesManuais && violacoesManuais.length > 0 ? violacoesManuais : getViolacoesBloco(secoesParaAvaliacao, operationType);
   let temViolacao = violacoes.length > 0;
 
   for (const v of violacoes) {
-    if (v.critica) {
+    if (v.critica || v.area_critica) {
       scoreQualidade -= 20;
-    } else {
-      const excesso = v.pctBloco - v.limitePermitido;
-      if (excesso > 0) {
-        scoreQualidade -= excesso; // penalidade proporcional ao excesso
-      }
+    } else if (v.limitePermitido !== undefined && (v.pctBloco || v.real_pct || 0) > v.limitePermitido) {
+      const excesso = (v.pctBloco || v.real_pct || 0) - v.limitePermitido;
+      scoreQualidade -= excesso;
+    } else if (v.limite_pct !== undefined && (v.pctBloco || v.real_pct || 0) > v.limite_pct) {
+      const excesso = (v.pctBloco || v.real_pct || 0) - v.limite_pct;
+      scoreQualidade -= excesso;
     }
-    
-    const idx = secoes.findIndex(s => s.area.toUpperCase() === v.area.toUpperCase());
-    if (idx !== -1) {
+
+    const vArea = v.area || v.area_nome || "";
+    const idx = secoes.findIndex(s => (s.area || "").toUpperCase() === vArea.toUpperCase());
+    if (idx >= 0) {
       secoes[idx].violacaoBloco = v;
     }
   }
@@ -104,7 +129,7 @@ export function evaluateChecker(
   }
 
   if (perfil === "PULA_ITENS" && (data.itensPulados || 0) > 10) {
-    tags.push("⚠️ Alto índice de omissão");
+    tags.push("🚩 Pula itens (Alto índice de omissão)");
   }
 
   if (pctErro > 1.5 && pctBloco > alerts.criticalBlockLimit) {

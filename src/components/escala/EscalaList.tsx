@@ -26,7 +26,7 @@ export default function EscalaList({ agrupamento, onConfirm }: EscalaListProps) 
     return (
       <View style={styles.card}>
         <View style={styles.header}>
-          <Text style={styles.nome}>{item.colaboradores?.nome || 'N/A'}</Text>
+          <Text style={styles.nome}>{item.nome || 'N/A'}</Text>
           <View style={[styles.badge, item.confirmado ? styles.badgeOn : styles.badgeOff]}>
             <Text style={[styles.badgeText, item.confirmado ? styles.badgeTextOn : styles.badgeTextOff]}>
               {item.confirmado ? 'CONFIRMADO' : 'PENDENTE'}
@@ -36,10 +36,10 @@ export default function EscalaList({ agrupamento, onConfirm }: EscalaListProps) 
 
         <View style={styles.infoRow}>
           <Text style={styles.infoText}>
-            <Ionicons name="location-outline" size={12} /> {item.colaboradores?.cidade}
+            <Ionicons name="location-outline" size={12} /> {item.cidade}
           </Text>
           <Text style={styles.infoText}>
-            <Ionicons name="star-outline" size={12} /> Score: {item.score?.toFixed(1) || '0.0'}
+            <Ionicons name="star-outline" size={12} /> Score: {item.score_final?.toFixed(1) || '0.0'}
           </Text>
         </View>
 
@@ -47,7 +47,7 @@ export default function EscalaList({ agrupamento, onConfirm }: EscalaListProps) 
           {!item.confirmado ? (
             <Pressable
               style={[styles.btnAction, styles.btnConfirm]}
-              onPress={() => onConfirm(item.id, true)}
+              onPress={() => onConfirm(item.escala_id, true)}
             >
               <Ionicons name="checkmark-circle-outline" size={16} color="#FFF" />
               <Text style={styles.btnConfirmText}>Confirmar</Text>
@@ -55,7 +55,7 @@ export default function EscalaList({ agrupamento, onConfirm }: EscalaListProps) 
           ) : (
             <Pressable
               style={[styles.btnAction, styles.btnRevoke]}
-              onPress={() => onConfirm(item.id, false)}
+              onPress={() => onConfirm(item.escala_id, false)}
             >
               <Ionicons name="close-circle-outline" size={16} color="#475569" />
               <Text style={styles.btnRevokeText}>Desfazer</Text>
@@ -76,7 +76,7 @@ export default function EscalaList({ agrupamento, onConfirm }: EscalaListProps) 
   return (
     <SectionList
       sections={sections}
-      keyExtractor={(i) => i.id}
+      keyExtractor={(i) => i.escala_id}
       renderItem={renderItem}
       renderSectionHeader={renderSectionHeader}
       contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 4 }}

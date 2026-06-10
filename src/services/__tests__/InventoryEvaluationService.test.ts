@@ -1,7 +1,8 @@
 import {
   evaluateChecker,
+  calcularPerfilComportamental,
 } from "../InventoryEvaluationService";
-import type { InventoryCheckerInput, InventoryCheckerEvaluation } from "../../types";
+import type { InventoryCheckerInput } from "../../types";
 
 describe("evaluateChecker", () => {
   const base: InventoryCheckerInput = {
@@ -13,21 +14,20 @@ describe("evaluateChecker", () => {
   };
 
   it("zero erro com qtde >= 1000 recebe tag premium", () => {
-    const ev = evaluateChecker(base, "FARMACIA") as InventoryCheckerEvaluation;
+    const ev = evaluateChecker(base, "FARMACIA");
     expect(ev.tags).toContain("⭐ Qualidade Premium (Zero Erro)");
     expect(ev.scoreFinal).toBeGreaterThan(80);
   });
 
   it("erro acima do crítico penaliza produtividade", () => {
-    const ev1 = evaluateChecker({ ...base, erro: 1 }, "FARMACIA") as InventoryCheckerEvaluation;
-    const ev2 = evaluateChecker({ ...base, erro: 9 }, "FARMACIA") as InventoryCheckerEvaluation;
+    const ev1 = evaluateChecker({ ...base, erro: 1 }, "FARMACIA");
+    const ev2 = evaluateChecker({ ...base, erro: 9 }, "FARMACIA");
     expect(ev2.scoreProdutividade).toBeLessThan(ev1.scoreProdutividade * 0.6);
   });
 
   it("itensPulados altos disparam tag de omissão", () => {
-    // itensPulados removido - a reimplementar
-    // const ev = evaluateChecker({ ...base, itensPulados: 20 }, "FARMACIA");
-    // expect(ev.tags.some((t) => t.includes("Pula"))).toBe(true);
+    const ev = evaluateChecker({ ...base, itensPulados: 20 }, "FARMACIA");
+    expect(ev.tags.some((t) => t.includes("Pula"))).toBe(true);
   });
 
   it("score final permanece entre 0 e 100", () => {
@@ -37,9 +37,10 @@ describe("evaluateChecker", () => {
       qtde1a1: 0,
       produtividade: 50,
       erro: 50,
-      // itensPulados, itensDuplicados removidos
+      itensPulados: 50,
+      itensDuplicados: 50,
     };
-    const ev = evaluateChecker(extremo, "FARMACIA") as InventoryCheckerEvaluation;
+    const ev = evaluateChecker(extremo, "FARMACIA");
     expect(ev.scoreFinal).toBeGreaterThanOrEqual(0);
     expect(ev.scoreFinal).toBeLessThanOrEqual(100);
   });
@@ -48,10 +49,15 @@ describe("evaluateChecker", () => {
     const ev = evaluateChecker(
       { ...base, erro: 5, produtividade: 2000 },
       "SUPERMERCADO",
-    ) as InventoryCheckerEvaluation;
+    );
     expect(ev.operationType).toBe("SUPERMERCADO");
     expect(ev.scoreFinal).toBeDefined();
   });
 });
 
-// calcularPerfilComportamental removido
+describe("calcularPerfilComportamental", () => {
+  it("threshold de omissão relativo ao volume", () => {
+    expect(calcularPerfilComportamental(20, 0, 1000)).toBe("PULA_ITENS");
+    expect(calcularPerfilComportamental(5, 0, 1000)).toBe("EQUILIBRADO");
+  });
+});

@@ -20,7 +20,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
-import { analyzeInventoryGaps } from "../services/deepseek";
 import type { ReportA } from "../types";
 import { formatReportA } from "../utils/parsers";
 
@@ -170,27 +169,6 @@ const scheduleAdvanceAlerts = async () => {
 export default function ReportAScreen() {
   const [report, setReport] = useState<ReportA>(initialState);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResult, setAiResult] = useState<string | null>(null);
-  const [aiModalVisible, setAiModalVisible] = useState(false);
-
-  const handleAiAudit = async () => {
-    setAiLoading(true);
-    setAiModalVisible(true);
-    try {
-      const reportText = formatReportA(report);
-      const result = await analyzeInventoryGaps(reportText);
-      if (result.success) {
-        setAiResult(result.text);
-      } else {
-        setAiResult(`Falha ao gerar auditoria: ${result.error}`);
-      }
-    } catch (err) {
-      setAiResult(`Erro inesperado: ${String(err)}`);
-    } finally {
-      setAiLoading(false);
-    }
-  };
 
   const [alarmActive, setAlarmActive] = useState(false);
   const [alarmLabel, setAlarmLabel] = useState("");
@@ -451,16 +429,9 @@ export default function ReportAScreen() {
         ? `https://wa.me/?text=${encodeURIComponent(msg)}`
         : `whatsapp://send?text=${encodeURIComponent(msg)}`;
     try {
-      if (Platform.OS !== "web") {
-        const canOpen = await Linking.canOpenURL(waUrl);
-        if (!canOpen) {
-          Alert.alert("WhatsApp não encontrado", "O WhatsApp não está instalado neste dispositivo.");
-          return;
-        }
-      }
       await Linking.openURL(waUrl);
     } catch {
-      Alert.alert("Erro ao abrir WhatsApp", "Não foi possível abrir o WhatsApp. Tente novamente.");
+      Alert.alert("Erro ao abrir WhatsApp", "Não foi possível abrir o WhatsApp. Certifique-se de que ele está instalado.");
     }
   };
 
@@ -532,7 +503,7 @@ export default function ReportAScreen() {
                 <TextInput
                   style={styles.input}
                   value={String(report.qtdColaboradores)}
-                  onChangeText={(t) => setField("qtdColaboradores", t === "" ? "" : Number(t))}
+                  onChangeText={(t) => setField("qtdColaboradores", t)}
                   keyboardType="numeric"
                 />
               </View>
@@ -761,25 +732,8 @@ export default function ReportAScreen() {
       <Modal visible={previewVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
               <Text style={styles.sectionTitle}>Pré-visualização</Text>
-              <Pressable
-                onPress={handleAiAudit}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "#eff6ff",
-                  borderColor: "#bfdbfe",
-                  borderWidth: 1,
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 8,
-                  gap: 4
-                }}
-              >
-                <Ionicons name="sparkles" size={14} color="#1d4ed8" />
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#1d4ed8" }}>Auditoria IA</Text>
-              </Pressable>
             </View>
             <ScrollView style={styles.previewBox}>
               <Text style={{ fontSize: 12, lineHeight: 18, color: "#334155" }}>{formatReportA(report)}</Text>
@@ -797,43 +751,7 @@ export default function ReportAScreen() {
         </View>
       </Modal>
 
-      {/* Modal de Auditoria Inteligente DeepSeek */}
-      <Modal
-        visible={aiModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAiModalVisible(false)}
-      >
-        <View style={styles.aiModalOverlay}>
-          <View style={styles.aiModalContent}>
-            <View style={styles.aiModalHeader}>
-              <Ionicons name="sparkles" size={22} color="#1d4ed8" />
-              <Text style={styles.aiModalTitle}>Auditoria de Gargalos IA</Text>
-              <Pressable onPress={() => setAiModalVisible(false)} style={styles.aiCloseBtn}>
-                <Ionicons name="close-circle" size={24} color="#64748b" />
-              </Pressable>
-            </View>
 
-            {aiLoading ? (
-              <View style={styles.aiLoadingContainer}>
-                <ActivityIndicator size="large" color="#1d4ed8" />
-                <Text style={styles.aiLoadingText}>DeepSeek auditando tempos e acuracidade...</Text>
-                <Text style={styles.aiLoadingSubtext}>Isso pode levar alguns segundos.</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.aiResultScroll}>
-                <Text style={styles.aiResultText}>{aiResult}</Text>
-              </ScrollView>
-            )}
-
-            <View style={styles.aiModalFooter}>
-              <Pressable style={styles.aiModalCloseBtn} onPress={() => setAiModalVisible(false)}>
-                <Text style={styles.aiModalCloseBtnText}>Fechar Diagnóstico</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
