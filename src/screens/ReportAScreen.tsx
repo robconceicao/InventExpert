@@ -310,7 +310,7 @@ export default function ReportAScreen() {
 
     // Ouvinte para quando a notificação é recebida em primeiro plano (foreground)
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
-      const label = notification.request.content.data?.label;
+      const label = notification.request.content.data?.label as string | undefined;
       if (label) {
         const adv = MONITORED_ADVANCES.find((a) => a.label === label);
         if (adv && isNearWarningTime(adv.hour, adv.minute)) {
@@ -328,7 +328,7 @@ export default function ReportAScreen() {
 
     // Ouvinte para quando o usuário clica na notificação (trazendo o app de background/fechado)
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const label = response.notification.request.content.data?.label;
+      const label = response.notification.request.content.data?.label as string | undefined;
       if (label) {
         const adv = MONITORED_ADVANCES.find((a) => a.label === label);
         if (adv && isNearWarningTime(adv.hour, adv.minute)) {
