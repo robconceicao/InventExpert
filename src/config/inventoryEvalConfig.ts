@@ -19,6 +19,16 @@ export const INVENTORY_PROFILES = {
     },
     alerts: { criticalBlockLimit: 80 },
   },
+  HIPERMERCADO: {
+    weights: { quality: 0.45, productivity: 0.4, adherence: 0.15 },
+    targets: {
+      productivity: 1200,
+      maxBlockLimit: 50,
+      erroTolerancia: 1.0,
+      erroCritico: 2.0,
+    },
+    alerts: { criticalBlockLimit: 80 },
+  },
   LOJA_GERAL: {
     weights: { quality: 0.5, productivity: 0.3, adherence: 0.2 },
     targets: {
@@ -41,9 +51,7 @@ export const INVENTORY_PROFILES = {
   },
 } as const;
 
-export type InventoryOperationType = keyof typeof INVENTORY_PROFILES;
-
-import type { ViolacaoBloco } from "../types";
+import type { ViolacaoBloco, InventoryOperationType } from "../types";
 
 export interface RegraBlocoArea {
   limite: number;

@@ -163,23 +163,39 @@ export interface AttendanceData {
 
 // ========== INVENTEXP - AVALIAÇÃO DE CONFERENTES ==========
 
-export type InventoryOperationType = "FARMACIA" | "SUPERMERCADO" | "LOJA_GERAL" | "ATACADO";
+export type InventoryOperationType =
+  | 'FARMACIA'
+  | 'SUPERMERCADO'
+  | 'HIPERMERCADO'
+  | 'LOJA_GERAL'
+  | 'ATACADO'; // legacy
 
 export type PerfilComportamental = "PULA_ITENS" | "FANTASMA" | "DESATENTO_GERAL" | "EQUILIBRADO";
-export type ModalidadeContrato = "CLT" | "INTERMITENTE" | "FREE_LANCE" | "FREELANCE";
+export type ModalidadeContrato = 'CLT' | 'INTERMITENTE' | 'FREE' | 'FREE_LANCE' | 'FREELANCE'; // legacy
 
+// Violação de limite de bloco por área
 export interface ViolacaoBloco {
   area?: string;
-  area_nome?: string; // alias legacy para testes
+  area_nome?: string;
   pctBloco?: number;
-  real_pct?: number; // alias legacy para testes
+  real_pct?: number;
   limitePermitido?: number;
-  limite_pct?: number; // alias legacy para testes
+  limite_pct?: number;
   critica?: boolean;
-  area_critica?: boolean; // alias legacy
-  excesso_fator?: number; // alias legacy
+  area_critica?: boolean;
+  excesso_fator?: number;
 }
 
+// Erro localizado por área (para RAIO-X)
+export interface ErroAreaDetalhe {
+  area_nome:       string;
+  tipo_erro:       'EXECUCAO' | 'OMISSAO' | 'DUPLICACAO' | 'AJUSTE_SECAO';
+  ajuste_qtd:      number;
+  produto_codigo?: string;
+  produto_nome?:   string;
+}
+
+// Registro de acurácia por área (seção SUAS SEÇÕES)
 export interface SectionAccuracyRecord {
   area?: string;
   totalItens?: number;
@@ -198,8 +214,16 @@ export interface SectionAccuracyRecord {
   violacao_bloco?: boolean; // alias legacy
   area_critica?: boolean; // alias legacy
   violacaoBloco?: ViolacaoBloco | null;
+
+  // new
+  area_nome?:        string;
+  qtd_c1?:           number;
+  ajuste_a1?:        number;
+  ajuste_a2?:        number;
+  ajuste_a3?:        number;
 }
 
+// Entrada para avaliação de um conferente
 export interface InventoryCheckerInput {
   nome: string;
   matricula?: string;
@@ -213,10 +237,24 @@ export interface InventoryCheckerInput {
   itensDuplicados?: number;
   erroSecao?: number;
   role?: string;
+
+  // new
+  modalidade?:       ModalidadeContrato;
+  totalPecas?:       number;
+  ritmoMedio?:       number;
+  pctErro?:          number;
+  pctBloco?:         number;
+  errosExecucao?:    number;
+  omissoes?:         number;
+  duplicacoes?:      number;
+  icsi?:             number;
+  sectionAccuracy?:  SectionAccuracyRecord[];
+  contagensDetalhadas?: ContagemDetalhada[];
 }
 
 export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";
 
+// Resultado da avaliação
 export interface InventoryCheckerEvaluation {
   input: InventoryCheckerInput;
   operationType: InventoryOperationType;
@@ -232,6 +270,16 @@ export interface InventoryCheckerEvaluation {
   secoes?: SectionAccuracyRecord[];
   perfil?: PerfilComportamental;
   violacoes?: ViolacaoBloco[];
+
+  // new
+  matricula?:           string;
+  nome?:                string;
+  modalidade?:          ModalidadeContrato;
+  scoreICV?:            number;
+  classificacao?:       'CRÍTICO' | 'REGULAR' | 'BOM' | 'EXCELENTE';
+  violacoesBloco?:      ViolacaoBloco[];
+  errosAreaDetalhe?:    ErroAreaDetalhe[];
+  rankingPos?:         number;
 }
 
 // =============================================================================
@@ -397,8 +445,17 @@ export class EscalaInsuficienteError extends Error {
 // PRC — Contagem Detalhada por Conferente/Seção
 // ---------------------------------------------------------------------------
 export interface ContagemDetalhada {
-  area_codigo: string;   // código de seção/área (ex: "003029")
-  barcode: string;       // EAN/código do produto
-  quantidade: number;    // quantidade contada no bip
-  matricula: string;     // matrícula do operador
+  matricula?:       string;
+  area_codigo?:     string;   // código numérico 6 dígitos do .prc
+  area_nome?:       string;   // resolvido via secao_lookup + normalizarNomeArea
+  produto_codigo?:  string;   // código interno stripped (sem zeros à esquerda)
+  produto_nome?:    string;   // de cadastro.txt ou invent_DSP.old
+  produto_ean?:     string;   // EAN real (invent_DSP.old; '' se não disponível)
+  produto_classe?:  string;   // classificação legal: 'A2', 'C1', '-B2'... ou ''
+  quantidade?:      number;
+  is_bloco?:        boolean;  // true quando flag = 'X' no .prc
+  data_hora?:       Date;
+
+  // legacy
+  barcode?: string;
 }
