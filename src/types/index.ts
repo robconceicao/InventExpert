@@ -165,12 +165,36 @@ export interface AttendanceData {
 
 export type InventoryOperationType = "FARMACIA" | "SUPERMERCADO" | "LOJA_GERAL" | "ATACADO";
 
+export type PerfilComportamental = "PULA_ITENS" | "FANTASMA" | "DESATENTO_GERAL" | "EQUILIBRADO";
+export type ModalidadeContrato = "CLT" | "INTERMITENTE" | "FREE_LANCE";
+
+export interface ViolacaoBloco {
+  area_nome: string;
+  pctBloco: number;
+  limitePermitido: number;
+  critica: boolean;
+}
+
+export interface SectionAccuracyRecord {
+  area: string;
+  totalItens: number;
+  erros: number;
+  pctErro: number;
+  pctBloco: number;
+  violacaoBloco: ViolacaoBloco | null;
+}
+
 export interface InventoryCheckerInput {
   nome: string;
+  matricula?: string;
+  modalidadeContrato?: ModalidadeContrato;
   qtde: number;
   qtde1a1: number;
   produtividade: number;
   erro: number;
+  itensPulados?: number;
+  itensDuplicados?: number;
+  erroSecao?: number;
 }
 
 export type InventoryScoreLevel = "EXCELENTE" | "BOM" | "ATENCAO" | "CRITICO";
