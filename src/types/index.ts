@@ -169,7 +169,7 @@ export type PerfilComportamental = "PULA_ITENS" | "FANTASMA" | "DESATENTO_GERAL"
 export type ModalidadeContrato = "CLT" | "INTERMITENTE" | "FREE_LANCE";
 
 export interface ViolacaoBloco {
-  area_nome: string;
+  area: string;
   pctBloco: number;
   limitePermitido: number;
   critica: boolean;
@@ -211,6 +211,9 @@ export interface InventoryCheckerEvaluation {
   nivel: InventoryScoreLevel;
   nivelColor: string;
   tags: string[];
+  secoes?: SectionAccuracyRecord[];
+  perfil?: PerfilComportamental;
+  violacoes?: ViolacaoBloco[];
 }
 
 // =============================================================================

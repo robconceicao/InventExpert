@@ -68,7 +68,7 @@ export default function LeaderEvaluationDashboard() {
   }, [navigation]);
 
   const evaluated = useMemo<InventoryCheckerEvaluation[]>(() => {
-    return SAMPLE_CHECKERS.map((c) => evaluateChecker(c, operationType));
+    return SAMPLE_CHECKERS.map((c) => evaluateChecker(c, operationType)).filter((e) => e !== null) as InventoryCheckerEvaluation[];
   }, [operationType]);
 
   const ranking = useMemo(() => sortRanking(evaluated), [evaluated]);

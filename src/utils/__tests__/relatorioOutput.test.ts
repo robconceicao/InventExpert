@@ -1,5 +1,5 @@
 import { evaluateChecker } from '../../services/InventoryEvaluationService';
-import type { InventoryCheckerInput } from '../../types';
+import type { InventoryCheckerInput, InventoryCheckerEvaluation } from '../../types';
 import { generateInventExpIndividualReportText } from '../inventExpReports';
 
 // ─── CENÁRIO 1 ────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ const TANIA: InventoryCheckerInput = {
 // =============================================================================
 
 describe('relatorioOutput — Cenário 1: Everaldo (zero erro, bloco alto)', () => {
-  const ev = evaluateChecker(EVERALDO, 'FARMACIA');
+  const ev = evaluateChecker(EVERALDO, 'FARMACIA') as InventoryCheckerEvaluation;
   const report = generateInventExpIndividualReportText(
     'FARMACIA', ev, 8, 10, '01/01/2025'
   );
@@ -70,7 +70,7 @@ describe('relatorioOutput — Cenário 1: Everaldo (zero erro, bloco alto)', () 
 });
 
 describe('relatorioOutput — Cenário 2: Elen (erros, bloco não-crítico)', () => {
-  const ev = evaluateChecker(ELEN, 'FARMACIA');
+  const ev = evaluateChecker(ELEN, 'FARMACIA') as InventoryCheckerEvaluation;
   const report = generateInventExpIndividualReportText(
     'FARMACIA', ev, 2, 10, '01/01/2025'
   );
@@ -89,7 +89,7 @@ describe('relatorioOutput — Cenário 2: Elen (erros, bloco não-crítico)', ()
 });
 
 describe('relatorioOutput — Cenário 3: Tania (erro acima do crítico)', () => {
-  const ev = evaluateChecker(TANIA, 'FARMACIA');
+  const ev = evaluateChecker(TANIA, 'FARMACIA') as InventoryCheckerEvaluation;
   const report = generateInventExpIndividualReportText(
     'FARMACIA', ev, 5, 10, '01/01/2025'
   );

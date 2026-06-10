@@ -1,7 +1,7 @@
 import {
   evaluateChecker,
 } from "../InventoryEvaluationService";
-import type { InventoryCheckerInput } from "../../types";
+import type { InventoryCheckerInput, InventoryCheckerEvaluation } from "../../types";
 
 describe("evaluateChecker", () => {
   const base: InventoryCheckerInput = {
@@ -13,14 +13,14 @@ describe("evaluateChecker", () => {
   };
 
   it("zero erro com qtde >= 1000 recebe tag premium", () => {
-    const ev = evaluateChecker(base, "FARMACIA");
+    const ev = evaluateChecker(base, "FARMACIA") as InventoryCheckerEvaluation;
     expect(ev.tags).toContain("⭐ Qualidade Premium (Zero Erro)");
     expect(ev.scoreFinal).toBeGreaterThan(80);
   });
 
   it("erro acima do crítico penaliza produtividade", () => {
-    const ev1 = evaluateChecker({ ...base, erro: 1 }, "FARMACIA");
-    const ev2 = evaluateChecker({ ...base, erro: 9 }, "FARMACIA");
+    const ev1 = evaluateChecker({ ...base, erro: 1 }, "FARMACIA") as InventoryCheckerEvaluation;
+    const ev2 = evaluateChecker({ ...base, erro: 9 }, "FARMACIA") as InventoryCheckerEvaluation;
     expect(ev2.scoreProdutividade).toBeLessThan(ev1.scoreProdutividade * 0.6);
   });
 
@@ -39,7 +39,7 @@ describe("evaluateChecker", () => {
       erro: 50,
       // itensPulados, itensDuplicados removidos
     };
-    const ev = evaluateChecker(extremo, "FARMACIA");
+    const ev = evaluateChecker(extremo, "FARMACIA") as InventoryCheckerEvaluation;
     expect(ev.scoreFinal).toBeGreaterThanOrEqual(0);
     expect(ev.scoreFinal).toBeLessThanOrEqual(100);
   });
@@ -48,7 +48,7 @@ describe("evaluateChecker", () => {
     const ev = evaluateChecker(
       { ...base, erro: 5, produtividade: 2000 },
       "SUPERMERCADO",
-    );
+    ) as InventoryCheckerEvaluation;
     expect(ev.operationType).toBe("SUPERMERCADO");
     expect(ev.scoreFinal).toBeDefined();
   });

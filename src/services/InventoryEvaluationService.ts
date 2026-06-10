@@ -1,14 +1,33 @@
-import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
+import { INVENTORY_PROFILES, getViolacoesBloco } from "../config/inventoryEvalConfig";
 import type {
   InventoryCheckerEvaluation,
   InventoryCheckerInput,
   InventoryOperationType,
+  PerfilComportamental,
+  SectionAccuracyRecord,
+  ViolacaoBloco,
 } from "../types";
+
+export function calcularPerfilComportamental(checker: InventoryCheckerInput): PerfilComportamental {
+  const pulados = checker.itensPulados || 0;
+  const duplicados = checker.itensDuplicados || 0;
+
+  if (pulados === 0 && duplicados === 0) return "EQUILIBRADO";
+  if (pulados > duplicados * 2) return "PULA_ITENS";
+  if (duplicados > pulados * 2) return "FANTASMA";
+  return "DESATENTO_GERAL";
+}
 
 export function evaluateChecker(
   data: InventoryCheckerInput,
   operationType: InventoryOperationType,
-): InventoryCheckerEvaluation {
+  secoes: SectionAccuracyRecord[] = [],
+  leaderName?: string
+): InventoryCheckerEvaluation | null {
+  if (leaderName && data.nome.trim().toUpperCase() === leaderName.trim().toUpperCase()) {
+    return null; // Excluir o líder da avaliação
+  }
+
   const profile = INVENTORY_PROFILES[operationType];
   const { weights, targets, alerts } = profile;
 
@@ -20,13 +39,44 @@ export function evaluateChecker(
   const pctErro = qtde > 0 ? (erro / qtde) * 100 : 0;
   const pctBloco = qtde > 0 ? ((qtde - qtde1a1) / qtde) * 100 : 0;
 
-  let scoreQualidade = Math.max(0, 100 - pctErro * 100);
+  const perfil = calcularPerfilComportamental(data);
+  const penalidadeComportamental = ((data.itensPulados || 0) * 0.7) + ((data.itensDuplicados || 0) * 0.2);
+
+  let scoreQualidade = Math.max(0, 100 - pctErro * 100 - penalidadeComportamental);
+
+  const secoesParaAvaliacao = secoes.map(s => ({ area: s.area, pctBloco: s.pctBloco }));
+  const violacoes = getViolacoesBloco(secoesParaAvaliacao, operationType);
+  let temViolacao = violacoes.length > 0;
+
+  for (const v of violacoes) {
+    if (v.critica) {
+      scoreQualidade -= 20;
+    } else {
+      const excesso = v.pctBloco - v.limitePermitido;
+      if (excesso > 0) {
+        scoreQualidade -= excesso; // penalidade proporcional ao excesso
+      }
+    }
+    
+    const idx = secoes.findIndex(s => s.area.toUpperCase() === v.area.toUpperCase());
+    if (idx !== -1) {
+      secoes[idx].violacaoBloco = v;
+    }
+  }
+
+  if (temViolacao && scoreQualidade >= 100) {
+    scoreQualidade = 99.9; // Nunca pode ser 100 se houver violação
+  }
+
+  scoreQualidade = Math.max(0, scoreQualidade);
+
   let scoreProdutividade = Math.min(
     100,
     targets.productivity > 0
       ? (produtividade / targets.productivity) * 100
       : 100,
   );
+  
   let scoreAderencia =
     pctBloco > targets.maxBlockLimit
       ? Math.max(0, 100 - (pctBloco - targets.maxBlockLimit) * 2)
@@ -51,6 +101,10 @@ export function evaluateChecker(
   if (produtividade > targets.productivity && pctErro <= targets.erroTolerancia) {
     scoreFinal += 3;
     tags.push("🚀 The Flash Sniper");
+  }
+
+  if (perfil === "PULA_ITENS" && (data.itensPulados || 0) > 10) {
+    tags.push("⚠️ Alto índice de omissão");
   }
 
   if (pctErro > 1.5 && pctBloco > alerts.criticalBlockLimit) {
@@ -81,10 +135,15 @@ export function evaluateChecker(
   return {
     input: {
       nome: data.nome,
+      matricula: data.matricula,
+      modalidadeContrato: data.modalidadeContrato,
       qtde,
       qtde1a1,
       produtividade,
       erro,
+      itensPulados: data.itensPulados,
+      itensDuplicados: data.itensDuplicados,
+      erroSecao: data.erroSecao,
     },
     operationType,
     pctErro,
@@ -96,6 +155,9 @@ export function evaluateChecker(
     nivel,
     nivelColor,
     tags,
+    secoes,
+    perfil,
+    violacoes,
   };
 }
 

@@ -115,7 +115,7 @@ export default function InventExpImportScreen() {
     }
     const evaluated = parsed.map((item) =>
       evaluateChecker(item, operationType),
-    );
+    ).filter((e) => e !== null) as InventoryCheckerEvaluation[];
     setEvaluations(sortRanking(evaluated));
   };
 
