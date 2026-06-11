@@ -113,17 +113,17 @@ export default function ReportDScreen() {
       void syncQueue();
       if (clearForm) {
         setReport(initialState);
-        Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
+        Alert.alert("Arquivado", "Dados salvos e formul├írio limpo.");
       } else {
         Alert.alert("Arquivado", "Dados salvos com sucesso.");
       }
     } catch {
-      Alert.alert("Erro", "Não foi possível arquivar.");
+      Alert.alert("Erro", "N├úo foi poss├¡vel arquivar.");
     }
   };
 
   const handleClearOnly = () => {
-    Alert.alert("Limpar Tudo?", "Isso apagará os dados atuais sem salvar.", [
+    Alert.alert("Limpar Tudo?", "Isso apagar├í os dados atuais sem salvar.", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Limpar",
@@ -139,16 +139,16 @@ export default function ReportDScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>1. Identificação</Text>
+            <Text style={styles.sectionTitle}>1. Identifica├º├úo</Text>
             <Text style={styles.label}>Loja</Text>
             <TextInput style={styles.input} value={report.loja} onChangeText={(t) => setField("loja", t)} />
             <View style={styles.row}>
                 <View style={styles.half}>
-                    <Text style={styles.label}>Nº Loja</Text>
+                    <Text style={styles.label}>N┬║ Loja</Text>
                     <TextInput style={styles.input} value={report.lojaNum} onChangeText={(t) => setField("lojaNum", t)} keyboardType="numeric" />
                 </View>
                 <View style={styles.half}>
-                    <Text style={styles.label}>Líder</Text>
+                    <Text style={styles.label}>L├¡der</Text>
                     <TextInput style={styles.input} value={report.lider} onChangeText={(t) => setField("lider", t)} />
                 </View>
             </View>
@@ -158,7 +158,7 @@ export default function ReportDScreen() {
                     <TextInput style={styles.input} value={String(report.qtdPessoas)} onChangeText={(t) => setField("qtdPessoas", t === "" ? "" : Number(t))} keyboardType="numeric" />
                 </View>
                 <View style={styles.half}>
-                    <Text style={styles.label}>Qtd. Peças</Text>
+                    <Text style={styles.label}>Qtd. Pe├ºas</Text>
                     <TextInput style={styles.input} value={String(report.qtdPecas)} onChangeText={(t) => setField("qtdPecas", t === "" ? "" : Number(t))} keyboardType="numeric" />
                 </View>
             </View>
@@ -204,7 +204,7 @@ export default function ReportDScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>3. Avaliação e Fim</Text>
+            <Text style={styles.sectionTitle}>3. Avalia├º├úo e Fim</Text>
             <View style={styles.row}>
                 <View style={styles.half}>
                     <Text style={styles.label}>Aval. Est. (%)</Text>
@@ -215,12 +215,12 @@ export default function ReportDScreen() {
                     <TextInput style={styles.input} value={String(report.avalLoja)} onChangeText={(t) => setField("avalLoja", t === "" ? "" : Number(t))} keyboardType="numeric" />
                 </View>
             </View>
-            {renderTimeField("Fim Inventário", "terminoInventario")}
+            {renderTimeField("Fim Invent├írio", "terminoInventario")}
           </View>
 
           <Pressable style={styles.buttonPrimary} onPress={() => setPreviewVisible(true)}>
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.btnText}>Gerar Relatório</Text>
+            <Text style={styles.btnText}>Gerar Relat├│rio</Text>
           </Pressable>
           <View style={[styles.row, { marginTop: 8, gap: 8 }]}>
             <Pressable style={[styles.buttonClear, { flex: 1 }]} onPress={handleClearOnly}>
@@ -236,7 +236,7 @@ export default function ReportDScreen() {
       <Modal visible={previewVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.sectionTitle}>Pré-visualização</Text>
+            <Text style={styles.sectionTitle}>Pr├®-visualiza├º├úo</Text>
             <ScrollView style={styles.previewBox}>
               <Text>{formatReportD(report)}</Text>
             </ScrollView>

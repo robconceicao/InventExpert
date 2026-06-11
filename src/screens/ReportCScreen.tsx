@@ -118,17 +118,17 @@ export default function ReportCScreen() {
       void syncQueue();
       if (clearForm) {
         setReport(initialState);
-        Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
+        Alert.alert("Arquivado", "Dados salvos e formul├írio limpo.");
       } else {
         Alert.alert("Arquivado", "Dados salvos com sucesso.");
       }
     } catch {
-      Alert.alert("Erro", "Não foi possível arquivar.");
+      Alert.alert("Erro", "N├úo foi poss├¡vel arquivar.");
     }
   };
 
   const handleClearOnly = () => {
-    Alert.alert("Limpar Tudo?", "Isso apagará os dados atuais sem salvar.", [
+    Alert.alert("Limpar Tudo?", "Isso apagar├í os dados atuais sem salvar.", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Limpar",
@@ -144,8 +144,8 @@ export default function ReportCScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>1. Identificação (Farmaconde)</Text>
-            <Text style={styles.label}>Inventário (Ref/Data)</Text>
+            <Text style={styles.sectionTitle}>1. Identifica├º├úo (Farmaconde)</Text>
+            <Text style={styles.label}>Invent├írio (Ref/Data)</Text>
             <TextInput style={styles.input} value={report.inventario_ref} onChangeText={(t) => setField("inventario_ref", t)} placeholder="ex: 12/12/2023" />
             <View style={styles.row}>
                 <View style={styles.half}>
@@ -157,7 +157,7 @@ export default function ReportCScreen() {
                     <TextInput style={styles.input} value={report.filial} onChangeText={(t) => setField("filial", t)} />
                 </View>
             </View>
-            <Text style={styles.label}>Líder</Text>
+            <Text style={styles.label}>L├¡der</Text>
             <TextInput style={styles.input} value={report.lider} onChangeText={(t) => setField("lider", t)} />
             <View style={styles.row}>
                 <View style={styles.half}>
@@ -173,23 +173,23 @@ export default function ReportCScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>2. Mapeamento</Text>
-            {renderTimeField("Início Contagem (Geral)", "inicioContagemGeral")}
+            {renderTimeField("In├¡cio Contagem (Geral)", "inicioContagemGeral")}
             {renderTimeField("Fim Contagem (Geral)", "fimContagemGeral")}
-            <Text style={styles.label}>% do Inventário</Text>
+            <Text style={styles.label}>% do Invent├írio</Text>
             <TextInput style={styles.input} value={String(report.pctInventario)} onChangeText={(t) => setField("pctInventario", t === "" ? "" : Number(t))} keyboardType="numeric" placeholder="%" />
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>3. Não Contados</Text>
-            {renderTimeField("Início (zerados)", "naoContadosInicio")}
+            <Text style={styles.sectionTitle}>3. N├úo Contados</Text>
+            {renderTimeField("In├¡cio (zerados)", "naoContadosInicio")}
             <Text style={styles.label}>Total de Itens</Text>
             <TextInput style={styles.input} value={String(report.naoContadosTotal)} onChangeText={(t) => setField("naoContadosTotal", t === "" ? "" : Number(t))} keyboardType="numeric" />
             {renderTimeField("Fim (zerados)", "naoContadosFim")}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>4. 1ª Divergência</Text>
-            {renderTimeField("Início da divergência", "div1Inicio")}
+            <Text style={styles.sectionTitle}>4. 1┬¬ Diverg├¬ncia</Text>
+            {renderTimeField("In├¡cio da diverg├¬ncia", "div1Inicio")}
             <View style={styles.row}>
                 <View style={styles.half}>
                     <Text style={styles.label}>Itens Controlados</Text>
@@ -210,12 +210,12 @@ export default function ReportCScreen() {
                     <TextInput style={styles.input} value={String(report.div1Total)} onChangeText={(t) => setField("div1Total", t === "" ? "" : Number(t))} keyboardType="numeric" />
                 </View>
             </View>
-            {renderTimeField("Fim da divergência", "div1Fim")}
+            {renderTimeField("Fim da diverg├¬ncia", "div1Fim")}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>5. 2ª Divergência</Text>
-            {renderTimeField("Início da divergência", "div2Inicio")}
+            <Text style={styles.sectionTitle}>5. 2┬¬ Diverg├¬ncia</Text>
+            {renderTimeField("In├¡cio da diverg├¬ncia", "div2Inicio")}
             <View style={styles.row}>
                 <View style={styles.half}>
                     <Text style={styles.label}>Negativos (perdas)</Text>
@@ -228,12 +228,12 @@ export default function ReportCScreen() {
             </View>
             <Text style={styles.label}>Total de Itens</Text>
             <TextInput style={styles.input} value={String(report.div2Total)} onChangeText={(t) => setField("div2Total", t === "" ? "" : Number(t))} keyboardType="numeric" />
-            {renderTimeField("Fim da divergência", "div2Fim")}
+            {renderTimeField("Fim da diverg├¬ncia", "div2Fim")}
           </View>
 
           <Pressable style={styles.buttonPrimary} onPress={() => setPreviewVisible(true)}>
             <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-            <Text style={styles.btnText}>Gerar Relatório</Text>
+            <Text style={styles.btnText}>Gerar Relat├│rio</Text>
           </Pressable>
           <View style={[styles.row, { marginTop: 8, gap: 8 }]}>
             <Pressable style={[styles.buttonClear, { flex: 1 }]} onPress={handleClearOnly}>
@@ -249,7 +249,7 @@ export default function ReportCScreen() {
       <Modal visible={previewVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.sectionTitle}>Pré-visualização</Text>
+            <Text style={styles.sectionTitle}>Pr├®-visualiza├º├úo</Text>
             <ScrollView style={styles.previewBox}>
               <Text>{formatReportC(report)}</Text>
             </ScrollView>
