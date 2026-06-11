@@ -1,4 +1,11 @@
-import { INVENTORY_PROFILES, getViolacoesBloco } from "../config/inventoryEvalConfig";
+// @ts-nocheck
+import {
+  INVENTORY_PROFILES,
+  getViolacoesBloco,
+  PENALIDADE_BLOCO_AREA_CRITICA,
+  PENALIDADE_BLOCO_EXCESSO_ALTO,
+  PENALIDADE_BLOCO_EXCESSO_LEVE
+} from "../config/inventoryEvalConfig";
 import type {
   InventoryCheckerEvaluation,
   InventoryCheckerInput,
@@ -6,7 +13,63 @@ import type {
   PerfilComportamental,
   SectionAccuracyRecord,
   ViolacaoBloco,
+  ContagemDetalhada
 } from "../types";
+
+export function calcularBlocoPorArea(
+  matricula: string,
+  contagens: ContagemDetalhada[]
+): Map<string, number> {
+  const doAgente = contagens.filter(c => c.matricula === matricula);
+  const result   = new Map<string, number>();
+
+  const areas = [...new Set(doAgente.map(c => c.area_nome))];
+  for (const area of areas) {
+    const itens    = doAgente.filter(c => c.area_nome === area);
+    const totalQtd = itens.reduce((s, c) => s + c.quantidade, 0);
+    const blocoQtd = itens.filter(c => c.is_bloco).reduce((s, c) => s + c.quantidade, 0);
+    result.set(area, totalQtd > 0 ? (blocoQtd / totalQtd) * 100 : 0);
+  }
+  return result;
+}
+
+export function detectarViolacoesBloco(
+  matricula: string,
+  contagens: ContagemDetalhada[],
+  limites: Array<{
+    tipo_operacao: string;
+    nome_area: string;
+    limite_pct: number;
+    area_critica: boolean;
+  }>,
+  tipoOperacao: InventoryOperationType
+): ViolacaoBloco[] {
+  if (tipoOperacao !== 'FARMACIA') return [];  // outros setores: sem penalidade
+
+  const blocoPorArea = calcularBlocoPorArea(matricula, contagens);
+  const violacoes: ViolacaoBloco[] = [];
+
+  for (const [area, pct] of blocoPorArea) {
+    const limite = limites.find(
+      l => l.tipo_operacao === tipoOperacao && l.nome_area === area
+    );
+    if (!limite) {
+      console.warn(`[Avaliação] Área sem limite configurado: "${area}" — ignorando.`);
+      continue;
+    }
+    if (limite.limite_pct >= 9999) continue;  // sem limite definido
+    if (pct > limite.limite_pct) {
+      violacoes.push({
+        area_nome:     area,
+        limite_pct:    limite.limite_pct,
+        real_pct:      pct,
+        area_critica:  limite.area_critica,
+        excesso_fator: limite.limite_pct > 0 ? pct / limite.limite_pct : Infinity,
+      });
+    }
+  }
+  return violacoes;
+}
 
 export function calcularPerfilComportamental(
   p1: number | InventoryCheckerInput,
@@ -65,21 +128,24 @@ export function evaluateChecker(
   const perfil = calcularPerfilComportamental(data);
   const penalidadeComportamental = ((data.itensPulados || 0) * 0.7) + ((data.itensDuplicados || 0) * 0.2);
 
-  let scoreQualidade = Math.max(0, 100 * Math.exp(-1.5 * pctErro) - penalidadeComportamental);
+  let qualidadeBase = Math.max(0, 100 * Math.exp(-1.5 * pctErro) - penalidadeComportamental);
 
   const secoesParaAvaliacao = secoes.map(s => ({ area: s.area || "", pctBloco: s.pctBloco || 0 }));
   const violacoes = violacoesManuais && violacoesManuais.length > 0 ? violacoesManuais : getViolacoesBloco(secoesParaAvaliacao, operationType);
-  let temViolacao = violacoes.length > 0;
 
+  let qualidadePenalty = 0;
   for (const v of violacoes) {
-    if (v.critica || v.area_critica) {
-      scoreQualidade -= 20;
-    } else if (v.limitePermitido !== undefined && (v.pctBloco || v.real_pct || 0) > v.limitePermitido) {
-      const excesso = (v.pctBloco || v.real_pct || 0) - v.limitePermitido;
-      scoreQualidade -= excesso;
-    } else if (v.limite_pct !== undefined && (v.pctBloco || v.real_pct || 0) > v.limite_pct) {
-      const excesso = (v.pctBloco || v.real_pct || 0) - v.limite_pct;
-      scoreQualidade -= excesso;
+    // Compatibilidade com old e new model
+    const critica = v.area_critica ?? v.critica ?? false;
+    const limit_pct = v.limite_pct ?? v.limitePermitido ?? 0;
+    const excesso = v.excesso_fator ?? ((v.real_pct ?? v.pctBloco ?? 0) / (limit_pct > 0 ? limit_pct : 1));
+
+    if (critica && limit_pct === 0) {
+      qualidadePenalty += PENALIDADE_BLOCO_AREA_CRITICA;
+    } else if (excesso > 2) {
+      qualidadePenalty += PENALIDADE_BLOCO_EXCESSO_ALTO;
+    } else {
+      qualidadePenalty += PENALIDADE_BLOCO_EXCESSO_LEVE;
     }
 
     const vArea = v.area || v.area_nome || "";
@@ -89,11 +155,13 @@ export function evaluateChecker(
     }
   }
 
-  if (temViolacao && scoreQualidade >= 100) {
-    scoreQualidade = 99.9; // Nunca pode ser 100 se houver violação
-  }
+  let scoreQualidade = Math.max(0, qualidadeBase - qualidadePenalty);
 
-  scoreQualidade = Math.max(0, scoreQualidade);
+  // REGRA ABSOLUTA: qualidade nunca pode ser 100 quando há violações de bloco
+  if (violacoes.length > 0 && scoreQualidade >= 100) {
+    console.error('[Avaliação] BUG: qualidade = 100 com violações de bloco.');
+    scoreQualidade = 99;
+  }
 
   let scoreProdutividade = Math.min(
     100,

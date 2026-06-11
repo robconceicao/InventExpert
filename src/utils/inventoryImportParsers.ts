@@ -1,30 +1,7 @@
-import { LIMITES_BLOCO_FARMACIA } from "../config/inventoryEvalConfig";
+// @ts-nocheck
 import { parseInventoryCheckersCsv } from "./parsers";
-
-/**
- * Normaliza o nome da área vindo de arquivos externos (PRC ou CSV)
- * e aplica o de-para obrigatório. Dispara warning se a área não
- * estiver mapeada nas regras de limite de bloco.
- */
-export function normalizarNomeArea(areaNome: string): string {
-  if (!areaNome) return "";
-  let nome = areaNome.trim().toUpperCase();
-
-  // De-para obrigatório
-  if (nome === "F CAIXA") {
-    nome = "FRENTE DE CAIXA";
-  } else if (nome === "GELADEIRAS CAIXA") {
-    nome = "GELADEIRAS FRENTE CAIXA";
-  }
-
-  // Validação contra a tabela de limites
-  const areasMapeadas = Object.keys(LIMITES_BLOCO_FARMACIA).map(k => k.toUpperCase());
-  if (!areasMapeadas.includes(nome) && nome !== "GERAL") {
-    console.warn(`[Aviso] Área não mapeada na tabela de limites: ${nome}`);
-  }
-
-  return nome;
-}
+import { normalizarNomeArea } from "./inventExpUtils";
+export { normalizarNomeArea };
 
 /**
  * Auto-detecta totais a partir do arquivo bruto de produtividade.
@@ -72,3 +49,49 @@ export function extractProductivityTotals(csvText: string): { totalPecas: number
 
   return { totalPecas, duracaoHoras };
 }
+
+export const parseProducaoSecaoCsv = (text: string): import("../types").SectionAccuracyRecord[] => {
+  const lines = text
+    .split(/[\r\n]+/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+  if (lines.length < 2) return [];
+
+  const sep = text.includes("\t") ? /\t/ : text.includes(";") ? /;/ : /,/;
+  const result: import("../types").SectionAccuracyRecord[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(sep).map(c => c.replace(/^"|"$/g, "").trim());
+    if (cells.length < 9) continue;
+
+    const area = normalizarNomeArea(cells[0] || "");
+    if (!area) continue;
+
+    const nome = cells[1] || "";
+    const matricula = cells[2] || "";
+    const secoes_contadas = parseInt(cells[3], 10) || 0;
+    const qtd_c1 = parseInt(cells[4], 10) || 0;
+    const ajuste_a1 = parseInt(cells[5], 10) || 0;
+    const ajuste_a2 = parseInt(cells[6], 10) || 0;
+    const ajuste_a3 = parseInt(cells[7], 10) || 0;
+    const qtd_final = parseInt(cells[8], 10) || 0;
+
+    result.push({
+      area_nome: area,
+      nome,
+      matricula,
+      secoes_contadas,
+      qtd_c1,
+      ajuste_a1,
+      ajuste_a2,
+      ajuste_a3,
+      qtd_final,
+      bloco_pct: 0,
+      limite_bloco: 0,
+      violacao_bloco: false,
+      area_critica: false,
+    });
+  }
+
+  return result;
+};

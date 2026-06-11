@@ -142,8 +142,53 @@ export type ReportBMode = "farmacias" | "mercados" | "outros";
 export type ReportB = ReportBFarmacias | ReportBMercados | ReportBOutros;
 
 // Mantido para compatibilidade com imports existentes no parsers.ts
-export interface ReportC { _removed: true; }
-export interface ReportD { _removed: true; }
+
+export interface ReportC {
+    inventario_ref: string;
+    cliente: string;
+    filial: string;
+    lider: string;
+    qtdEquipe: number | "";
+    qtdFaltas: number | "";
+    inicioContagemGeral: string;
+    fimContagemGeral: string;
+    pctInventario: number | "";
+    naoContadosInicio: string;
+    naoContadosTotal: number | "";
+    naoContadosFim: string;
+    div1Inicio: string;
+    div1Controlados: number | "";
+    div1Negativos: number | "";
+    div1Positivos: number | "";
+    div1Total: number | "";
+    div1Fim: string;
+    div2Inicio: string;
+    div2Negativos: number | "";
+    div2Positivos: number | "";
+    div2Total: number | "";
+    div2Fim: string;
+}
+
+export interface ReportD {
+    loja: string;
+    lojaNum: string;
+    lider: string;
+    qtdPessoas: number | "";
+    qtdPecas: number | "";
+    pctInv: number | "";
+    chegada: string;
+    inicioContagemEstoque: string;
+    terminoContagemEstoque: string;
+    inicioContagemLoja: string;
+    terminoContagemLoja: string;
+    inicioAuditoria: string;
+    terminoAuditoria: string;
+    inicioDivergencia: string;
+    terminoDivergencia: string;
+    avalEstoque: number | "";
+    avalLoja: number | "";
+    terminoInventario: string;
+}
 
 export interface AttendanceCollaborator {
   id: string;
@@ -455,7 +500,47 @@ export interface ContagemDetalhada {
   quantidade?:      number;
   is_bloco?:        boolean;  // true quando flag = 'X' no .prc
   data_hora?:       Date;
+  nome?:            string;
 
   // legacy
   barcode?: string;
+}
+
+
+export interface AuditoriaAcuracidadeRow {
+  secao: string;
+  ean: string;
+  descricao: string;
+  c1: number;
+  a1: number;
+  a2: number;
+  a3: number;
+  final: number;
+  ajst: number;
+}
+
+export interface AuditoriaAgenteInfo {
+  codigo: string;
+  nome: string;
+  cpf: string;
+}
+
+export interface AuditoriaSecaoDivergente {
+  secao: string;
+  ean: string;
+  descricao: string;
+  erro_secao: number;
+  ajst?: number;
+  quem_contou_matricula?: string;
+}
+
+export interface AuditoriaNivel1Result {
+  codigo_conferente: string;
+  nome: string;
+  cpf: string;
+  erro_real: number;
+  erro_atribuido: number;
+  diferenca: number;
+  status: 'OK' | 'DIVERGENCIA' | 'ERRO_DE_TERCEIRO_RECEBIDO' | 'ERRO_PROPRIO_EM_OUTRO';
+  secoes_divergentes: AuditoriaSecaoDivergente[];
 }
