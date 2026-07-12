@@ -1,10 +1,10 @@
-// @ts-nocheck
 import {
   ContagemDetalhada,
   AuditoriaAcuracidadeRow,
   AuditoriaAgenteInfo,
   AuditoriaNivel1Result,
   AuditoriaSecaoDivergente,
+  DivergenciaProdutoSetor,
   InventoryCheckerInput
 } from '../types';
 
@@ -49,7 +49,7 @@ export class AuditoriaAtribuicaoService {
         agenteInfo.cpf, 
         agenteInfo.codigo, 
         prodMatricula
-      ].map(id => id.replace(/\D/g, '')).filter(Boolean));
+      ].map(id => (id || '').replace(/\D/g, '')).filter(Boolean));
 
       // 2. Seções contadas pelo conferente (via .prc)
       // O .prc tem 'matricula' (que geralmente é o CPF de 11 dígitos digitado no coletor)
@@ -61,13 +61,28 @@ export class AuditoriaAtribuicaoService {
       bipsDoAgente.forEach(bip => secoesContadas.add(bip.area_codigo));
 
       // 3. Erro Real = soma de |AJST| de ACURACIDADE nas seções contadas
+      //    + detalhamento por produto/setor (ajst !== 0)
       let erro_real = 0;
+      const divergencias_detalhadas: DivergenciaProdutoSetor[] = [];
       for (const secao of secoesContadas) {
         const itensDaSecao = acuracidadeMap.get(secao) || [];
         for (const item of itensDaSecao) {
           erro_real += Math.abs(item.ajst);
+          if (item.ajst !== 0) {
+            divergencias_detalhadas.push({
+              secao,
+              ean: item.ean,
+              descricao: item.descricao,
+              c1: item.c1,
+              final: item.final,
+              ajst: item.ajst
+            });
+          }
         }
       }
+
+      // Ordenar por |ajst| decrescente para priorizar maiores divergências
+      divergencias_detalhadas.sort((a, b) => Math.abs(b.ajst) - Math.abs(a.ajst));
 
       // 4. Erro Atribuído
       const erro_atribuido = prod.erro || 0;
@@ -112,6 +127,8 @@ export class AuditoriaAtribuicaoService {
                   secoes_divergentes.push({
                     secao,
                     ean: item.ean,
+                    descricao: item.descricao,
+                    erro_secao: erroNaSecao,
                     ajst: item.ajst,
                     quem_contou_matricula: quemContouStr
                   });
@@ -130,7 +147,8 @@ export class AuditoriaAtribuicaoService {
         erro_atribuido,
         diferenca,
         status,
-        secoes_divergentes
+        secoes_divergentes,
+        divergencias_detalhadas
       });
     }
 

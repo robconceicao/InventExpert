@@ -702,6 +702,16 @@ export interface AuditoriaSecaoDivergente {
   quem_contou_matricula?: string;
 }
 
+/** Divergência física (AJST ≠ 0) em produto/seção contados pelo próprio conferente. */
+export interface DivergenciaProdutoSetor {
+  secao: string;
+  ean: string;
+  descricao: string;
+  c1: number;
+  final: number;
+  ajst: number;
+}
+
 export interface AuditoriaNivel1Result {
   codigo_conferente: string;
   nome: string;
@@ -711,4 +721,6 @@ export interface AuditoriaNivel1Result {
   diferenca: number;
   status: 'OK' | 'DIVERGENCIA' | 'ERRO_DE_TERCEIRO_RECEBIDO' | 'ERRO_PROPRIO_EM_OUTRO';
   secoes_divergentes: AuditoriaSecaoDivergente[];
+  /** Erros nas seções que o conferente realmente contou (por produto/setor). */
+  divergencias_detalhadas?: DivergenciaProdutoSetor[];
 }
