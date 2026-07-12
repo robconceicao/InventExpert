@@ -212,17 +212,17 @@ Quando houver conflito entre documentos, adotar nesta ordem:
 ### Fase 6 — Relatórios & UI
 **Objetivo:** relatórios fiéis à spec v2.1 sem "Perfil Operacional".
 
-- [ ] Alerta: `area_critica || limite_pct <= 5`; textos CLT / INTERMITENTE / FREE (versão completa da spec)
-- [ ] SUAS SEÇÕES: colunas Seções | C1 | Ajuste | Final | Bloco% | Status (quando dados existirem)
-- [ ] RAIO-X: detalhar área/produto quando `ErroAreaDetalhe` / contagens disponíveis
-- [ ] COMO A NOTA: "Como avaliamos" + "Motivo" só se &lt; max
-- [ ] DIRECIONAMENTO balanceado (já parcial — alinhar copy)
-- [ ] FREE: proibir colaborador/funcionário/medida disciplinar
-- [ ] Criar `inventExpReportHtml.ts` espelhando o texto
-- [ ] `CheckerFeedbackReport`: alerta visual + seções; sem Perfil Operacional
-- [ ] PDF via expo-print no fluxo de export da InventExp (se já houver share de texto, adicionar PDF)
+- [x] Alerta: `area_critica || limite_pct <= 5`; textos CLT / INTERMITENTE / FREE
+- [x] SUAS SEÇÕES: Área | Seções | C1 | Ajuste | Final | Bloco% | Status
+- [x] RAIO-X: detalhe área/produto quando `ErroAreaDetalhe` disponível
+- [x] COMO A NOTA: "Como avaliamos" + "Motivo da pontuação"
+- [x] DIRECIONAMENTO balanceado (positivos + melhorias)
+- [x] FREE: sem medida disciplinar / vínculo; rodapé prestação de serviço
+- [x] `inventExpReportHtml.ts` + `sharePdfFromHtml` (expo-print)
+- [x] `CheckerFeedbackReport`: alerta visual + seções; sem Perfil Operacional
+- [x] PDF 1º ranking na InventExpImportScreen
 
-**Validação:** `tsc` + `npm test` (especialmente `relatorioOutput.test.ts`)  
+**Validação:** `tsc` + `npm test` (70 verdes)  
 **Commit:** `feat: relatorios e UI alinhados a v2.1 (fase 6)`  
 **Parar e aguardar aprovação.**
 

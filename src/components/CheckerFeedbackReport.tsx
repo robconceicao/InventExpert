@@ -2,19 +2,43 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
-import type {
-  InventoryCheckerEvaluation,
-  InventoryOperationType,
+import {
+  getSectionAreaNome,
+  getSectionBlocoPct,
+  getViolacaoArea,
+  getViolacaoCritica,
+  getViolacaoLimitePct,
+  getViolacaoRealPct,
+  type InventoryCheckerEvaluation,
+  type InventoryOperationType,
+  type SectionAccuracyRecord,
+  type ViolacaoBloco,
 } from "../types";
 
 interface CheckerFeedbackReportProps {
   evaluation: InventoryCheckerEvaluation;
   operationType: InventoryOperationType;
+  secoes?: SectionAccuracyRecord[];
+}
+
+function isAlertaFormal(v: ViolacaoBloco): boolean {
+  return getViolacaoCritica(v) || getViolacaoLimitePct(v) <= 5;
+}
+
+function statusIcon(sec: SectionAccuracyRecord): string {
+  if (sec.violacaoBloco) {
+    return getViolacaoCritica(sec.violacaoBloco) ? "🚨" : "⚠️";
+  }
+  if (sec.violacao_bloco) {
+    return sec.area_critica ? "🚨" : "⚠️";
+  }
+  return "✅";
 }
 
 export function CheckerFeedbackReport({
   evaluation,
   operationType,
+  secoes: secoesProp,
 }: CheckerFeedbackReportProps) {
   const profile = INVENTORY_PROFILES[operationType];
   const { targets, alerts } = profile;
@@ -23,6 +47,13 @@ export function CheckerFeedbackReport({
     evaluation;
 
   const pct1a1 = 100 - pctBloco;
+  const violacoes = evaluation.violacoes || evaluation.violacoesBloco || [];
+  const alertas = violacoes.filter(isAlertaFormal);
+  const secoes =
+    secoesProp ||
+    evaluation.secoes ||
+    evaluation.input.sectionAccuracy ||
+    [];
 
   const mensagens: string[] = [];
 
@@ -36,7 +67,10 @@ export function CheckerFeedbackReport({
       "Você perdeu pontos de aderência pelo uso acima do recomendado de contagem em bloco.",
     );
   }
-  if (pctErro <= targets.erroTolerancia && input.produtividade > targets.productivity) {
+  if (
+    pctErro <= targets.erroTolerancia &&
+    input.produtividade > targets.productivity
+  ) {
     mensagens.push(
       "Você recebeu bônus por manter boa qualidade mesmo com produtividade acima da meta.",
     );
@@ -44,6 +78,11 @@ export function CheckerFeedbackReport({
   if (pctErro > 1.5 && pctBloco > alerts.criticalBlockLimit) {
     mensagens.push(
       "Foi identificado risco de contagem superficial (erro alto com muito bloco).",
+    );
+  }
+  if (violacoes.length > 0) {
+    mensagens.push(
+      `Penalidade de bloco aplicada em ${violacoes.length} área(s).`,
     );
   }
   if (mensagens.length === 0) {
@@ -64,13 +103,35 @@ export function CheckerFeedbackReport({
         </View>
       </View>
 
-      {tags.length > 0 && (
+      {/* Alerta formal de área restrita — sem "Perfil Operacional" */}
+      {alertas.length > 0 && (
+        <View style={styles.alertaBox}>
+          <Text style={styles.alertaTitle}>
+            🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA
+          </Text>
+          {alertas.map((v, i) => (
+            <Text key={i} style={styles.alertaText}>
+              {getViolacaoArea(v)}: {getViolacaoRealPct(v).toFixed(1)}% (limite{" "}
+              {getViolacaoLimitePct(v)}%)
+            </Text>
+          ))}
+        </View>
+      )}
+
+      {(tags.length > 0 || violacoes.length > 0) && (
         <View style={styles.tagsContainer}>
           {tags.map((tag) => (
             <View key={tag} style={styles.tagChip}>
               <Text style={styles.tagText}>{tag}</Text>
             </View>
           ))}
+          {violacoes.length > 0 && (
+            <View style={[styles.tagChip, { backgroundColor: "#fee2e2" }]}>
+              <Text style={[styles.tagText, { color: "#dc2626" }]}>
+                ⚠️ Violou limites em {violacoes.length} área(s)
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -100,8 +161,64 @@ export function CheckerFeedbackReport({
         </View>
       </View>
 
+      {secoes.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SUAS SEÇÕES — ACURÁCIA</Text>
+          {secoes.map((sec, i) => {
+            const area = getSectionAreaNome(sec);
+            const bloco = getSectionBlocoPct(sec);
+            return (
+              <View key={`${area}-${i}`} style={styles.secaoRow}>
+                <Text style={styles.secaoStatus}>{statusIcon(sec)}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.secaoNome}>{area}</Text>
+                  <Text style={styles.secaoMeta}>
+                    Bloco {bloco.toFixed(1)}%
+                    {sec.limite_bloco != null
+                      ? ` · lim. ${sec.limite_bloco}%`
+                      : ""}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {violacoes.length > 0 && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: "#dc2626" }]}>
+            ⚠️ Penalidades de Bloco
+          </Text>
+          {violacoes.map((v, i) => {
+            const vArea = getViolacaoArea(v);
+            const vLimit = getViolacaoLimitePct(v);
+            const vReal = getViolacaoRealPct(v);
+            const vCritica = getViolacaoCritica(v);
+            let status = "";
+            if (vLimit === 0 && vCritica) {
+              status = `PROIBIDO BLOCO | Realizado ${vReal.toFixed(1)}%`;
+            } else {
+              status = `Limite ${vLimit.toFixed(1)}% | Realizado ${vReal.toFixed(
+                1,
+              )}%${vCritica ? " (CRÍTICA)" : ""}`;
+            }
+            return (
+              <Text key={i} style={styles.explanationText}>
+                • {vArea} - {status}
+              </Text>
+            );
+          })}
+        </View>
+      )}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Como a sua nota foi calculada</Text>
+        <Text style={styles.scoreLine}>
+          Q {Math.round(evaluation.scoreQualidade)} · P{" "}
+          {Math.round(evaluation.scoreProdutividade)} · A{" "}
+          {Math.round(evaluation.scoreAderencia)}
+        </Text>
         {mensagens.map((m) => (
           <Text key={m} style={styles.explanationText}>
             • {m}
@@ -150,6 +267,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#ffffff",
   },
+  alertaBox: {
+    backgroundColor: "#fef2f2",
+    borderLeftWidth: 4,
+    borderLeftColor: "#dc2626",
+    borderRadius: 8,
+    padding: 12,
+    gap: 4,
+  },
+  alertaTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#991b1b",
+  },
+  alertaText: {
+    fontSize: 12,
+    color: "#7f1d1d",
+  },
   tagsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -194,9 +328,34 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0f172a",
   },
+  secaoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e2e8f0",
+  },
+  secaoStatus: {
+    fontSize: 16,
+    width: 24,
+  },
+  secaoNome: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  secaoMeta: {
+    fontSize: 11,
+    color: "#64748b",
+  },
+  scoreLine: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
   explanationText: {
     fontSize: 13,
     color: "#334155",
   },
 });
-

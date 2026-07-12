@@ -92,3 +92,39 @@ export const shareCsvFile = async (
     Alert.alert("Erro", "Falha ao gerar o arquivo CSV.");
   }
 };
+
+/**
+ * Gera PDF a partir de HTML (expo-print) e compartilha.
+ * No web: baixa um .html equivalente (print via browser).
+ */
+export const sharePdfFromHtml = async (
+  filename: string,
+  html: string,
+  dialogTitle = "Exportar PDF",
+) => {
+  if (Platform.OS === "web") {
+    downloadOnWeb(
+      filename.replace(/\.pdf$/i, ".html"),
+      html,
+      "text/html;charset=utf-8",
+    );
+    return;
+  }
+
+  try {
+    const Print = await import("expo-print");
+    const { uri } = await Print.printToFileAsync({ html });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle,
+        UTI: "com.adobe.pdf",
+      });
+    } else {
+      Alert.alert("Erro", "Compartilhamento não disponível neste dispositivo.");
+    }
+  } catch (error) {
+    console.error("Erro ao exportar PDF:", error);
+    Alert.alert("Erro", "Falha ao gerar o PDF.");
+  }
+};

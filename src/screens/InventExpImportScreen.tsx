@@ -38,7 +38,8 @@ import {
     buildInventDspIndex,
     resolverProduto,
 } from "../utils/catalogoLookup";
-import { shareCsvFile, shareTextFile } from "../utils/export";
+import { shareCsvFile, sharePdfFromHtml, shareTextFile } from "../utils/export";
+import { generateInventExpIndividualReportHtml } from "../utils/inventExpReportHtml";
 import { readFileAsCsvText, readFileAsText } from "../utils/fileImport";
 import {
     generateInventExpGerencialReportText,
@@ -382,16 +383,43 @@ export default function InventExpImportScreen() {
       ev,
       index + 1,
       evaluations.length,
+      undefined,
+      ev.secoes,
+      ev.violacoes,
     );
-    const waUrl = Platform.OS === "web"
-      ? `https://wa.me/?text=${encodeURIComponent(text)}`
-      : `whatsapp://send?text=${encodeURIComponent(text)}`;
-    Linking.openURL(waUrl).catch(
-      () =>
-        Alert.alert(
-          "Erro",
-          "N\u00e3o foi poss\u00edvel abrir o WhatsApp neste dispositivo.",
-        ),
+    const waUrl =
+      Platform.OS === "web"
+        ? `https://wa.me/?text=${encodeURIComponent(text)}`
+        : `whatsapp://send?text=${encodeURIComponent(text)}`;
+    Linking.openURL(waUrl).catch(() =>
+      Alert.alert(
+        "Erro",
+        "Não foi possível abrir o WhatsApp neste dispositivo.",
+      ),
+    );
+  };
+
+  const handleExportIndividualPdf = async (
+    ev: InventoryCheckerEvaluation,
+    index: number,
+  ) => {
+    const html = generateInventExpIndividualReportHtml(
+      operationType,
+      ev,
+      index + 1,
+      evaluations.length,
+      undefined,
+      ev.secoes,
+      ev.violacoes,
+    );
+    const safeName = (ev.input.nome || "conferente")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "_")
+      .slice(0, 40);
+    await sharePdfFromHtml(
+      `avaliacao_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      html,
+      "Exportar PDF Avaliação Individual",
     );
   };
 
@@ -679,6 +707,7 @@ export default function InventExpImportScreen() {
                 <CheckerFeedbackReport
                   evaluation={evaluations[0]}
                   operationType={operationType}
+                  secoes={evaluations[0].secoes}
                 />
               </View>
             )}
@@ -698,6 +727,15 @@ export default function InventExpImportScreen() {
                 <Ionicons name="document-text-outline" size={20} color="#fff" />
                 <Text style={styles.btnTextWhite}>Relatório Gerencial</Text>
               </Pressable>
+              {evaluations[0] && (
+                <Pressable
+                  onPress={() => void handleExportIndividualPdf(evaluations[0], 0)}
+                  style={[styles.btnExport, { backgroundColor: "#b91c1c" }]}
+                >
+                  <Ionicons name="print-outline" size={20} color="#fff" />
+                  <Text style={styles.btnTextWhite}>PDF 1º ranking</Text>
+                </Pressable>
+              )}
             </View>
           </>
         )}
@@ -974,7 +1012,9 @@ const styles = StyleSheet.create({
   exportRow: {
     marginTop: 8,
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "flex-end",
+    gap: 8,
   },
   btnExport: {
     flexDirection: "row",
