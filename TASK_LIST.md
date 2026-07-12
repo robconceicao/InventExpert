@@ -142,12 +142,12 @@ Quando houver conflito entre documentos, adotar nesta ordem:
 ### Fase 2 — Tipos
 **Objetivo:** consolidar contrato sem quebrar os 63 testes.
 
-- [ ] Definir campos canônicos (preferir snake_case da v2 onde o motor/reports já usam)
-- [ ] Manter aliases legados (`area`/`area_nome`, `critica`/`area_critica`, `FREE`/`FREE_LANCE`) com deprecação documentada
-- [ ] `ModalidadeContrato` canônico: `'CLT' | 'INTERMITENTE' | 'FREE'`
-- [ ] `InventoryOperationType` manter: FARMACIA | SUPERMERCADO | HIPERMERCADO | LOJA_GERAL | ATACADO
-- [ ] Garantir `ContagemDetalhada`, `ViolacaoBloco`, `SectionAccuracyRecord`, `ErroAreaDetalhe` coerentes
-- [ ] Remover opcionalidade excessiva **somente** onde seguro (ou helpers de normalização)
+- [x] Definir campos canônicos (preferir snake_case da v2 onde o motor/reports já usam)
+- [x] Manter aliases legados (`area`/`area_nome`, `critica`/`area_critica`, `FREE`/`FREE_LANCE`) com deprecação documentada
+- [x] `ModalidadeContrato` canônico: `'CLT' | 'INTERMITENTE' | 'FREE'` (+ aliases)
+- [x] `InventoryOperationType` manter: FARMACIA | SUPERMERCADO | HIPERMERCADO | LOJA_GERAL | ATACADO
+- [x] Garantir `ContagemDetalhada`, `ViolacaoBloco`, `SectionAccuracyRecord`, `ErroAreaDetalhe` coerentes
+- [x] Helpers: `normalizeModalidade`, `buildViolacaoBloco`, getters dual-field; ContagemDetalhada com campos principais obrigatórios
 
 **Validação:** `tsc` + `npm test`  
 **Commit:** `refactor: consolidar tipos do modulo avaliacao (fase 2)`  
