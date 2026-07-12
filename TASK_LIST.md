@@ -175,14 +175,15 @@ Quando houver conflito entre documentos, adotar nesta ordem:
 ### Fase 4 — Motor de Avaliação
 **Objetivo:** path único de violações + assertion + líder + tipagem.
 
-- [ ] Wire `getLimitesBlocoArea` (ou fallback) → `detectarViolacoesBloco` no fluxo de `evaluateChecker` quando houver `contagensDetalhadas`
-- [ ] Unificar saída de `ViolacaoBloco` (preencher camel + snake para compat de testes/relatórios)
-- [ ] Assertion: qualidade **nunca 100** com violação (já existe — reforçar em testes)
-- [ ] Operação ≠ FARMACIA → `[]` imediato (já existe)
-- [ ] k exponencial por perfil (se aprovado) em vez de 1.5 fixo
-- [ ] Exclusão de líder: `role` LIDER + nome + parâmetro `leaderName?` opcional
-- [ ] Remover `@ts-nocheck` do service (se possível sem refactor enorme)
-- [ ] Decisão ICV: **default = manter 3 pilares** (não implementar scoreICV sem pedido)
+- [x] Wire fallback/`limites` → `detectarViolacoesBloco` quando há `contagensDetalhadas`
+- [x] Unificar saída de `ViolacaoBloco` via `buildViolacaoBloco` (dual-field)
+- [x] Assertion qualidade nunca 100 + testes
+- [x] Operação ≠ FARMACIA → `[]` imediato
+- [x] k exponencial por perfil (`qualityDecayK`)
+- [x] Exclusão de líder: `role` + nome + `leaderName?` → retorna `null`
+- [x] Removido `@ts-nocheck` do service
+- [x] ICV: 3 pilares mantidos (scoreICV não implementado)
+- [x] Baseline testes: **70** (era 63)
 
 **Validação:** `tsc` + `npm test`  
 **Commit:** `feat: unificar motor de violacoes de bloco e tipagem (fase 4)`  

@@ -144,7 +144,7 @@ const TANIA_SECTIONS: SectionAccuracyRecord[] = [
 // =============================================================================
 
 describe('relatorioOutput — Cenário 1: Everaldo (INTERMITENTE, zero erro, bloco alto)', () => {
-  const ev = evaluateChecker(EVERALDO, 'FARMACIA', 0, 5, 1, EVERALDO_VIOLACOES);
+  const ev = evaluateChecker(EVERALDO, 'FARMACIA', 0, 5, 1, EVERALDO_VIOLACOES)!;
   const report = generateInventExpIndividualReportText(
     'FARMACIA', ev, 8, 10, '01/01/2025', EVERALDO_SECTIONS,
   );
@@ -202,7 +202,7 @@ describe('relatorioOutput — Cenário 1: Everaldo (INTERMITENTE, zero erro, blo
 });
 
 describe('relatorioOutput — Cenário 2: Elen (FREELANCE, erros, bloco G 3 não-crítico)', () => {
-  const ev = evaluateChecker(ELEN, 'FARMACIA', 0, 5, 1, ELEN_VIOLACOES);
+  const ev = evaluateChecker(ELEN, 'FARMACIA', 0, 5, 1, ELEN_VIOLACOES)!;
   const report = generateInventExpIndividualReportText(
     'FARMACIA', ev, 2, 10, '01/01/2025', ELEN_SECTIONS,
   );
@@ -270,7 +270,7 @@ describe('relatorioOutput — Cenário 2: Elen (FREELANCE, erros, bloco G 3 não
 });
 
 describe('relatorioOutput — Cenário 3: Tania (CLT, MEDICAMENTOS área crítica)', () => {
-  const ev = evaluateChecker(TANIA, 'FARMACIA', 0, 5, 1, TANIA_VIOLACOES);
+  const ev = evaluateChecker(TANIA, 'FARMACIA', 0, 5, 1, TANIA_VIOLACOES)!;
   const report = generateInventExpIndividualReportText(
     'FARMACIA', ev, 5, 10, '01/01/2025', TANIA_SECTIONS,
   );
