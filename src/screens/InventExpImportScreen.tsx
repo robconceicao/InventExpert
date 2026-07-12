@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import React, { useMemo, useState } from "react";
@@ -17,29 +16,44 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CheckerFeedbackReport } from "../components/CheckerFeedbackReport";
-import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
+import {
+    getLimitesBlocoFallback,
+    INVENTORY_PROFILES,
+    type LimiteBlocoRow,
+} from "../config/inventoryEvalConfig";
+import { getLimitesBlocoArea } from "../repositories/limitesBlocoRepository";
+import { getSecaoLookup } from "../repositories/secaoLookupRepository";
 import {
     evaluateChecker,
     sortRanking,
 } from "../services/InventoryEvaluationService";
 import type {
+    ContagemDetalhada,
     InventoryCheckerEvaluation,
     InventoryOperationType,
+    SectionAccuracyRecord,
 } from "../types";
+import {
+    buildCatalogoIndex,
+    buildInventDspIndex,
+    resolverProduto,
+} from "../utils/catalogoLookup";
 import { shareCsvFile, shareTextFile } from "../utils/export";
-import { readFileAsCsvText } from "../utils/fileImport";
-import { readFileAsText } from "../utils/fileImport";
+import { readFileAsCsvText, readFileAsText } from "../utils/fileImport";
 import {
     generateInventExpGerencialReportText,
     generateInventExpIndividualReportText,
 } from "../utils/inventExpReports";
+import {
+    enriquecerSecoesComBloco,
+    extractProductivityTotals,
+    filtrarContagensDoConferente,
+    filtrarSecoesDoConferente,
+    parseProducaoSecaoCsv,
+    resolverAreasNasContagens,
+} from "../utils/inventoryImportParsers";
 import { parseInventoryCheckersCsv } from "../utils/parsers";
 import { parsePrcFile } from "../utils/prcParser";
-import { parseProducaoSecaoCsv } from "../utils/inventoryImportParsers";
-import { buildCatalogoIndex, buildInventDspIndex, resolverProduto } from "../utils/catalogoLookup";
-import { normalizarNomeArea } from "../utils/inventExpUtils";
-import { getSecaoLookup } from "../repositories/secaoLookupRepository";
-import type { ContagemDetalhada } from "../types";
 
 
 const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
@@ -56,11 +70,13 @@ export default function InventExpImportScreen() {
   );
   const [prcInfo, setPrcInfo] = useState<{ count: number; totalLines: number } | null>(null);
   const [prcContagens, setPrcContagens] = useState<ContagemDetalhada[]>([]);
-  
+
   const [cadastroText, setCadastroText] = useState("");
   const [inventDspText, setInventDspText] = useState("");
-  const [producaoSecao, setProducaoSecao] = useState<import("../types").SectionAccuracyRecord[]>([]);
-
+  const [producaoSecao, setProducaoSecao] = useState<SectionAccuracyRecord[]>([]);
+  /** Nome do líder (Acompanhamento) — excluído da avaliação automática */
+  const [leaderName, setLeaderName] = useState("");
+  const [processing, setProcessing] = useState(false);
 
   const handlePickFile = async () => {
     try {
@@ -108,6 +124,10 @@ export default function InventExpImportScreen() {
 
       setPrcContagens(allContagens);
       setPrcInfo({ count: arquivos.length, totalLines: allContagens.length });
+      Alert.alert(
+        "Arquivos .prc",
+        `✓ ${arquivos.length} arquivo(s) · ${allContagens.length.toLocaleString("pt-BR")} linhas válidas`,
+      );
     } catch {
       Alert.alert("Erro", "Não foi possível ler os arquivos .prc.");
     }
@@ -158,33 +178,100 @@ export default function InventExpImportScreen() {
       return;
     }
 
-    const catalogoIdx  = buildCatalogoIndex(cadastroText);
-    const inventDspIdx = buildInventDspIndex(inventDspText);
+    setProcessing(true);
+    try {
+      const { totalPecas, duracaoHoras } = extractProductivityTotals(rawText);
+      const catalogoIdx = buildCatalogoIndex(cadastroText);
+      const inventDspIdx = buildInventDspIndex(inventDspText);
 
-    const contagensAtualizadas = [...prcContagens];
-    for (const c of contagensAtualizadas) {
-      const prod = resolverProduto((c.produto_codigo as string), inventDspIdx, catalogoIdx);
-      c.produto_nome   = prod.nome;
-      c.produto_ean    = prod.ean;
-      c.produto_classe = prod.classe;
+      // --- lookups UMA vez (sem N+1) ---
+      const secaoRows = await getSecaoLookup(operationType);
+      const secaoMap = new Map<string, string>();
+      for (const s of secaoRows) {
+        secaoMap.set(s.codigo_secao, s.nome_area);
+        const stripped = s.codigo_secao.replace(/^0+/, "");
+        if (stripped) secaoMap.set(stripped, s.nome_area);
+      }
 
-      const secoes = await getSecaoLookup(operationType);
-      const secao = secoes.find(s => s.codigo_secao === (c.area_codigo as string));
-      const areaNome = secao ? secao.nome_area : c.area_codigo;
-      c.area_nome = normalizarNomeArea(areaNome || '');
+      let limites: LimiteBlocoRow[] = await getLimitesBlocoArea(operationType);
+      if (!limites.length) {
+        limites = getLimitesBlocoFallback(operationType);
+      }
+
+      // Resolve produto + área em todas as contagens .prc acumuladas
+      let contagensAtualizadas = resolverAreasNasContagens(
+        prcContagens,
+        secaoMap,
+      );
+      contagensAtualizadas = contagensAtualizadas.map((c) => {
+        const prod = resolverProduto(
+          c.produto_codigo,
+          inventDspIdx,
+          catalogoIdx,
+        );
+        return {
+          ...c,
+          produto_nome: prod.nome,
+          produto_ean: prod.ean,
+          produto_classe: prod.classe,
+        };
+      });
+      setPrcContagens(contagensAtualizadas);
+
+      const leader = leaderName.trim() || undefined;
+      const numConferentes = parsed.length;
+
+      const evaluated: InventoryCheckerEvaluation[] = [];
+      for (const item of parsed) {
+        const contagens = filtrarContagensDoConferente(
+          contagensAtualizadas,
+          item.matricula,
+          item.nome,
+        );
+        let secoesDoConferente = filtrarSecoesDoConferente(
+          producaoSecao,
+          item.matricula,
+          item.nome,
+        );
+        secoesDoConferente = enriquecerSecoesComBloco(
+          secoesDoConferente,
+          contagens,
+          limites,
+        );
+
+        const input = {
+          ...item,
+          contagensDetalhadas: contagens,
+          sectionAccuracy: secoesDoConferente,
+        };
+
+        const ev = evaluateChecker(
+          input,
+          operationType,
+          totalPecas,
+          duracaoHoras || 5,
+          numConferentes,
+          undefined,
+          secoesDoConferente,
+          limites,
+          leader,
+        );
+        if (ev) evaluated.push(ev);
+      }
+
+      setEvaluations(sortRanking(evaluated));
+      if (evaluated.length === 0) {
+        Alert.alert(
+          "Sem avaliações",
+          "Nenhum conferente restante após exclusão de líderes / filtros.",
+        );
+      }
+    } catch (e) {
+      console.warn("[InventExp] Erro ao processar avaliação:", e);
+      Alert.alert("Erro", "Falha ao processar a avaliação. Verifique os arquivos.");
+    } finally {
+      setProcessing(false);
     }
-    setPrcContagens(contagensAtualizadas);
-
-    for (const p of parsed) {
-       p.contagensDetalhadas = contagensAtualizadas.filter(c => c.matricula === p.matricula);
-    }
-
-    const evaluated = parsed.map((item) => {
-      const secoesDoConferente = producaoSecao.filter(s => (s as any).matricula === item.matricula);
-      return evaluateChecker(item, operationType, 0, 5, 1, [], secoesDoConferente);
-    }).filter((e) => e !== null) as InventoryCheckerEvaluation[];
-
-    setEvaluations(sortRanking(evaluated));
   };
 
   const resumo = useMemo(() => {
@@ -318,6 +405,7 @@ export default function InventExpImportScreen() {
             [
               "FARMACIA",
               "SUPERMERCADO",
+              "HIPERMERCADO",
               "ATACADO",
               "LOJA_GERAL",
             ] as InventoryOperationType[]
@@ -367,22 +455,46 @@ export default function InventExpImportScreen() {
           </View>
           {prcInfo && (
             <Text style={styles.prcPreview}>
-              ✓ {prcInfo.count} arquivo(s) .prc · {prcInfo.totalLines} linhas
+              ✓ {prcInfo.count} arquivo(s) .prc ·{" "}
+              {prcInfo.totalLines.toLocaleString("pt-BR")} linhas
             </Text>
           )}
-          {cadastroText ? <Text style={styles.prcPreview}>✓ cadastro.txt carregado</Text> : null}
-          {inventDspText ? <Text style={styles.prcPreview}>✓ invent_DSP.old carregado</Text> : null}
-          {producaoSecao.length > 0 ? <Text style={styles.prcPreview}>✓ PRODUÇÃO_SEÇÃO carregado ({producaoSecao.length} linhas)</Text> : null}
+          {cadastroText ? (
+            <Text style={styles.prcPreview}>✓ cadastro.txt carregado</Text>
+          ) : null}
+          {inventDspText ? (
+            <Text style={styles.prcPreview}>✓ invent_DSP.old carregado</Text>
+          ) : null}
+          {producaoSecao.length > 0 ? (
+            <Text style={styles.prcPreview}>
+              ✓ PRODUÇÃO_SEÇÃO carregado ({producaoSecao.length} linhas)
+            </Text>
+          ) : null}
+
+          <Text style={styles.subtitle}>
+            Líder da operação (excluído da avaliação automática)
+          </Text>
+          <TextInput
+            value={leaderName}
+            onChangeText={setLeaderName}
+            placeholder="Nome do líder (opcional)"
+            placeholderTextColor="#94A3B8"
+            style={styles.leaderInput}
+            autoCapitalize="characters"
+          />
         </View>
 
         <Pressable
           style={[
             styles.btnPrimary,
-            rawText.length === 0 && { opacity: 0.5 },
+            (rawText.length === 0 || processing) && { opacity: 0.5 },
           ]}
-          onPress={handleProcess}
+          onPress={() => void handleProcess()}
+          disabled={rawText.length === 0 || processing}
         >
-          <Text style={styles.btnTextWhite}>Processar Avaliação</Text>
+          <Text style={styles.btnTextWhite}>
+            {processing ? "Processando…" : "Processar Avaliação"}
+          </Text>
         </Pressable>
 
         <View style={styles.card}>
@@ -420,9 +532,15 @@ export default function InventExpImportScreen() {
             style={styles.textArea}
             textAlignVertical="top"
           />
-          <Pressable onPress={handleProcess} style={styles.btnPrimary}>
+          <Pressable
+            onPress={() => void handleProcess()}
+            style={[styles.btnPrimary, processing && { opacity: 0.5 }]}
+            disabled={processing}
+          >
             <Ionicons name="calculator-outline" size={20} color="#fff" />
-            <Text style={styles.btnTextWhite}>Processar Avaliação</Text>
+            <Text style={styles.btnTextWhite}>
+              {processing ? "Processando…" : "Processar Avaliação"}
+            </Text>
           </Pressable>
         </View>
 
@@ -695,6 +813,16 @@ const styles = StyleSheet.create({
     color: "#059669",
     fontWeight: "600",
     marginBottom: 4,
+  },
+  leaderInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: "#0f172a",
+    backgroundColor: "#F8FAFC",
   },
   textArea: {
     marginTop: 8,

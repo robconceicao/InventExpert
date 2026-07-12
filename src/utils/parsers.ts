@@ -6,6 +6,8 @@ import type {
   ReportBFarmacias,
   ReportBMercados,
   ReportBOutros,
+  ReportC,
+  ReportD,
 } from "../types";
 
 // ==========================
@@ -295,10 +297,63 @@ Fim Inventário: ${fmtTime(r.terminoInventario)}`;
 // Aliases mantidos para não quebrar imports de arquivos antigos
 /** @deprecated use formatReportBFarmacias */
 export const formatReportB = formatReportBFarmacias as unknown as (r: never) => string;
-/** @deprecated ReportC removido */
-export const formatReportC = (_r: unknown): string => "";
-/** @deprecated ReportD removido */
-export const formatReportD = (_r: unknown): string => "";
+export const formatReportC = (r: ReportC): string => {
+    return `*INVENTÁRIO: ${r.inventario_ref}*
+  
+  Loja/Cliente: ${fmtVal(r.cliente)}
+  Filial da loja: ${fmtVal(r.filial)}
+  Líder: ${fmtVal(r.lider)}
+  Quantidade Equipe: ${fmtVal(r.qtdEquipe)}
+  Quantidade de faltas: ${fmtVal(r.qtdFaltas)}
+  
+  *Mapeamento*
+  Início Contagem (Geral): ${fmtTime(r.inicioContagemGeral)}
+  Fim Contagem (Geral): ${fmtTime(r.fimContagemGeral)}
+  % do Inventário: ${fmtPct(r.pctInventario)}
+  
+  *Não Contados*
+  Início (zerados): ${fmtTime(r.naoContadosInicio)}
+  Total de Itens: ${fmtVal(r.naoContadosTotal)}
+  Fim (zerados): ${fmtTime(r.naoContadosFim)}
+  
+  *1º Divergência*
+  Início da divergência: ${fmtTime(r.div1Inicio)}
+  Itens Controlados: ${fmtVal(r.div1Controlados)}
+  Itens Negativos (perdas): ${fmtVal(r.div1Negativos)}
+  Itens Positivos (sobras): ${fmtVal(r.div1Positivos)}
+  Total de Itens: ${fmtVal(r.div1Total)}
+  Fim da divergência: ${fmtTime(r.div1Fim)}
+  
+  *2º Divergência*
+  Início da divergência: ${fmtTime(r.div2Inicio)}
+  Itens Negativos (perdas): ${fmtVal(r.div2Negativos)}
+  Itens Positivos (sobras): ${fmtVal(r.div2Positivos)}
+  Total de Itens: ${fmtVal(r.div2Total)}
+  Fim da divergência: ${fmtTime(r.div2Fim)}`;
+};
+
+export const formatReportD = (r: ReportD): string => {
+    return `*Acompanhamento de Inventário*
+  
+  Loja: ${fmtVal(r.loja)}
+  Nº Loja: ${fmtVal(r.lojaNum)}
+  Líder: ${fmtVal(r.lider)}
+  Qtd. Pessoas: ${fmtVal(r.qtdPessoas)}
+  Qtd. Peças: ${fmtVal(r.qtdPecas)}
+  % Inv.: ${fmtPct(r.pctInv)}
+  Chegada: ${fmtTime(r.chegada)}
+  Ini. Cont. Est.: ${fmtTime(r.inicioContagemEstoque)}
+  Fim Cont. Est.: ${fmtTime(r.terminoContagemEstoque)}
+  Ini. Cont. Loja: ${fmtTime(r.inicioContagemLoja)}
+  Fim Cont. Loja: ${fmtTime(r.terminoContagemLoja)}
+  Ini. Audit.: ${fmtTime(r.inicioAuditoria)}
+  Fim Audit.: ${fmtTime(r.terminoAuditoria)}
+  Ini. Diverg.: ${fmtTime(r.inicioDivergencia)}
+  Fim Diverg.: ${fmtTime(r.terminoDivergencia)}
+  Aval. Est.: ${fmtPct(r.avalEstoque)}
+  Aval. Loja: ${fmtPct(r.avalLoja)}
+  Fim Inventário: ${fmtTime(r.terminoInventario)}`;
+};
 
 // Número: BR 7.307,00 -> 7307 | 0,027 -> 0.027; US 1,770.65 -> 1770.65
 // Também lida com strings de percentagem "1,73%" -> 1.73
@@ -405,7 +460,14 @@ export const parseInventoryCheckersCsv = (
 
   let headerRowIndex = -1;
   let sep = /,/;
-  let col = { nome: -1, qtde: -1, qtde1a1: -1, produtividade: -1, erro: -1 };
+  let col = {
+    nome: -1,
+    qtde: -1,
+    qtde1a1: -1,
+    produtividade: -1,
+    erro: -1,
+    matricula: -1,
+  };
 
   // Scan the first 30 lines to find the header row
   for (let r = 0; r < Math.min(lines.length, 30); r++) {
@@ -420,23 +482,25 @@ export const parseInventoryCheckersCsv = (
       });
     };
 
-    const cNome = matchCol([/nome/i, /conferente/i, /colaborador/i]);
+    const cNome = matchCol([/nome/i, /conferente/i, /colaborador/i], /matricula|cpf/i);
+    const cMatricula = matchCol([/matricula/i, /^cpf$/i, /documento/i]);
     const cQtde = matchCol([/^qtde\.?\s*volu/i, /^qtde/i, /^quantidade/i, /^qtd/i, /total.*peca/i, /volumes/i], /1a1|unit/i);
     const cQtde1a1 = matchCol([/1\s*a\s*1/i, /1a1/i, /qtde1a1/i, /unit[aá]rio/i, /unit/i]);
     // Produtividade: evitar "horas trabalhadas" ou "estimadas"
     const cProdutividade = matchCol([/produtividade/i, /ritmo/i, /itens.*hora/i, /prod.*hora/i]);
     // Erro: erro absoluto
-    const cErro = matchCol([/^erro/i, /^erros/i, /^qtde.*erro/i, /divergencia/i], /%/); 
-    const cPctErro = matchCol([/%/i, /taxa.*erro/i]); 
+    const cErro = matchCol([/^erro/i, /^erros/i, /^qtde.*erro/i, /divergencia/i], /%/);
+    const cPctErro = matchCol([/%/i, /taxa.*erro/i]);
 
     // Diagnóstico flexível: tenta encontrar pelo menos Nome e Quantidade
     if (cNome >= 0 && cQtde >= 0) {
-      col = { 
-        nome: cNome, 
-        qtde: cQtde, 
-        qtde1a1: cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1, 
-        produtividade: cProdutividade >= 0 && cProdutividade !== cQtde ? cProdutividade : -1, 
-        erro: cErro >= 0 ? cErro : cPctErro 
+      col = {
+        nome: cNome,
+        qtde: cQtde,
+        qtde1a1: cQtde1a1 >= 0 && cQtde1a1 !== cQtde ? cQtde1a1 : -1,
+        produtividade: cProdutividade >= 0 && cProdutividade !== cQtde ? cProdutividade : -1,
+        erro: cErro >= 0 ? cErro : cPctErro,
+        matricula: cMatricula,
       };
 
       headerRowIndex = r;
@@ -466,9 +530,15 @@ export const parseInventoryCheckersCsv = (
       const produtividade = parseNumberBR(nonEmpties[7]);
       const erro = parseNumberBR(nonEmpties[8]);
       const qtde1a1 = nonEmpties.length > 13 ? parseNumberBR(nonEmpties[13]) : 0;
+      // Heurística Crystal Reports: [0]=evento, [1]=matrícula/CPF (dígitos)
+      const matricula =
+        nonEmpties[1] && /^\d{6,14}$/.test(nonEmpties[1])
+          ? nonEmpties[1]
+          : undefined;
 
       result.push({
         nome,
+        matricula,
         qtde: Math.max(0, qtde),
         qtde1a1: Math.max(0, qtde1a1),
         produtividade: Math.max(0, produtividade),
@@ -508,8 +578,15 @@ export const parseInventoryCheckersCsv = (
 
     if (qtde <= 0) continue;
 
+    const matriculaRaw =
+      col.matricula >= 0 ? (cells[col.matricula] ?? "").trim() : "";
+    const matricula = matriculaRaw
+      ? matriculaRaw.replace(/\D/g, "") || matriculaRaw
+      : undefined;
+
     result.push({
       nome,
+      matricula,
       qtde,
       qtde1a1: Math.min(qtde1a1, qtde),
       produtividade,

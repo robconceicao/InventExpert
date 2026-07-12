@@ -194,12 +194,14 @@ Quando houver conflito entre documentos, adotar nesta ordem:
 ### Fase 5 — Parsers & Importação
 **Objetivo:** import robusto, sem N+1, multi-.prc correto.
 
-- [ ] `getSecaoLookup` **uma vez** antes do loop de contagens
-- [ ] Carregar limites via repository **uma vez** e passar a `evaluateChecker`
-- [ ] Garantir `normalizarNomeArea` em todos os pontos de área (XLS + .prc)
-- [ ] Associar contagens a conferente por matrícula (e fallback nome se necessário)
-- [ ] Preview: `N arquivo(s) · X linhas` (já parcial — completar se faltar na UI)
-- [ ] Opcional: extrair `useInventExpImport` se a screen continuar > risco de regressão
+- [x] `getSecaoLookup` **uma vez** antes do loop de contagens
+- [x] Carregar limites via repository **uma vez** + fallback; passar a `evaluateChecker`
+- [x] `normalizarNomeArea` em PRODUÇÃO_SEÇÃO e resolução de áreas .prc
+- [x] Associar contagens/seções por matrícula (fallback nome)
+- [x] Preview: `N arquivo(s) · X linhas` + alert pós-load
+- [x] Campo `leaderName` + exclusão no processar
+- [x] Matrícula no parser CSV/XLS; helpers em `inventoryImportParsers`
+- [x] Hooks inventExp: **não extraídos** (lógica na screen, risco controlado)
 
 **Validação:** `tsc` + `npm test`  
 **Commit:** `feat: robustecer importacao prc/xls e wiring de limites (fase 5)`  
