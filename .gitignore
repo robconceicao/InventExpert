@@ -43,3 +43,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Local JDK for Android builds (do not commit)
+jdk17/
+
