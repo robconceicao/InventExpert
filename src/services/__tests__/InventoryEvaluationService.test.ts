@@ -4,7 +4,11 @@ import {
   detectarViolacoesBloco,
   isLeaderExcluded,
 } from "../InventoryEvaluationService";
-import { getLimitesBlocoFallback } from "../../config/inventoryEvalConfig";
+import {
+  getLimitesBlocoFallback,
+  getViolacoesBloco,
+  lookupLimiteBlocoArea,
+} from "../../config/inventoryEvalConfig";
 import type { ContagemDetalhada, InventoryCheckerInput, ViolacaoBloco } from "../../types";
 import { buildViolacaoBloco } from "../../types";
 
@@ -197,5 +201,40 @@ describe("isLeaderExcluded", () => {
         erro: 0,
       }),
     ).toBe(true);
+  });
+});
+
+describe("getViolacoesBloco / limites canônicos", () => {
+  it("FRENTE DE CAIXA tem limite 90% (migration)", () => {
+    const regra = lookupLimiteBlocoArea("FRENTE DE CAIXA");
+    expect(regra?.limite).toBe(90);
+  });
+
+  it("área desconhecida: warn + sem penalidade (não aplica default 20%)", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const v = getViolacoesBloco(
+      [{ area: "AREA_INEXISTENTE_XYZ", pctBloco: 99 }],
+      "FARMACIA",
+    );
+    expect(v).toHaveLength(0);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("buildViolacaoBloco preenche canônico e legado (dual-field)", () => {
+    const v = buildViolacaoBloco({
+      area_nome: "G 1",
+      real_pct: 40,
+      limite_pct: 15,
+      area_critica: false,
+    });
+    expect(v.area_nome).toBe("G 1");
+    expect(v.area).toBe("G 1");
+    expect(v.real_pct).toBe(40);
+    expect(v.pctBloco).toBe(40);
+    expect(v.limite_pct).toBe(15);
+    expect(v.limitePermitido).toBe(15);
+    expect(v.critica).toBe(false);
+    expect(v.area_critica).toBe(false);
   });
 });

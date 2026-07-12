@@ -333,3 +333,44 @@ describe('relatorioOutput — Cenário 3: Tania (CLT, MEDICAMENTOS área crític
     expect(report).toContain('⚠️ O que precisa melhorar');
   });
 });
+
+describe('relatorioOutput — Alerta formal com limite ≤ 5% (OTC)', () => {
+  const OTC_VIOL: ViolacaoBloco[] = [
+    {
+      area_nome: 'MEDICAMENTOS OTC',
+      limite_pct: 5,
+      real_pct: 12,
+      area_critica: true,
+      excesso_fator: 12 / 5,
+    },
+  ];
+
+  const checker: InventoryCheckerInput = {
+    nome: 'TESTE OTC',
+    matricula: '999',
+    modalidadeContrato: 'CLT',
+    qtde: 1000,
+    qtde1a1: 900,
+    produtividade: 800,
+    erro: 0,
+  };
+
+  const ev = evaluateChecker(checker, 'FARMACIA', 0, 5, 1, OTC_VIOL)!;
+  const report = generateInventExpIndividualReportText(
+    'FARMACIA',
+    ev,
+    1,
+    5,
+    '01/01/2025',
+  );
+
+  it('alerta formal aparece para limite 5% mesmo sem ser só "critica" do domínio ANVISA 0%', () => {
+    expect(report).toContain('🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA');
+    expect(report).toContain('MEDICAMENTOS OTC');
+  });
+
+  it('linguagem CLT no alerta OTC', () => {
+    expect(report).toContain('medida disciplinar');
+    expect(report).toContain('CLT');
+  });
+});

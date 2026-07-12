@@ -37,46 +37,45 @@ expo-speech              ← TTS (usar ttsService, não speak() direto)
 
 ## Estrutura de Arquivos — Módulos Principais
 
-### Avaliação (módulo principal, maior complexidade)
+### Avaliação (módulo principal, maior complexidade) — overhaul v2.1 (2026-07)
 
 ```
 src/
 ├── services/
-│   ├── InventoryEvaluationService.ts   ← motor de cálculo de score
-│   ├── AvaliacaoHistoricoService.ts    ← persistência AsyncStorage
-│   ├── avaliacaoEscalaSync.ts          ← integração com escala
-│   └── CheckerDBService.ts             ← BD local de conferentes
+│   └── InventoryEvaluationService.ts   ← motor de score (bloco por área, k por perfil, exclusão líder)
 │
 ├── config/
-│   └── inventoryEvalConfig.ts          ← pesos, metas, penalidades de bloco
+│   └── inventoryEvalConfig.ts          ← pesos, qualityDecayK, LIMITES_BLOCO_FARMACIA (fallback=migration)
+│
+├── repositories/
+│   ├── limitesBlocoRepository.ts       ← Supabase limites_bloco_area
+│   └── secaoLookupRepository.ts        ← Supabase secao_lookup
 │
 ├── utils/
-│   ├── prcParser.ts                    ← parser de arquivos .prc (NOVO)
-│   ├── catalogoLookup.ts               ← lookup produto: cadastro.txt/invent_DSP.old (NOVO)
-│   ├── inventExpReports.ts             ← gera texto Markdown/WhatsApp do relatório
-│   ├── inventExpReportHtml.ts          ← gera HTML/PDF do relatório
-│   ├── inventoryImportParsers.ts       ← adapters DPSP/Sysled/RMS + PRODUÇÃO_SEÇÃO.xls
-│   ├── excelParser.ts                  ← leitura genérica .xlsx/.xls via SheetJS
-│   ├── parsers.ts                      ← parseInventoryCheckersCsv(), parseInventoryFull()
-│   ├── fileImport.ts                   ← leitura de arquivos como texto/CSV
-│   ├── nomeMatching.ts                 ← fuzzy matching de nomes
-│   └── inventExpUtils.ts               ← normalizarNomeArea() e auxiliares gerais
-│
-├── hooks/inventExp/
-│   ├── useInventExpImport.ts           ← orquestra importação + avaliação + historização
-│   ├── useInventExpEvaluations.ts      ← perfil operacional, modalidades de contrato
-│   └── useInventExpExport.ts           ← orquestra exportação CSV/PDF/WhatsApp
+│   ├── prcParser.ts                    ← parser .prc 83/84 chars
+│   ├── catalogoLookup.ts               ← cadastro.txt + invent_DSP.old
+│   ├── inventExpReports.ts             ← Markdown/WhatsApp (alerta, seções, RAIO-X, nota, direção)
+│   ├── inventExpReportHtml.ts          ← HTML/PDF fiel ao texto
+│   ├── inventoryImportParsers.ts       ← PRODUÇÃO_SEÇÃO + match matrícula/nome + bloco%
+│   ├── inventExpUtils.ts               ← normalizarNomeArea()
+│   ├── parsers.ts                      ← parseInventoryCheckersCsv() (+ matrícula)
+│   ├── fileImport.ts                   ← leitura arquivos
+│   └── export.ts                       ← CSV/texto/PDF (sharePdfFromHtml)
 │
 ├── components/
-│   └── CheckerFeedbackReport.tsx       ← componente visual de feedback individual
+│   └── CheckerFeedbackReport.tsx       ← card visual (alerta + seções)
 │
 ├── screens/
-│   ├── InventExpImportScreen.tsx       ← tela principal: importação + avaliação + exportação
-│   └── CheckersScreen.tsx             ← CRUD de conferentes e níveis de experiência
+│   ├── InventExpImportScreen.tsx       ← import multi-.prc + avaliação + export
+│   └── LeaderEvaluationDashboard.tsx   ← ranking / simulações (incl. ATACADO)
 │
 └── types/
-    └── index.ts                        ← todos os tipos e interfaces do módulo
+    └── index.ts                        ← tipos + helpers dual-field (buildViolacaoBloco, etc.)
 ```
+
+> Fluxo de importação/orquestração vive em `InventExpImportScreen` (hooks inventExp
+> não foram extraídos na v2.1). Services legados AvaliacaoHistorico/CheckerDB não
+> fazem parte do path atual.
 
 ### Banco de Dados (Supabase)
 
@@ -85,9 +84,9 @@ supabase/
 ├── schema_v2.sql                              ← schema principal
 ├── functions.sql                              ← views e functions de score
 ├── migration_campos_adicionais.sql            ← campos extras (codigo_loja, segmento)
-├── migration_limites_bloco_area.sql           ← limites de bloco por área (NOVO)
-├── migration_limites_bloco_area_patch1.sql    ← 3 áreas adicionais (NOVO)
-├── migration_secao_lookup.sql                 ← lookup seção código → nome (NOVO)
+├── migration_limites_bloco_area.sql           ← limites de bloco por área
+├── migration_limites_bloco_area_patch1.sql    ← upsert seed + alias OTC + RLS
+├── migration_secao_lookup.sql                 ← lookup seção código → nome
 ├── fix_security_definer_views.sql
 └── fix_function_search_path.sql
 ```
@@ -238,12 +237,16 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Estado atual:** 58 testes passando em 4 arquivos de teste.
+**Baseline v2.1 (2026-07):** **≥70 testes / 6 suites** · `tsc --noEmit` = 0 erros.
 
 Arquivos de teste relevantes:
 ```
-src/utils/__tests__/prcParser.integration.test.ts   ← parser .prc + catalogoLookup
-src/utils/__tests__/relatorioOutput.test.ts          ← 3 cenários completos de relatório
+src/services/__tests__/InventoryEvaluationService.test.ts  ← motor, líder, violações, dual-field
+src/utils/__tests__/prcParser.integration.test.ts          ← parser .prc + catalogoLookup + normalizarNomeArea
+src/utils/__tests__/relatorioOutput.test.ts                ← Everaldo / Elen / Tania + alerta OTC ≤5%
+src/utils/__tests__/parseInventoryCheckersCsv.test.ts
+src/services/__tests__/AuditoriaAtribuicaoService.test.ts
+src/services/__tests__/AuditoriaReconciliacaoService.test.ts
 ```
 
 **Antes de encerrar qualquer task:** rodar `tsc --noEmit` e confirmar
@@ -275,12 +278,14 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 
 | Decisão | Justificativa |
 |---------|---------------|
-| Limites de bloco em tabela Supabase (não hardcoded) | Facilita ajustes sem deploy |
-| Ausência de registro = sem penalidade de bloco | Outros setores (supermercado) não penalizados |
+| Limites em Supabase + fallback local = seed migration | Offline e remoto alinhados; FRENTE DE CAIXA 90% |
+| Ausência de registro = warn + sem penalidade (nunca default 20%) | Não punir área desconhecida silenciosamente |
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
 | "Perfil Operacional" removido do relatório | Baseado em histórico: incoerente com classificação do evento atual |
-| Alerta de área crítica antes de qualquer seção | Visibilidade máxima para ocorrência grave |
+| Alerta formal se crítica OU limite ≤ 5% | Visibilidade para OTC e áreas ANVISA |
 | catalogoLookup prefere invent_DSP sobre cadastro.txt | invent_DSP tem EAN real e classificação legal |
+| qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
+| Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
 
 ---
 

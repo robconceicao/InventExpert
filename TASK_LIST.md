@@ -229,19 +229,17 @@ Quando houver conflito entre documentos, adotar nesta ordem:
 ---
 
 ### Fase 7 — Testes & Verificação Final
-**Objetivo:** baseline ≥ 63, zero regressão, docs sincronizados.
+**Objetivo:** baseline ≥ 70, zero regressão, docs sincronizados.
 
-- [ ] Atualizar/estender testes para novos textos de alerta (limite ≤ 5)
-- [ ] Teste: área desconhecida → warn + sem penalidade
-- [ ] Teste: FRENTE DE CAIXA 90% (EVERALDO 70.5% sem violação — já existe)
-- [ ] Teste: multi-modelo `ViolacaoBloco` unificado
-- [ ] `npx tsc --noEmit` → 0
-- [ ] `npm test` → todos verdes
-- [ ] Atualizar CLAUDE.md (baseline testes, gaps fechados, arquivos fantasma removidos da lista se não existirem)
-- [ ] Atualizar ANTIGRAVITY_CONTEXT (baseline 63, status consolidação)
+- [x] Testes alerta limite ≤ 5 (OTC)
+- [x] Teste: área desconhecida → warn + sem penalidade
+- [x] Teste: FRENTE DE CAIXA 90% + dual-field `buildViolacaoBloco`
+- [x] `npx tsc --noEmit` → 0
+- [x] `npm test` → todos verdes
+- [x] CLAUDE.md + ANTIGRAVITY_CONTEXT sincronizados (baseline, estrutura real)
 
 **Commit:** `test: fechar overhaul avaliacao v2.1 + sincronizar docs`  
-**Parar e aguardar aprovação final.**
+**Overhaul v2.1 ENCERRADO** após este commit.
 
 ---
 

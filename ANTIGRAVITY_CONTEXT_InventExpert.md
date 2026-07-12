@@ -63,13 +63,82 @@ supabase/migrations/                    ← inclui migration_limites_bloco_area.
 
 ---
 
-## 3. Status Atual — Módulo Avaliação (CONCLUÍDO)
+## 3. Mapa de Telas — 12 abas (RootTabs.tsx)
 
-O módulo passou por um overhaul completo, finalizado em junho/2026:
+| Tab | Tela | Função |
+|---|---|---|
+| ReportA | `ReportAScreen` | Relatório operacional padrão + sistema de avisos/alarme |
+| ReportB | `ReportBScreen` | Relatório farmácias/mercados |
+| Attendance | `AttendanceScreen` | Controle de presença |
+| Escala | `EscalaDashboardScreen` | Dashboard de escala |
+| InventExp | `InventExpImportScreen` | Importação de contagens + avaliação pós-importação |
+| InventExpEvolution | `InventExpEvolutionScreen` | Evolução histórica de conferentes |
+| Management | `ManagementScreen` | Clientes, colaboradores, inventários |
+| Scanner | `ScannerScreen` | Scanner de código de barras (só mobile) |
+| Acompanhamento | `AcompanhamentoScreen` | Acompanhamento em tempo real da operação |
+| ReportFarmaconde | `ReportFarmacondeScreen` | Relatório Farmaconde |
+| Checkers | `CheckersScreen` | Avaliação de conferentes (LeaderEvaluationDashboard) |
+| InventoryDivergence | `InventoryDivergenceScreen` | Divergências de inventário |
+
+> Toda a navegação requer autenticação Supabase. Usuário não autenticado vê `AuthScreen`.
+
+### Notas por módulo
+
+**ReportAScreen** — contém o sistema de avisos sonoros/visuais (`alarmActive`,
+banners, sons via expo-av). O botão de "Auditoria IA" foi removido em sessão
+anterior; o restante do sistema de alarme está 100% intacto.
+
+**AcompanhamentoScreen** — fornece o `leaderName` usado pelo módulo Avaliação
+para excluir o líder das avaliações automáticas.
+
+**InventExpImportScreen** — ponto de entrada dos arquivos `.xls` e `.prc`;
+filtra `null` retornado por `evaluateChecker` quando o conferente é o líder.
+
+**LeaderEvaluationDashboard** — simulações, ranking da equipe e geração de
+avaliações via IA pelo gestor; também suporta o perfil ATACADO.
+
+**ManagementScreen** — arquitetura `controller → service → repository` via
+`src/modules/`; queries Supabase nunca direto nas telas.
+
+### Arquitetura de módulos (`src/modules/`)
+```
+src/modules/
+├── clientes/          ← inclui segmentação por tipo de operação (ATACADO adicionado)
+├── colaboradores/
+├── inventarios/       ← validação de transações atualizada para ATACADO
+└── */repository.ts    ← único ponto de acesso ao Supabase por módulo
+```
+
+### Perfis de operação disponíveis (`inventoryEvalConfig.ts`)
+
+| Perfil | Peso Qualidade | Peso Produtividade | k (decaimento) | Meta prod. |
+|---|---|---|---|---|
+| `FARMACIA` | 55% | 20% | 1.5 (rigoroso) | 800 itens/h |
+| `SUPERMERCADO` | 52% | 28% | 0.8 (tolerante) | 1200 itens/h |
+| `LOJA_GERAL` | 50% | 25% | 1.1 (médio) | 1000 itens/h |
+| `ATACADO` | 45% | 40% | — | 1500 itens/h |
+
+**Fórmula de qualidade (exponencial):**
+```
+scoreQualidade = 100 × e^(-k × pctErro)
+```
+Não usar a fórmula linear antiga `100 - pctErro × 100`.
+
+**Nível de experiência do conferente:**
+`novato (×0.70)` → `junior (×0.85)` → `pleno (×1.00)` → `senior (×1.15)` → `expert (×1.30)`
+
+---
+
+## 4. Status Atual — Módulo Avaliação (CONSOLIDADO v2.1 — 2026-07)
+
+Overhaul consolidado em fases 0–7 (tipos, config, motor, import, relatórios, docs):
 
 - **`tsc --noEmit` → 0 erros**
-- **58/58 testes passando em 4 arquivos de teste**
-- Validação end-to-end pendente apenas com arquivo `.prc` real (ver §5)
+- **≥70 testes / 6 suites** verdes (baseline pós-Fase 7)
+- Fallback de limites alinhado à migration (`FRENTE DE CAIXA` 90%, etc.)
+- Path único de violações: manuais → .prc+limites → seções
+- PDF individual via `inventExpReportHtml` + expo-print
+- Validação end-to-end com `.prc` real de campo ainda recomendada (ver §5)
 
 ### Funcionalidades implementadas
 
@@ -116,7 +185,7 @@ O módulo passou por um overhaul completo, finalizado em junho/2026:
 
 ---
 
-## 4. Outros módulos / trabalho recente
+## 5. Outros módulos / trabalho recente
 
 - **Google TTS** integrado (voz neural pt-BR) para avisos/alarmes, com expo-av.
 - **Relatórios PDF** via expo-print espelhando exatamente o texto dos relatórios.
@@ -128,45 +197,39 @@ O módulo passou por um overhaul completo, finalizado em junho/2026:
 
 ---
 
-## 5. Pendências conhecidas (prioridade imediata)
+## 6. Pendências conhecidas (prioridade imediata)
 
 1. **Validação end-to-end com `.prc` real** — testes automatizados cobrem a
-   lógica, mas falta passar um `.prc` real do inventário L2395 pela tela de
-   importação e conferir o RAIO-X (seção + produto) no relatório gerado.
-   Confirmar tratamento da variante de 84 chars e resolução de produto no
-   `catalogoLookup`.
-2. **Smoke test do APK release** em dispositivo físico após o build.
-3. Conferir se o de-para de áreas (`F CAIXA` → `FRENTE DE CAIXA`,
-   `GELADEIRAS CAIXA` → `GELADEIRAS FRENTE CAIXA`) cobre todos os XLS reais
-   recebidos em campo — qualquer área sem match deve disparar `console.warn`,
-   nunca falhar silenciosamente.
+   lógica; falta smoke com arquivo real de inventário (ex. L2395) na tela de
+   importação e conferência do RAIO-X no relatório.
+2. **Popular `secao_lookup`** com códigos reais por evento (tabela existe; seed vazio).
+3. **Smoke test do APK release** em dispositivo físico após o build.
+4. Expandir aliases de `normalizarNomeArea` conforme XLS reais de campo
+   (área sem match em limites → `console.warn`, sem penalidade).
 
 ---
 
-## 6. Backlog de melhorias (para o Antigravity planejar)
+## 7. Backlog de melhorias (próximas rodadas)
 
-Itens candidatos à próxima rodada — gerar Implementation Plan antes de codar:
+Itens candidatos — gerar Implementation Plan antes de codar:
 
-1. **Perfil de operação ATACADO** no módulo de avaliação
-   (config → types → service → hooks → UI → PDF → testes).
+1. ~~**Perfil ATACADO**~~ — **feito** (config + UI + pesos).
 2. **Sistema de evolução do conferente** — tracking diário/quinzenal/mensal
    com histórico comparativo entre inventários.
-3. **Robustez de parsers** — revisar index drift, fuzzy name matching e
-   tratamento de rejeição em `Promise.all` (itens do audit anterior).
-4. **UX da tela de importação** — feedback de progresso ao processar múltiplos
-   `.prc` e validação prévia de estrutura dos arquivos.
-5. **Dashboard de qualidade por loja/operação** agregando avaliações.
+3. **Extrair hooks inventExp** (opcional) se a screen crescer demais.
+4. **Dashboard de qualidade por loja/operação** agregando avaliações.
+5. **scoreICV / 4º pilar** — só se o negócio priorizar (hoje: 3 pilares).
 
 ---
 
-## 7. Regras de trabalho para agentes
+## 8. Regras de trabalho para agentes
 
 - **Nunca codar sem plano aprovado.** Gerar Implementation Plan + Execution
   Task List (`TASK_LIST.md` na raiz) antes de qualquer edição.
 - Ler `CLAUDE.md` antes de tocar em qualquer arquivo.
 - Migrations sempre novas; nunca editar as existentes.
 - Rodar `tsc --noEmit` e a suíte Jest completa após cada fase — o baseline é
-  **0 erros TS / 58 testes verdes**; nenhuma regressão é aceitável.
+  **0 erros TS / ≥70 testes verdes (6 suites)**; nenhuma regressão é aceitável.
 - **Commit obrigatório ao final de cada fase.** Nenhuma fase é considerada
   concluída sem um `git commit` com mensagem descritiva do que foi feito.
   O agente **não inicia a próxima fase** sem confirmar ao Roberto que o commit
