@@ -158,12 +158,13 @@ Quando houver conflito entre documentos, adotar nesta ordem:
 ### Fase 3 — Config & Utils
 **Objetivo:** uma única fonte de limites + utils estáveis.
 
-- [ ] Espelhar seed da migration em fallback local completo (offline / Supabase vazio)
-- [ ] Corrigir `getViolacoesBloco`: área desconhecida → **warn + skip**, nunca limite default 20
-- [ ] Alinhar FRENTE DE CAIXA = 90%, GELADEIRAS FRENTE CAIXA = 100% (migration)
-- [ ] Incluir áreas da migration ausentes no hardcoded (AVARIAS, TERMOLÁBEIS, CAIXAS, G1–G10, etc.)
-- [ ] Revisar `normalizarNomeArea` (aliases atuais ok; expandir só com evidência de XLS real)
-- [ ] `prcParser` / `catalogoLookup`: smoke review; sem mudança se testes cobrem
+- [x] Espelhar seed da migration em fallback local completo (offline / Supabase vazio)
+- [x] Corrigir `getViolacoesBloco`: área desconhecida → **warn + skip**, nunca limite default 20
+- [x] Alinhar FRENTE DE CAIXA = 90%, GELADEIRAS FRENTE CAIXA = 100% (migration)
+- [x] Incluir áreas da migration ausentes no hardcoded (AVARIAS, TERMOLÁBEIS, CAIXAS, G1–G10, etc.)
+- [x] Revisar `normalizarNomeArea` (+ aliases OTC)
+- [x] `getLimitesBlocoFallback` / `lookupLimiteBlocoArea` / `qualityDecayK` por perfil
+- [x] `prcParser` / `catalogoLookup`: smoke review OK (sem mudança)
 
 **Validação:** `tsc` + `npm test`  
 **Commit:** `fix: alinhar limites de bloco e regras de config (fase 3)`  
