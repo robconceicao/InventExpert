@@ -64,7 +64,9 @@ de desempenho de conferentes e geração de relatórios individuais.
 **Navegação:** React Navigation
 **Build:** Expo (EAS Build ou local via Gradle)
 **Testes:** Jest + React Native Testing Library
-**Web (paridade):** inventexpert-web (Vite + React), sem Scanner
+**Web (paridade):** inventexpert-web (Vite + React), sem Scanner  
+**Orientações web (acesso público + deploy + paridade):**  
+`../inventexpert-web/docs/ORIENTACOES_WEB.md`
 
 ---
 
