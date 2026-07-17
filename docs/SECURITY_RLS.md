@@ -116,3 +116,22 @@ INSERT INTO public.app_profiles (user_id, role)
 VALUES ('<auth.users.id>', 'LIDER')
 ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role;
 ```
+
+## Teste OPERADOR vs LIDER (2026-07-17)
+
+User de teste: `robtconceicao@gmail.com` → perfil final **`LIDER`**.
+
+Simulação com `SET LOCAL ROLE authenticated` + `request.jwt.claim.sub`:
+
+| Papel | SELECT core | INSERT clientes | UPDATE inventarios | INSERT produtividade |
+|-------|-------------|-----------------|--------------------|----------------------|
+| **LIDER** | OK (count≥1) | OK | OK (rows=1) | OK |
+| **OPERADOR** | OK (count≥1) | **BLOCKED** | **rows=0** | **BLOCKED** |
+
+Dados seed de teste (podem apagar se quiser):
+
+- cliente `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa` — Loja Teste Security  
+- colaborador `bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb`  
+- inventário `cccccccc-cccc-cccc-cccc-cccccccccccc`  
+
+**Nota app:** gates de UI (Home → Gestão/Escala, publish InventExp) usam o mesmo critério LIDER/ADMIN.

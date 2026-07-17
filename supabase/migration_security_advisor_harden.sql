@@ -137,23 +137,15 @@ CREATE POLICY "inventarios_select_staff"
   ON public.inventarios FOR SELECT TO authenticated
   USING (public.is_staff_reader());
 
+-- Escrita só LIDER/ADMIN (created_by é audit trail, não bypass de escrita)
 CREATE POLICY "inventarios_insert_staff"
   ON public.inventarios FOR INSERT TO authenticated
-  WITH CHECK (
-    public.is_staff_writer()
-    OR (auth.uid() IS NOT NULL AND created_by = auth.uid())
-  );
+  WITH CHECK (public.is_staff_writer());
 
 CREATE POLICY "inventarios_update_staff"
   ON public.inventarios FOR UPDATE TO authenticated
-  USING (
-    public.is_staff_writer()
-    OR (auth.uid() IS NOT NULL AND created_by = auth.uid())
-  )
-  WITH CHECK (
-    public.is_staff_writer()
-    OR (auth.uid() IS NOT NULL AND created_by = auth.uid())
-  );
+  USING (public.is_staff_writer())
+  WITH CHECK (public.is_staff_writer());
 
 CREATE POLICY "inventarios_delete_staff"
   ON public.inventarios FOR DELETE TO authenticated
