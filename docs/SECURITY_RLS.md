@@ -76,23 +76,38 @@ Para endurecer: criar perfil `OPERADOR` para todos os users e promover líderes 
 1. `migration_rls_authenticated_only.sql` — removeu acesso `anon`/`public`
 2. `migration_gerar_escala_lock_patch1.sql` — lock + auth em `gerar_escala`
 3. `migration_field_events_and_roles.sql` — `field_events`, `app_profiles`
-4. **`migration_security_advisor_harden.sql`** — Always True → role helpers; listar_escala; HIBP via API/docs
+4. **`migration_security_advisor_harden.sql`** — Always True → role helpers; listar_escala; HIBP via API/docs  
+5. **`migration_security_advisor_cleanup.sql`** — REVOKE anon em views/helpers; FORCE RLS; bootstrap `app_profiles` no signup
 
 ---
 
 ## Checklist Security Advisor
 
-- [x] RLS Always True nas 5 tabelas core → `is_staff_reader/writer()` (0 policies `true` no core)
-- [x] Public execute SECURITY DEFINER (`listar_escala`) → só `authenticated` + `service_role`
-- [ ] Leaked Password Protection → **requer Supabase Pro** (402 no Free)
-- [x] `search_path` em `listar_escala` / `gerar_escala` → `public, pg_temp`
-- [ ] Validar no Dashboard Security Advisor (UI)
-- [ ] Testar com users OPERADOR vs LIDER
+- [x] RLS Always True nas 5 tabelas core → `is_staff_reader/writer()` (**0** policies `true` em `public`)
+- [x] Public execute SECURITY DEFINER (`listar_escala` / `gerar_escala`) → só `authenticated` + `service_role`
+- [x] REVOKE `anon` em `vw_produtividade_consolidada` e helpers
+- [x] FORCE ROW LEVEL SECURITY nas 7 tabelas app
+- [x] Trigger signup → `app_profiles(OPERADOR)`
+- [ ] Leaked Password Protection → **requer Supabase Pro** (HTTP 402 no Free)
+- [ ] Validar no Dashboard Security Advisor (UI refresh)
+- [ ] Testar login OPERADOR (só leitura) vs LIDER (escrita)
+
+## Verificação remota (2026-07-17 pós-cleanup)
+
+| Check | Valor |
+|-------|-------|
+| `always_true_any` | 0 |
+| `vw_anon_grants` | 0 |
+| `helper_anon_grants` | 0 |
+| `escala_fn_anon` | 0 |
+| `force_rls_count` | 7 |
+| `has_signup_trigger` | true |
+| REST anon `clientes` / view / `produtividade` | 401 |
 
 ## Backup
 
 - Snapshot de policies pré-harden: `docs/backup_rls_policies_20260717.json`
-- Migration: `supabase/migration_security_advisor_harden.sql`
+- Migrations: `migration_security_advisor_harden.sql`, `migration_security_advisor_cleanup.sql`
 
 ## Promover utilizador
 
