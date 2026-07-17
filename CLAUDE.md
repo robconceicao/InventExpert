@@ -5,6 +5,54 @@ Atualizar sempre que houver mudança arquitetural relevante.
 
 ---
 
+## Paridade Mobile ↔ Web (obrigatório)
+
+Existe versão web em repositório irmão: **`inventexpert-web`**
+(`C:\Users\robtc\inventexpert-web` ou sibling `../inventexpert-web`).
+
+**Regra:** toda atualização de lógica de negócio neste app mobile deve ser
+**propagada para a web** no mesmo ciclo (release/PR).
+
+### O que sincronizar automaticamente
+
+A partir do **mobile** (recomendado):
+
+```bash
+npm run web:sync         # propaga módulos compartilhados → inventexpert-web
+npm run web:parity       # só verifica se a web está alinhada
+```
+
+Ou na pasta web:
+
+```bash
+cd ../inventexpert-web
+npm run parity:sync
+npm test
+npm run smoke:eval
+```
+
+Ver: `inventexpert-web/docs/PARIDADE_MOBILE_WEB.md` e
+`inventexpert-web/scripts/parity-manifest.json`.
+
+O CI da web faz **checkout do mobile** e falha se houver divergência
+(`PARITY_STRICT=1`).
+
+### O que NÃO vai para a web
+
+- Módulo **Scanner**
+- UI React Native / Expo Speech / DocumentPicker nativo
+
+### Checklist do agente ao mudar o mobile
+
+1. Implementar + testar no mobile (`npm test`, regras de avaliação).
+2. Se tocou motor, parsers, config, relatórios inventexp, authzRules ou SQL Supabase:
+   - `npm run web:sync` **obrigatório** no mesmo ciclo (depois validar testes na web).
+3. Migrations novas: documentar impacto na web (`docs/RLS_POLICIES.md` / checklist).
+4. Não deixar score/relatório divergente entre plataformas.
+5. Commitar alterações na **web** (arquivos sincronizados) — o CI rejeita main divergente.
+
+---
+
 ## Visão Geral do Projeto
 
 **InventExpert** é um app mobile de gerenciamento de inventário físico,
@@ -12,10 +60,11 @@ desenvolvido em React Native + Expo + TypeScript. Voltado para operações
 de campo (farmácias, supermercados, hipermercados), com foco em avaliação
 de desempenho de conferentes e geração de relatórios individuais.
 
-**Backend:** Supabase (PostgreSQL + Auth + Storage)
+**Backend:** Supabase (PostgreSQL + Auth + Storage) — **mesmo projeto da web**
 **Navegação:** React Navigation
 **Build:** Expo (EAS Build ou local via Gradle)
 **Testes:** Jest + React Native Testing Library
+**Web (paridade):** inventexpert-web (Vite + React), sem Scanner
 
 ---
 

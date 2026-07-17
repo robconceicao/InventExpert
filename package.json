@@ -12,7 +12,9 @@
     "predeploy": "npx expo export -p web",
     "deploy": "node ./scripts/inject-base.js && copy dist\\index.html dist\\404.html && gh-pages --nojekyll --dotfiles -d dist",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "web:parity": "node scripts/web-parity.mjs check",
+    "web:sync": "node scripts/web-parity.mjs sync"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
