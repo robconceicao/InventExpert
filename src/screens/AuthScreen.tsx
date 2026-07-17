@@ -58,12 +58,12 @@ export default function AuthScreen() {
     }
   };
 
+  /** Min 8 chars, letter + digit. Max 72 (bcrypt practical limit). No max-8 cap. */
   const validatePassword = (pass: string) => {
     const hasLetter = /[a-zA-Z]/.test(pass);
     const hasNumber = /[0-9]/.test(pass);
-    const hasSymbol = /[^a-zA-Z0-9]/.test(pass);
-    const isRightLength = pass.length > 0 && pass.length <= 8;
-    return hasLetter && hasNumber && hasSymbol && isRightLength;
+    const isRightLength = pass.length >= 8 && pass.length <= 72;
+    return hasLetter && hasNumber && isRightLength;
   };
 
   const handleSignUp = async () => {
@@ -79,7 +79,7 @@ export default function AuthScreen() {
 
     if (!validatePassword(password)) {
       setPasswordError(
-        "A senha deve ter no máximo 8 caracteres e conter letras, números e símbolos."
+        "A senha deve ter no mínimo 8 caracteres e conter letras e números."
       );
       return;
     }
@@ -142,7 +142,7 @@ export default function AuthScreen() {
         <View style={styles.card}>
           <View style={styles.header}>
             <Image
-              source={require("../../assets/images/icon.png")}
+              source={require("../../assets/images/icon.jpg")}
               style={styles.logo}
             />
             <Text style={styles.title}>InventExpert</Text>
