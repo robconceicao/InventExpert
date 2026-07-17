@@ -64,9 +64,12 @@ de desempenho de conferentes e geração de relatórios individuais.
 **Navegação:** React Navigation
 **Build:** Expo (EAS Build ou local via Gradle)
 **Testes:** Jest + React Native Testing Library
-**Web (paridade):** inventexpert-web (Vite + React), sem Scanner  
-**Orientações web (acesso público + deploy + paridade):**  
-`../inventexpert-web/docs/ORIENTACOES_WEB.md`
+**Web pública (mesmo app, responsivo):**  
+https://robconceicao.github.io/inventexpert-web/  
+= export Expo web do **InventExpert** (não um segundo produto).  
+Scanner: stub `ScannerScreen.web.tsx`. Deploy: workflow Pages no repo  
+`inventexpert-web` (checkout deste app + `expo export -p web`).  
+**Orientações:** `../inventexpert-web/docs/ORIENTACOES_WEB.md`
 
 ---
 
