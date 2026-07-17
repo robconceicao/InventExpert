@@ -278,6 +278,8 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 
 | Decisão | Justificativa |
 |---------|---------------|
+| RLS core via `is_staff_reader/writer()` + `app_profiles` | Security Advisor “Always True”; sem multi-tenant `user_id` nas tabelas core — ver `docs/SECURITY_RLS.md` |
+| `listar_escala`/`gerar_escala` sem EXECUTE para anon/PUBLIC | SECURITY DEFINER só para `authenticated` + `service_role` |
 | Limites em Supabase + fallback local = seed migration | Offline e remoto alinhados; FRENTE DE CAIXA 90% |
 | Ausência de registro = warn + sem penalidade (nunca default 20%) | Não punir área desconhecida silenciosamente |
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
@@ -298,3 +300,5 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 - ❌ Não usar linguagem de vínculo empregatício no relatório FREE
 - ❌ Não processar apenas um .prc — sempre acumular todos os arquivos selecionados
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
+- ❌ Não recriar policies `USING (true)` / `WITH CHECK (true)` nas tabelas core
+- ❌ Não conceder `EXECUTE` de `gerar_escala`/`listar_escala` a `anon` ou `PUBLIC`

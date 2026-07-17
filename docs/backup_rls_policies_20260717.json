@@ -1,0 +1,146 @@
+﻿[
+    {
+        "tablename":  "app_profiles",
+        "policyname":  "ap_insert_own",
+        "roles":  "{authenticated}",
+        "cmd":  "INSERT",
+        "qual":  null,
+        "with_check":  "((user_id = auth.uid()) AND (role = \u0027OPERADOR\u0027::text))"
+    },
+    {
+        "tablename":  "app_profiles",
+        "policyname":  "ap_select_own",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "(user_id = auth.uid())",
+        "with_check":  null
+    },
+    {
+        "tablename":  "app_profiles",
+        "policyname":  "ap_update_own",
+        "roles":  "{authenticated}",
+        "cmd":  "UPDATE",
+        "qual":  "(user_id = auth.uid())",
+        "with_check":  "((user_id = auth.uid()) AND (role = ( SELECT p.role\n   FROM app_profiles p\n  WHERE (p.user_id = auth.uid()))))"
+    },
+    {
+        "tablename":  "clientes",
+        "policyname":  "authenticated_select_clientes",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "true",
+        "with_check":  null
+    },
+    {
+        "tablename":  "clientes",
+        "policyname":  "authenticated_write_clientes",
+        "roles":  "{authenticated}",
+        "cmd":  "ALL",
+        "qual":  "true",
+        "with_check":  "true"
+    },
+    {
+        "tablename":  "colaboradores",
+        "policyname":  "authenticated_select_colaboradores",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "true",
+        "with_check":  null
+    },
+    {
+        "tablename":  "colaboradores",
+        "policyname":  "authenticated_write_colaboradores",
+        "roles":  "{authenticated}",
+        "cmd":  "ALL",
+        "qual":  "true",
+        "with_check":  "true"
+    },
+    {
+        "tablename":  "escala",
+        "policyname":  "authenticated_select_escala",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "true",
+        "with_check":  null
+    },
+    {
+        "tablename":  "escala",
+        "policyname":  "authenticated_write_escala",
+        "roles":  "{authenticated}",
+        "cmd":  "ALL",
+        "qual":  "true",
+        "with_check":  "true"
+    },
+    {
+        "tablename":  "field_events",
+        "policyname":  "fe_delete_own",
+        "roles":  "{authenticated}",
+        "cmd":  "DELETE",
+        "qual":  "(user_id = auth.uid())",
+        "with_check":  null
+    },
+    {
+        "tablename":  "field_events",
+        "policyname":  "fe_insert_own",
+        "roles":  "{authenticated}",
+        "cmd":  "INSERT",
+        "qual":  null,
+        "with_check":  "(user_id = auth.uid())"
+    },
+    {
+        "tablename":  "field_events",
+        "policyname":  "fe_select_own",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "(user_id = auth.uid())",
+        "with_check":  null
+    },
+    {
+        "tablename":  "field_events",
+        "policyname":  "fe_update_own",
+        "roles":  "{authenticated}",
+        "cmd":  "UPDATE",
+        "qual":  "(user_id = auth.uid())",
+        "with_check":  "(user_id = auth.uid())"
+    },
+    {
+        "tablename":  "inventarios",
+        "policyname":  "authenticated_select_inventarios",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "true",
+        "with_check":  null
+    },
+    {
+        "tablename":  "inventarios",
+        "policyname":  "authenticated_write_inventarios",
+        "roles":  "{authenticated}",
+        "cmd":  "ALL",
+        "qual":  "true",
+        "with_check":  "true"
+    },
+    {
+        "tablename":  "produtividade",
+        "policyname":  "authenticated_insert_produtividade",
+        "roles":  "{authenticated}",
+        "cmd":  "INSERT",
+        "qual":  null,
+        "with_check":  "true"
+    },
+    {
+        "tablename":  "produtividade",
+        "policyname":  "authenticated_select_produtividade",
+        "roles":  "{authenticated}",
+        "cmd":  "SELECT",
+        "qual":  "true",
+        "with_check":  null
+    },
+    {
+        "tablename":  "produtividade",
+        "policyname":  "authenticated_update_produtividade",
+        "roles":  "{authenticated}",
+        "cmd":  "UPDATE",
+        "qual":  "true",
+        "with_check":  "true"
+    }
+]
