@@ -29,10 +29,7 @@ jobs:
             echo "Enquanto isso: Actions → inventexpert-web → Deploy GitHub Pages → Run workflow"
             exit 1
           fi
-          # 1) workflow_dispatch explícito
+          # Dispara o workflow de Pages no host da URL pública
           gh workflow run "Deploy GitHub Pages" --repo robconceicao/inventexpert-web
-          # 2) repository_dispatch (backup / listeners extras)
-          gh api repos/robconceicao/inventexpert-web/dispatches \
-            -f event_type='mobile-released' \
-            -f client_payload='{"source":"InventExpert","ref":"'"${GITHUB_REF_NAME}"'","sha":"'"${GITHUB_SHA}"'"}'
           echo "Deploy da web enfileirado em robconceicao/inventexpert-web"
+          gh run list --repo robconceicao/inventexpert-web --workflow "Deploy GitHub Pages" --limit 1
