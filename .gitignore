@@ -47,3 +47,7 @@ app-example
 # Local JDK for Android builds (do not commit)
 jdk17/
 
+
+*.apk
+InventExpert-*.apk
+

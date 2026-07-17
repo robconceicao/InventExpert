@@ -10,13 +10,9 @@
     "web": "expo start --web",
     "build": "npx expo export -p web && node -e \"const fs=require('fs'); if(fs.existsSync('public')) fs.rmSync('public', {recursive:true, force:true}); if(fs.existsSync('dist')) fs.renameSync('dist', 'public')\"",
     "export:web": "npx expo export -p web",
-    "export:web:pages": "node -e \"process.env.EXPO_WEB_BASE=process.env.EXPO_WEB_BASE||'/inventexpert-web'; require('child_process').execSync('npx expo export -p web',{stdio:'inherit',env:process.env}); require('./scripts/inject-base.js')\"",
-    "predeploy": "npx expo export -p web",
-    "deploy": "node ./scripts/inject-base.js && npx gh-pages --nojekyll --dotfiles -d dist",
+    "export:web:pages": "node scripts/export-web-pages.mjs",
     "lint": "expo lint",
-    "test": "jest",
-    "web:parity": "node scripts/web-parity.mjs check",
-    "web:sync": "node scripts/web-parity.mjs sync"
+    "test": "jest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

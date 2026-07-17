@@ -1,13 +1,12 @@
 /**
- * Garante <base href="..."> no dist/index.html após expo export -p web.
- * Preferir EXPO_WEB_BASE=/inventexpert-web (experiments.baseUrl no app.config.js).
- * Fallback: injeta base se o export não tiver colocado.
+ * Pós-processo do expo export -p web para GitHub Pages.
+ * Base: EXPO_WEB_BASE (default /InventExpert) — mesmo repo do app.
  */
 const fs = require("fs");
 const path = require("path");
 
 const base =
-  (process.env.EXPO_WEB_BASE || "/inventexpert-web").replace(/\/$/, "") + "/";
+  (process.env.EXPO_WEB_BASE || "/InventExpert").replace(/\/$/, "") + "/";
 const file = path.join("dist", "index.html");
 
 if (!fs.existsSync(file)) {
@@ -26,8 +25,6 @@ if (!content.includes("<base ")) {
   console.log("[inject-base] <base> já presente — ok");
 }
 
-// SPA: 404.html = index (GitHub Pages)
 fs.copyFileSync(file, path.join("dist", "404.html"));
-// Desativa Jekyll no GH Pages
 fs.writeFileSync(path.join("dist", ".nojekyll"), "");
-console.log("[inject-base] 404.html + .nojekyll OK");
+console.log("[inject-base] 404.html + .nojekyll OK → base", base);

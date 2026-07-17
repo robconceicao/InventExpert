@@ -5,72 +5,35 @@ Atualizar sempre que houver mudança arquitetural relevante.
 
 ---
 
-## Paridade Mobile ↔ Web (obrigatório)
+## Web pública = mesmo app (obrigatório)
 
-Existe versão web em repositório irmão: **`inventexpert-web`**
-(`C:\Users\robtc\inventexpert-web` ou sibling `../inventexpert-web`).
+**Não há segundo produto web.** A URL pública é o export Expo deste repositório.
 
-**Regra:** toda atualização de lógica de negócio neste app mobile deve ser
-**propagada para a web** no mesmo ciclo (release/PR).
+| | |
+|--|--|
+| URL | https://robconceicao.github.io/InventExpert/ |
+| Deploy | push `main` → workflow **Deploy GitHub Pages** |
+| Scanner | só no mobile (`ScannerScreen.web.tsx` no browser) |
+| Backend | mesmo Supabase |
 
-### O que sincronizar automaticamente
+Docs: [`docs/WEB_PUBLICA.md`](docs/WEB_PUBLICA.md).
 
-A partir do **mobile** (recomendado):
-
-```bash
-npm run web:sync         # propaga módulos compartilhados → inventexpert-web
-npm run web:parity       # só verifica se a web está alinhada
-```
-
-Ou na pasta web:
-
-```bash
-cd ../inventexpert-web
-npm run parity:sync
-npm test
-npm run smoke:eval
-```
-
-Ver: `inventexpert-web/docs/PARIDADE_MOBILE_WEB.md` e
-`inventexpert-web/scripts/parity-manifest.json`.
-
-O CI da web faz **checkout do mobile** e falha se houver divergência
-(`PARITY_STRICT=1`).
-
-### O que NÃO vai para a web
-
-- Módulo **Scanner**
-- UI React Native / Expo Speech / DocumentPicker nativo
-
-### Checklist do agente ao mudar o mobile
-
-1. Implementar + testar no mobile (`npm test`, regras de avaliação).
-2. Se tocou motor, parsers, config, relatórios inventexp, authzRules ou SQL Supabase:
-   - `npm run web:sync` **obrigatório** no mesmo ciclo (depois validar testes na web).
-3. Migrations novas: documentar impacto na web (`docs/RLS_POLICIES.md` / checklist).
-4. Não deixar score/relatório divergente entre plataformas.
-5. Commitar alterações na **web** (arquivos sincronizados) — o CI rejeita main divergente.
+Após mudanças no app: `git push origin main` — a web atualiza sozinha.
 
 ---
 
 ## Visão Geral do Projeto
 
-**InventExpert** é um app mobile de gerenciamento de inventário físico,
-desenvolvido em React Native + Expo + TypeScript. Voltado para operações
-de campo (farmácias, supermercados, hipermercados), com foco em avaliação
-de desempenho de conferentes e geração de relatórios individuais.
+**InventExpert** é um app de gerenciamento de inventário físico (mobile + web
+responsiva), desenvolvido em React Native + Expo + TypeScript. Voltado para
+operações de campo (farmácias, supermercados, hipermercados), com foco em
+avaliação de desempenho de conferentes e geração de relatórios individuais.
 
-**Backend:** Supabase (PostgreSQL + Auth + Storage) — **mesmo projeto da web**
+**Backend:** Supabase (PostgreSQL + Auth + Storage)
 **Navegação:** React Navigation
-**Build:** Expo (EAS Build ou local via Gradle)
+**Build:** Expo (EAS Build ou local via Gradle) · web via `expo export -p web`
 **Testes:** Jest + React Native Testing Library
-**Web pública (mesmo app, responsivo):**  
-https://robconceicao.github.io/inventexpert-web/  
-= export Expo web do **InventExpert** (não um segundo produto).  
-Scanner: stub `ScannerScreen.web.tsx`.  
-Deploy: push em `main` → workflow **Publish web** → Pages em inventexpert-web  
-(`expo export -p web`). Secret `WEB_PAGES_TOKEN` no InventExpert.  
-**Orientações:** `../inventexpert-web/docs/ORIENTACOES_WEB.md`
+**Web:** https://robconceicao.github.io/InventExpert/
 
 ---
 
