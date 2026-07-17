@@ -67,8 +67,9 @@ de desempenho de conferentes e geração de relatórios individuais.
 **Web pública (mesmo app, responsivo):**  
 https://robconceicao.github.io/inventexpert-web/  
 = export Expo web do **InventExpert** (não um segundo produto).  
-Scanner: stub `ScannerScreen.web.tsx`. Deploy: workflow Pages no repo  
-`inventexpert-web` (checkout deste app + `expo export -p web`).  
+Scanner: stub `ScannerScreen.web.tsx`.  
+Deploy: push em `main` → workflow **Publish web** → Pages em inventexpert-web  
+(`expo export -p web`). Secret `WEB_PAGES_TOKEN` no InventExpert.  
 **Orientações:** `../inventexpert-web/docs/ORIENTACOES_WEB.md`
 
 ---

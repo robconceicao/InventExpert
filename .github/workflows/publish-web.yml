@@ -1,0 +1,38 @@
+# Após push no app, republica a web responsiva:
+# https://robconceicao.github.io/inventexpert-web/
+#
+# Requer secret WEB_PAGES_TOKEN (PAT classic com scope "repo" + "workflow"
+# ou fine-grained: Actions write no inventexpert-web).
+name: Publish web (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-web
+  cancel-in-progress: true
+
+jobs:
+  trigger:
+    name: Disparar deploy inventexpert-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Deploy GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.WEB_PAGES_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Configure o secret WEB_PAGES_TOKEN no repo InventExpert (PAT com workflow no inventexpert-web)."
+            echo "Enquanto isso: Actions → inventexpert-web → Deploy GitHub Pages → Run workflow"
+            exit 1
+          fi
+          # 1) workflow_dispatch explícito
+          gh workflow run "Deploy GitHub Pages" --repo robconceicao/inventexpert-web
+          # 2) repository_dispatch (backup / listeners extras)
+          gh api repos/robconceicao/inventexpert-web/dispatches \
+            -f event_type='mobile-released' \
+            -f client_payload='{"source":"InventExpert","ref":"'"${GITHUB_REF_NAME}"'","sha":"'"${GITHUB_SHA}"'"}'
+          echo "Deploy da web enfileirado em robconceicao/inventexpert-web"
