@@ -66,7 +66,7 @@ export default function RootTabs() {
         headerTitle: (props) => (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Image
-              source={require("../../assets/images/icon.jpg")}
+              source={require("../../assets/images/icon.png")}
               style={{ width: 24, height: 24, tintColor: "#fff" }}
             />
             <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>

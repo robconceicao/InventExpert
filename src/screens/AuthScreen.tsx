@@ -142,7 +142,7 @@ export default function AuthScreen() {
         <View style={styles.card}>
           <View style={styles.header}>
             <Image
-              source={require("../../assets/images/icon.jpg")}
+              source={require("../../assets/images/icon.png")}
               style={styles.logo}
             />
             <Text style={styles.title}>InventExpert</Text>
