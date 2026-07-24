@@ -4,7 +4,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScannerReviewPanel from "../components/ScannerReviewPanel";
 import { eraseHandwriting } from "../services/handwritingEraser";
 import {
+  arquivarGeracao,
+  listarGeracoes,
+} from "../services/scannerGeracaoStorage";
+import {
   excluirFolha as excluirFolhaDaLista,
   folhasFromUris,
   inserirDepoisNaLista,
@@ -32,6 +36,15 @@ import {
   urisOrdenadas,
   type FolhaEscaneada,
 } from "../utils/folhaEscaneada";
+import {
+  folhasArquivadasParaRevisao,
+  formatDataHoraBr,
+  nextVersaoNaCadeia,
+  resolveRootId,
+  rotuloCorrecao,
+  rotuloVersao,
+  type GeracaoPdf,
+} from "../utils/scannerGeracao";
 
 // ---------------------------------------------------------------------------
 // Helper: converte URI de imagem para base64 com orientação portrait corrigida
@@ -89,6 +102,12 @@ export default function ScannerScreen() {
   const [revisaoConfirmada, setRevisaoConfirmada] = useState(false);
   const [isReviewCapturing, setIsReviewCapturing] = useState(false);
 
+  // Histórico de gerações (persistente no dispositivo)
+  const [historico, setHistorico] = useState<GeracaoPdf[]>([]);
+  const [historicoLoading, setHistoricoLoading] = useState(true);
+  /** Geração aberta para correção — o próximo PDF vira nova versão. */
+  const [geracaoBase, setGeracaoBase] = useState<GeracaoPdf | null>(null);
+
   // Eraser mode
   const [eraserVisible, setEraserVisible] = useState(false);
   const [eraserSource, setEraserSource] = useState<string | null>(null);
@@ -99,6 +118,21 @@ export default function ScannerScreen() {
   const [eraserEngineName, setEraserEngineName] = useState("");
   const [eraserModelName, setEraserModelName] = useState("");
 
+  const refreshHistorico = useCallback(async () => {
+    try {
+      const lista = await listarGeracoes();
+      setHistorico(lista);
+    } catch {
+      // silencioso — histórico é complementar
+    } finally {
+      setHistoricoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshHistorico();
+  }, [refreshHistorico]);
+
   // ── Escanear documento (portrait: o plugin já orienta corretamente em modo
   //    portrait do dispositivo; forçamos re-encode para garantir metadados EXIF)
   const handleScan = async (append = false) => {
@@ -107,6 +141,10 @@ export default function ScannerScreen() {
       const newImages = await abrirCamera(10);
       if (newImages.length === 0) return;
 
+      if (!append) {
+        // Novo lote: não é correção de geração arquivada
+        setGeracaoBase(null);
+      }
       setFolhas((prev) => {
         const novas = folhasFromUris(newImages, append ? prev.length + 1 : 1);
         return append ? [...prev, ...novas] : novas;
@@ -122,7 +160,40 @@ export default function ScannerScreen() {
     setFolhas([]);
     setRevisaoConfirmada(false);
     setReviewVisible(false);
+    setGeracaoBase(null);
   };
+
+  /** Reabre a revisão com as folhas de uma geração arquivada (correção). */
+  const abrirCorrecao = useCallback((geracao: GeracaoPdf) => {
+    if (!geracao.folhas?.length) {
+      Alert.alert("Sem folhas", "Esta geração não possui folhas arquivadas.");
+      return;
+    }
+    setFolhas(folhasArquivadasParaRevisao(geracao.folhas));
+    setGeracaoBase(geracao);
+    setRevisaoConfirmada(false);
+    setPdfName(geracao.nomePdf || "");
+    setReviewVisible(true);
+  }, []);
+
+  const recompartilharPdf = useCallback(async (geracao: GeracaoPdf) => {
+    try {
+      const info = await FileSystem.getInfoAsync(geracao.pdfUri);
+      if (!info.exists) {
+        Alert.alert(
+          "PDF indisponível",
+          "O arquivo não foi encontrado no dispositivo. Corrija a geração para criar um novo PDF.",
+        );
+        return;
+      }
+      await Sharing.shareAsync(geracao.pdfUri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Enviar PDF escaneado",
+      });
+    } catch {
+      Alert.alert("Erro", "Não foi possível compartilhar o PDF arquivado.");
+    }
+  }, []);
 
   // ── Ações da revisão (id estável; nunca índice) ──────────────────────────
   const excluirFolha = useCallback((id: string) => {
@@ -289,6 +360,25 @@ export default function ScannerScreen() {
       const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
       const outputUri = `${FileSystem.cacheDirectory}${targetName}`;
       await FileSystem.moveAsync({ from: printed.uri, to: outputUri });
+
+      // Arquiva folhas + PDF em documentDirectory (original ou nova versão)
+      try {
+        await arquivarGeracao({
+          folhas,
+          nomePdf: trimmed,
+          pdfSourceUri: outputUri,
+          base: geracaoBase,
+        });
+        setGeracaoBase(null);
+        await refreshHistorico();
+      } catch (archiveErr) {
+        console.warn("[Scanner] Falha ao arquivar geração:", archiveErr);
+        Alert.alert(
+          "Aviso",
+          "PDF gerado, mas não foi possível arquivar no histórico local.",
+        );
+      }
+
       await Sharing.shareAsync(outputUri, {
         mimeType: "application/pdf",
         dialogTitle: "Enviar PDF escaneado",
@@ -386,6 +476,12 @@ export default function ScannerScreen() {
   };
 
   const podeGerarPdf = folhas.length > 0 && revisaoConfirmada && !isSharing;
+
+  const proximaVersaoLabel = geracaoBase
+    ? rotuloVersao({
+        versao: nextVersaoNaCadeia(historico, resolveRootId(geracaoBase)),
+      })
+    : null;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -507,9 +603,98 @@ export default function ScannerScreen() {
           {isSharing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Gerar e Compartilhar PDF</Text>
+            <Text style={styles.buttonText}>
+              {geracaoBase && proximaVersaoLabel
+                ? `Gerar PDF corrigido (${proximaVersaoLabel})`
+                : "Gerar e Compartilhar PDF"}
+            </Text>
           )}
         </Pressable>
+
+        {/* Histórico de gerações arquivadas */}
+        <View style={styles.card}>
+          <View style={styles.pagesHeader}>
+            <Text style={[styles.cardTitle, { marginBottom: 0, flex: 1 }]}>
+              Histórico de PDFs
+            </Text>
+            {historicoLoading ? (
+              <ActivityIndicator size="small" color="#2563EB" />
+            ) : (
+              <Text style={styles.historicoCount}>
+                {historico.length}{" "}
+                {historico.length === 1 ? "geração" : "gerações"}
+              </Text>
+            )}
+          </View>
+          <Text style={[styles.subtitle, { marginBottom: 12 }]}>
+            Cada PDF compartilhado fica arquivado. Abra para corrigir folhas e
+            gerar uma nova versão — o original permanece intacto.
+          </Text>
+
+          {geracaoBase ? (
+            <View style={styles.correctionBanner}>
+              <Ionicons name="git-branch-outline" size={16} color="#7C3AED" />
+              <Text style={styles.correctionBannerText}>
+                Corrigindo {geracaoBase.nomePdf} ({rotuloVersao(geracaoBase)}) —
+                o próximo PDF será uma nova versão
+              </Text>
+              <Pressable
+                onPress={() => setGeracaoBase(null)}
+                hitSlop={8}
+                accessibilityLabel="Cancelar modo correção"
+              >
+                <Ionicons name="close-circle" size={20} color="#7C3AED" />
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!historicoLoading && historico.length === 0 ? (
+            <Text style={styles.emptyText}>
+              Nenhum PDF arquivado ainda. Gere o primeiro para vê-lo aqui.
+            </Text>
+          ) : (
+            historico.map((g) => {
+              const correcao = rotuloCorrecao(g);
+              return (
+                <View key={g.geracaoId} style={styles.historicoItem}>
+                  <View style={styles.historicoItemTop}>
+                    <View style={styles.versaoBadge}>
+                      <Text style={styles.versaoBadgeText}>{rotuloVersao(g)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.historicoNome} numberOfLines={1}>
+                        {g.nomePdf || "sem-nome"}
+                      </Text>
+                      <Text style={styles.historicoMeta}>
+                        {formatDataHoraBr(g.criadoEm)} · {g.qtdFolhas}{" "}
+                        {g.qtdFolhas === 1 ? "folha" : "folhas"}
+                      </Text>
+                      {correcao ? (
+                        <Text style={styles.historicoCorrecao}>{correcao}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={styles.historicoActions}>
+                    <Pressable
+                      style={styles.historicoBtnSecondary}
+                      onPress={() => void recompartilharPdf(g)}
+                    >
+                      <Ionicons name="share-outline" size={16} color="#2563EB" />
+                      <Text style={styles.historicoBtnSecondaryText}>Enviar</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.historicoBtnPrimary}
+                      onPress={() => abrirCorrecao(g)}
+                    >
+                      <Ionicons name="create-outline" size={16} color="#fff" />
+                      <Text style={styles.historicoBtnPrimaryText}>Corrigir</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
 
       {/* Modal: revisão pós-scanner */}
@@ -524,6 +709,12 @@ export default function ScannerScreen() {
           <ScannerReviewPanel
             folhas={folhas}
             isBusy={isReviewCapturing}
+            title={geracaoBase ? "Corrigindo geração" : undefined}
+            subtitle={
+              geracaoBase
+                ? `${geracaoBase.nomePdf} · ${rotuloVersao(geracaoBase)} — alterações geram um novo PDF`
+                : undefined
+            }
             onExcluir={excluirFolha}
             onReescanear={(id) => void reescanearFolha(id)}
             onInserirDepois={(id) => void inserirDepois(id)}
@@ -873,5 +1064,106 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     flex: 1,
+  },
+  // ── Histórico de gerações ─────────────────────────────────────────────────
+  historicoCount: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  correctionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F5F3FF",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+  },
+  correctionBannerText: {
+    color: "#5B21B6",
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
+  historicoItem: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: "#F8FAFC",
+  },
+  historicoItemTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 10,
+  },
+  versaoBadge: {
+    backgroundColor: "#DBEAFE",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 36,
+    alignItems: "center",
+  },
+  versaoBadgeText: {
+    color: "#1E40AF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  historicoNome: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  historicoMeta: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  historicoCorrecao: {
+    fontSize: 11,
+    color: "#7C3AED",
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  historicoActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  historicoBtnSecondary: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  historicoBtnSecondaryText: {
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  historicoBtnPrimary: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#2563EB",
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  historicoBtnPrimaryText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
   },
 });

@@ -25,6 +25,10 @@ import type { FolhaEscaneada } from "../utils/folhaEscaneada";
 export type ScannerReviewPanelProps = {
   folhas: FolhaEscaneada[];
   isBusy?: boolean;
+  /** Título do header (default: Revisão do lote). */
+  title?: string;
+  /** Subtítulo do header (default: Confira antes de gerar o PDF). */
+  subtitle?: string;
   onExcluir: (id: string) => void;
   onReescanear: (id: string) => void;
   onInserirDepois: (id: string) => void;
@@ -38,6 +42,8 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 export default function ScannerReviewPanel({
   folhas,
   isBusy = false,
+  title = "Revisão do lote",
+  subtitle = "Confira antes de gerar o PDF",
   onExcluir,
   onReescanear,
   onInserirDepois,
@@ -187,8 +193,12 @@ export default function ScannerReviewPanel({
           </Pressable>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Revisão do lote</Text>
-            <Text style={styles.headerSubtitle}>Confira antes de gerar o PDF</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.headerSubtitle} numberOfLines={2}>
+              {subtitle}
+            </Text>
           </View>
 
           <View style={styles.countChip}>
