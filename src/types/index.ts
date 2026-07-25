@@ -1,3 +1,9 @@
+// =============================================================================
+// RELATÓRIOS OPERACIONAIS (A–G)
+// A=DSP · B=Farmaconde · C=Farmácias · D=Mercados · E=Outros · F=Assaí · G=Resumo
+// =============================================================================
+
+/** ReportA — Acompanhamento de Inventário (DSP) */
 export interface ReportA {
   lojaNum: string;
   lojaNome: string;
@@ -17,7 +23,7 @@ export interface ReportA {
   avanco01h: string;
   avanco03h: string;
   avanco04h: string;
-  avancoExtraHora: string; // opcional: incluir novo horário
+  avancoExtraHora: string;
   avancoExtraValor: string;
   envioArquivo1: string;
   envioArquivo2: string;
@@ -31,10 +37,34 @@ export interface ReportA {
   contagemAntecipada: boolean | null;
 }
 
-// ---------------------------------------------------------------------------
-// REPORT B — Farmácias
-// ---------------------------------------------------------------------------
-export interface ReportBFarmacias {
+/** ReportB — Farmaconde */
+export interface ReportB {
+  cliente: string;
+  filial: string;
+  lider: string;
+  qtdEquipe: string;
+  qtdFaltas: string;
+  inicioContagemGeral: string;
+  fimContagemGeral: string;
+  pctInventario: string;
+  naoContadosInicio: string;
+  naoContadosTotal: string;
+  naoContadosFim: string;
+  div1Inicio: string;
+  div1Controlados: string;
+  div1Negativos: string;
+  div1Positivos: string;
+  div1Total: string;
+  div1Fim: string;
+  div2Inicio: string;
+  div2Negativos: string;
+  div2Positivos: string;
+  div2Total: string;
+  div2Fim: string;
+}
+
+/** ReportC — Acompanhamento (Farmácias Em Geral) */
+export interface ReportC {
   lojaNum: string;
   lojaNome: string;
   data: string;
@@ -76,10 +106,8 @@ export interface ReportBFarmacias {
   terminoInventario: string;
 }
 
-// ---------------------------------------------------------------------------
-// REPORT B — Mercados (menos Atacado e Hipermercados)
-// ---------------------------------------------------------------------------
-export interface ReportBMercados {
+/** ReportD — Mercados (exceto Atacado/Hiper) */
+export interface ReportD {
   lojaNome: string;
   lojaNum: string;
   data: string;
@@ -111,10 +139,8 @@ export interface ReportBMercados {
   terminoInventario: string;
 }
 
-// ---------------------------------------------------------------------------
-// REPORT B — Outros Estabelecimentos em Geral
-// ---------------------------------------------------------------------------
-export interface ReportBOutros {
+/** ReportE — Outros Estabelecimentos em geral */
+export interface ReportE {
   lojaNum: string;
   lojaNome: string;
   data: string;
@@ -137,57 +163,146 @@ export interface ReportBOutros {
   terminoInventario: string;
 }
 
-// Union para uso genérico
-export type ReportBMode = "farmacias" | "mercados" | "outros";
-export type ReportB = ReportBFarmacias | ReportBMercados | ReportBOutros;
-
-// Mantido para compatibilidade com imports existentes no parsers.ts
-
-export interface ReportC {
-    inventario_ref: string;
-    cliente: string;
-    filial: string;
-    lider: string;
-    qtdEquipe: number | "";
-    qtdFaltas: number | "";
-    inicioContagemGeral: string;
-    fimContagemGeral: string;
-    pctInventario: number | "";
-    naoContadosInicio: string;
-    naoContadosTotal: number | "";
-    naoContadosFim: string;
-    div1Inicio: string;
-    div1Controlados: number | "";
-    div1Negativos: number | "";
-    div1Positivos: number | "";
-    div1Total: number | "";
-    div1Fim: string;
-    div2Inicio: string;
-    div2Negativos: number | "";
-    div2Positivos: number | "";
-    div2Total: number | "";
-    div2Fim: string;
+/** ReportF — Assaí */
+export interface ReportF {
+  lojaNome: string;
+  lojaNum: string;
+  lider: string;
+  qtdPessoas: string;
+  chegadaEquipe: string;
+  inicioContagemEstoque: string;
+  terminoContagemEstoque: string;
+  inicioContagemLoja: string;
+  terminoContagemLoja: string;
+  inicioAuditoria: string;
+  terminoAuditoria: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  qtdPecas: string;
+  valorTotal: string;
+  pctInventario: string;
+  avalEstoque: string;
+  avalLoja: string;
+  terminoInventario: string;
 }
 
-export interface ReportD {
-    loja: string;
-    lojaNum: string;
-    lider: string;
-    qtdPessoas: number | "";
-    qtdPecas: number | "";
-    pctInv: number | "";
-    chegada: string;
-    inicioContagemEstoque: string;
-    terminoContagemEstoque: string;
-    inicioContagemLoja: string;
-    terminoContagemLoja: string;
-    inicioAuditoria: string;
-    terminoAuditoria: string;
-    inicioDivergencia: string;
-    terminoDivergencia: string;
-    avalEstoque: number | "";
-    avalLoja: number | "";
-    terminoInventario: string;
+/** ReportG — Resumo Final do Inventário (consolidado) */
+export interface ReportG {
+  lojaNum: string;
+  lojaNome: string;
+  data: string;
+  pivProgramado: string;
+  pivRealizado: string;
+  chegadaEquipe: string;
+  inicioDeposito: string;
+  terminoDeposito: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioControlados: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  qtdAlterados: string;
+  qtdNaoContados: string;
+  qtdEncontradosNaoContados: string;
+  envioArquivo1: string;
+  envioArquivo2: string;
+  envioArquivo3: string;
+  totalPecas: string;
+  valorTotal: string;
+  avalPrepDeposito: string;
+  avalPrepLoja: string;
+  satisfacao: string;
+  responsavel: string;
+  acuracidadeCliente: string;
+  acuracidadeTerceirizada: string;
+  suporteSolicitado: boolean | null;
+  phCalculado: string;
+  terminoInventario: string;
+}
+
+/** ReportH — Resumo Farmaconde */
+export interface ReportH {
+  lojaNome: string;
+  lojaNum: string;
+  data: string;
+  pivProgramado: string;
+  pivRealizado: string;
+  chegadaEquipe: string;
+  inicioDeposito: string;
+  terminoDeposito: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioAuditoriaCliente: string;
+  terminoAuditoriaCliente: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  inicioNaoContados: string;
+  terminoNaoContados: string;
+  qtdItensAlterados: string;
+  qtdItensNaoContados: string;
+  qtdItensEncontradosNaoContados: string;
+  envioArquivo: string;
+  terminoInventario: string;
+  totalPecas: string;
+  valorTotal: string;
+  avalPrepDeposito: string;
+  avalPrepLoja: string;
+  responsavelInventario: string;
+  satisfacao: string;
+  acuracidadeCliente: string;
+  acuracidadeTerceirizada: string;
+  suporteSolicitado: boolean | null;
+}
+
+/** ReportI — Resumo Mercados (exceto Atacado/Hiper) */
+export interface ReportI {
+  lojaNome: string;
+  lojaNum: string;
+  data: string;
+  pivProgramado: string;
+  pivRealizado: string;
+  chegadaEquipe: string;
+  inicioDeposito: string;
+  terminoDeposito: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioAuditoriaCliente: string;
+  terminoAuditoriaCliente: string;
+  inicioDivergencia: string;
+  terminoDivergencia: string;
+  inicioNaoContados: string;
+  terminoNaoContados: string;
+  qtdItensAlterados: string;
+  qtdItensNaoContados: string;
+  qtdItensEncontradosNaoContados: string;
+  envioPrimeiroArquivo: string;
+  terminoInventario: string;
+  totalPecas: string;
+  valorTotal: string;
+}
+
+/**
+ * ReportJ — Resumo Demais Estabelecimentos.
+ * Campos próximos de ReportE/F, mas nomes e conjunto próprios do Resumo
+ * (não reutiliza o tipo de Acompanhamento para não acoplar os módulos).
+ */
+export interface ReportJ {
+  lojaNome: string;
+  lojaNum: string;
+  lider: string;
+  qtdColaboradores: string;
+  qtdPecas: string;
+  pctInventario: string;
+  chegada: string;
+  inicioControlados: string;
+  terminoControlados: string;
+  inicioLoja: string;
+  terminoLoja: string;
+  inicioAuditoria: string;
+  terminoAuditoria: string;
+  avalEstoque: string;
+  avalLoja: string;
+  terminoInventario: string;
 }
 
 export interface AttendanceCollaborator {
