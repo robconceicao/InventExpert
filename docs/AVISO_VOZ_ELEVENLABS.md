@@ -23,19 +23,22 @@ Atenção, estamos a quinze minutos do próximo avanço. Solicite aos conferente
 ## 2. Prompt para criar a voz (ElevenLabs → Voice Design)
 
 Cole no campo de descrição da voz em **Voice Design** (Text to Voice → Design a
-voice). O prompt está em inglês porque o Voice Design responde melhor assim; o
-idioma **falado** é definido pelo texto acima, em português.
+voice). O campo aceita **no máximo 500 caracteres** — o prompt abaixo tem 495,
+então cole inteiro, sem quebras de linha. Está em inglês porque o Voice Design
+responde melhor assim; o idioma **falado** vem do texto em português do item 1.
 
 ```
-A Brazilian Portuguese male voice, 35 to 45 years old, in the style of an
-experienced operations supervisor giving a shift announcement over a store
-intercom. Warm but authoritative baritone, chest resonance, calm and steady —
-never dramatic, never cheerful, never salesy. Measured, deliberate pace with
-crisp, fully articulated consonants so every word survives a noisy supermarket
-floor at night. Neutral São Paulo accent, no regional slang. Even volume from
-first to last word, no rising excitement, no trailing off at the end of the
-sentence. Clean studio recording, dry and close-mic'd, no reverb, no background
-music, no room tone.
+Brazilian Portuguese male voice, 35-45: an experienced operations supervisor announcing a shift update over a store intercom. Warm, authoritative baritone with chest resonance. Calm and steady, never dramatic or cheerful. Measured pace, crisp fully articulated consonants that survive a noisy supermarket floor at night. Neutral Sao Paulo accent, no slang. Even volume throughout, no rising excitement, no trailing off. Clean dry studio recording, close-mic'd, no reverb, no music, no room tone.
+```
+
+> Sem acento em "Sao Paulo" de propósito: a descrição é lida como inglês e o
+> acento às vezes puxa a pronúncia da voz para o lado errado.
+
+Se a voz sair jovem demais, animada demais ou com sotaque estranho, use esta
+variação mais curta (352 caracteres), que insiste no tom sério:
+
+```
+Brazilian Portuguese male voice, around 40: a night-shift inventory supervisor giving a calm announcement to his team. Deep, steady baritone, serious and reassuring, never cheerful. Slow deliberate pace, very clear consonants, neutral Sao Paulo accent. Even volume from first to last word. Dry close-mic studio recording, no reverb or background noise.
 ```
 
 Ajustes recomendados na geração (Text to Speech):
