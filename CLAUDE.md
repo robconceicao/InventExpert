@@ -303,6 +303,8 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
 | "Perfil Operacional" removido do relatório | Baseado em histórico: incoerente com classificação do evento atual |
 | Alerta formal se crítica OU limite ≤ 5% | Visibilidade para OTC e áreas ANVISA |
+| Aviso de avanço preso ao preenchimento do avanço anterior | O anterior é a prova de que a operação chegou ali; 22h00 é inicial (0%) e nunca avisa |
+| Voz do aviso com tela apagada = som da notificação | Sem player de áudio no projeto; TTS só toca com o app aberto — ver `docs/AVISO_VOZ_ELEVENLABS.md` |
 | catalogoLookup prefere invent_DSP sobre cadastro.txt | invent_DSP tem EAN real e classificação legal |
 | qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
