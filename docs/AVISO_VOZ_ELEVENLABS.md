@@ -58,27 +58,45 @@ altere o texto (ele precisa bater com o que aparece escrito na notificação).
 
 ## 3. Exportar o arquivo
 
-Requisitos do Android para som de notificação:
+**O MP3 do ElevenLabs serve direto no Android — não precisa converter.**
 
-- **Formato:** WAV (PCM 16 bits) — o mais compatível. MP3 costuma funcionar,
-  WAV nunca falha.
+Verificado no próprio pacote: o plugin copia o arquivo para `res/raw` sem
+converter nem validar formato (`plugin/build/withNotificationsAndroid.js`,
+`writeNotificationSoundFile`), e o nativo resolve o recurso **pelo nome base**,
+descartando a extensão (`android/.../SoundResolver.java`, `filenameToBasename`).
+O `res/raw` do Android toca MP3 sem problema.
+
+Requisitos que valem de verdade:
+
+- **Nome do arquivo:** só minúsculas, dígitos e `_` — `aviso_avanco.mp3`. O
+  build falha na validação (`assertValidAndroidAssetName`) se tiver acento,
+  espaço ou maiúscula.
 - **Duração:** máximo 30 segundos. O texto tem ~8 s, folgado.
-- **Sample rate:** 44.1 kHz, mono.
 - **Silêncio:** até 0,2 s no início; nada no fim.
-- **Nome do arquivo:** `aviso_avanco.wav` — minúsculas, sem acento e sem
-  espaço (o Android rejeita o recurso se tiver).
 
-Se o ElevenLabs só exportar MP3, converta:
+### Se um dia o app for para iOS
 
-```bash
+Aí sim o formato importa: o iOS aceita apenas **WAV, AIFF ou CAF** em som de
+notificação e ignora MP3 (cai para o som padrão, sem erro). Hoje o projeto só
+gera APK Android, então isso não bloqueia nada.
+
+Para converter no Windows, sem instalar nada pesado:
+
+```powershell
+winget install Gyan.FFmpeg
+# feche e reabra o PowerShell para o PATH atualizar
 ffmpeg -i aviso_avanco.mp3 -ar 44100 -ac 1 -c:a pcm_s16le aviso_avanco.wav
 ```
+
+Alternativa em interface gráfica: abrir o MP3 no **Audacity** e usar
+_Arquivo → Exportar → Exportar como WAV_ (44100 Hz, mono, 16 bits).
 
 ---
 
 ## 4. Instalar no app (3 passos)
 
-**1. Coloque o arquivo em** `assets/sounds/aviso_avanco.wav`
+**1. Coloque o arquivo em** `assets/sounds/aviso_avanco.mp3`
+(ou `.wav`, se tiver convertido — o Android resolve pelo nome base)
 
 **2. Registre no `app.json`**, trocando a entrada `"expo-notifications"` por:
 
@@ -86,7 +104,7 @@ ffmpeg -i aviso_avanco.mp3 -ar 44100 -ac 1 -c:a pcm_s16le aviso_avanco.wav
 [
   "expo-notifications",
   {
-    "sounds": ["./assets/sounds/aviso_avanco.wav"]
+    "sounds": ["./assets/sounds/aviso_avanco.mp3"]
   }
 ]
 ```
@@ -94,7 +112,7 @@ ffmpeg -i aviso_avanco.mp3 -ar 44100 -ac 1 -c:a pcm_s16le aviso_avanco.wav
 **3. Ligue o som em** `src/services/advanceAlarmService.ts`:
 
 ```ts
-export const SOM_AVISO: string | null = "aviso_avanco.wav";
+export const SOM_AVISO: string | null = "aviso_avanco.mp3";
 ```
 
 Enquanto `SOM_AVISO` for `null`, o app usa o som padrão do sistema e nada
@@ -124,7 +142,7 @@ Se aparecer a notificação mas o som for o padrão do sistema:
 
 - o canal `alarms` do Android guarda o som de quando foi criado. Desinstale e
   reinstale o app (ou limpe os dados) para o canal ser recriado com o novo som;
-- confirme que o arquivo está em `res/raw` no build (`aviso_avanco.wav`);
+- confirme que o arquivo está em `res/raw` no build (`aviso_avanco.mp3`);
 - confirme que o aparelho não está em Não Perturbe sem exceção para o app.
 
 ---

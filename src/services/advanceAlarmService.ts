@@ -52,7 +52,10 @@ export const ALARM_TITLE = "⏰ Próximo avanço em 15 minutos";
  * padrão e nada quebra. Depois de gerar o áudio, siga
  * docs/AVISO_VOZ_ELEVENLABS.md — colocar o arquivo em assets/sounds/,
  * registrar no plugin expo-notifications do app.json, trocar este valor por
- * "aviso_avanco.wav" e gerar um novo build (o som é asset nativo).
+ * "aviso_avanco.mp3" e gerar um novo build (o som é asset nativo).
+ *
+ * MP3 serve: no Android o recurso é resolvido pelo nome base, sem a extensão
+ * (SoundResolver.filenameToBasename). iOS exigiria WAV/AIFF/CAF.
  */
 export const SOM_AVISO: string | null = null;
 
