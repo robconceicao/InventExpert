@@ -48,16 +48,14 @@ export const ALARM_TITLE = "⏰ Próximo avanço em 15 minutos";
 /**
  * Som customizado da notificação = voz masculina gravada no ElevenLabs.
  *
- * Mantenha `null` enquanto o arquivo não estiver no projeto: o SO usa o som
- * padrão e nada quebra. Depois de gerar o áudio, siga
- * docs/AVISO_VOZ_ELEVENLABS.md — colocar o arquivo em assets/sounds/,
- * registrar no plugin expo-notifications do app.json, trocar este valor por
- * "aviso_avanco.mp3" e gerar um novo build (o som é asset nativo).
+ * O arquivo precisa existir em assets/sounds/aviso_avanco.mp3 e estar
+ * registrado no plugin expo-notifications do app.json — sem ele o build falha
+ * ao copiar o som para res/raw. Ver docs/AVISO_VOZ_ELEVENLABS.md.
  *
  * MP3 serve: no Android o recurso é resolvido pelo nome base, sem a extensão
  * (SoundResolver.filenameToBasename). iOS exigiria WAV/AIFF/CAF.
  */
-export const SOM_AVISO: string | null = null;
+export const SOM_AVISO: string | null = "aviso_avanco.mp3";
 
 /** `sound` aceito pelo expo-notifications: nome do arquivo ou som padrão. */
 function somDaNotificacao(): string {
