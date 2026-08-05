@@ -4,7 +4,8 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,12 +16,16 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
 import DocumentScanner from "react-native-document-scanner-plugin";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ScanFilterEngine, {
+  type ScanFilterEngineRef,
+} from "../components/ScanFilterEngine";
 import ScannerReviewPanel from "../components/ScannerReviewPanel";
 import { eraseHandwriting } from "../services/handwritingEraser";
 import {
@@ -51,6 +56,10 @@ import {
   somarTamanhoBytes,
   type GeracaoPdf,
 } from "../utils/scannerGeracao";
+import { SCAN_FILTER_CSS } from "../utils/scanFilter";
+
+/** Preferência do modo documento (P&B) — sobrevive ao fechamento do app. */
+const MODO_DOCUMENTO_KEY = "inventexpert:scanner_modo_documento";
 
 // ---------------------------------------------------------------------------
 // Helper: converte URI de imagem para base64 com orientação portrait corrigida
@@ -116,6 +125,13 @@ export default function ScannerScreen() {
   /** Id em exclusão (bloqueia os botões do item) ou "*" para o histórico todo. */
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
 
+  // Modo documento: papel branco e tinta preta, como um scanner de verdade
+  const [modoDocumento, setModoDocumento] = useState(true);
+  const [filtrando, setFiltrando] = useState<{ feitas: number; total: number } | null>(
+    null,
+  );
+  const filtroRef = useRef<ScanFilterEngineRef>(null);
+
   // Eraser mode
   const [eraserVisible, setEraserVisible] = useState(false);
   const [eraserSource, setEraserSource] = useState<string | null>(null);
@@ -141,13 +157,64 @@ export default function ScannerScreen() {
     void refreshHistorico();
   }, [refreshHistorico]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const salvo = await AsyncStorage.getItem(MODO_DOCUMENTO_KEY);
+        if (salvo !== null) setModoDocumento(salvo === "1");
+      } catch {
+        // preferência é acessório — mantém o padrão (ligado)
+      }
+    })();
+  }, []);
+
+  const alternarModoDocumento = useCallback((valor: boolean) => {
+    setModoDocumento(valor);
+    void AsyncStorage.setItem(MODO_DOCUMENTO_KEY, valor ? "1" : "0").catch(
+      () => undefined,
+    );
+  }, []);
+
+  /**
+   * Converte as capturas em preto e branco neutro (papel branco, tinta preta).
+   * Sem isso, caneta azul/vermelha continua colorida no PDF.
+   * Falha aqui nunca perde a captura: devolve as URIs originais e o filtro CSS
+   * do PDF ainda tira a cor.
+   */
+  const aplicarFiltroDocumento = useCallback(
+    async (uris: string[]): Promise<string[]> => {
+      if (!modoDocumento || uris.length === 0) return uris;
+      const engine = filtroRef.current;
+      if (!engine) return uris;
+
+      setFiltrando({ feitas: 0, total: uris.length });
+      try {
+        const { uris: filtradas, falhas } = await engine.filtrarUris(
+          uris,
+          (feitas, total) => setFiltrando({ feitas, total }),
+        );
+        if (falhas > 0) {
+          console.warn(`[Scanner] ${falhas} folha(s) sem filtro de pixels.`);
+        }
+        return filtradas;
+      } catch (e) {
+        console.warn("[Scanner] Filtro documento indisponível:", e);
+        return uris;
+      } finally {
+        setFiltrando(null);
+      }
+    },
+    [modoDocumento],
+  );
+
   // ── Escanear documento (portrait: o plugin já orienta corretamente em modo
   //    portrait do dispositivo; forçamos re-encode para garantir metadados EXIF)
   const handleScan = async (append = false) => {
     try {
       setIsScanning(true);
-      const newImages = await abrirCamera(10);
-      if (newImages.length === 0) return;
+      const capturadas = await abrirCamera(10);
+      if (capturadas.length === 0) return;
+      const newImages = await aplicarFiltroDocumento(capturadas);
 
       if (!append) {
         // Novo lote: não é correção de geração arquivada
@@ -328,29 +395,37 @@ export default function ScannerScreen() {
     setRevisaoConfirmada(false);
   }, []);
 
-  const reescanearFolha = useCallback(async (id: string) => {
-    setIsReviewCapturing(true);
-    try {
-      const uris = await abrirCamera(1);
-      if (uris.length === 0) return;
-      setFolhas((prev) => reescanearFolhaNaLista(prev, id, uris[0]));
-      setRevisaoConfirmada(false);
-    } finally {
-      setIsReviewCapturing(false);
-    }
-  }, []);
+  const reescanearFolha = useCallback(
+    async (id: string) => {
+      setIsReviewCapturing(true);
+      try {
+        const capturadas = await abrirCamera(1);
+        if (capturadas.length === 0) return;
+        const uris = await aplicarFiltroDocumento(capturadas);
+        setFolhas((prev) => reescanearFolhaNaLista(prev, id, uris[0]));
+        setRevisaoConfirmada(false);
+      } finally {
+        setIsReviewCapturing(false);
+      }
+    },
+    [aplicarFiltroDocumento],
+  );
 
-  const inserirDepois = useCallback(async (idReferencia: string) => {
-    setIsReviewCapturing(true);
-    try {
-      const uris = await abrirCamera(1);
-      if (uris.length === 0) return;
-      setFolhas((prev) => inserirDepoisNaLista(prev, idReferencia, uris[0]));
-      setRevisaoConfirmada(false);
-    } finally {
-      setIsReviewCapturing(false);
-    }
-  }, []);
+  const inserirDepois = useCallback(
+    async (idReferencia: string) => {
+      setIsReviewCapturing(true);
+      try {
+        const capturadas = await abrirCamera(1);
+        if (capturadas.length === 0) return;
+        const uris = await aplicarFiltroDocumento(capturadas);
+        setFolhas((prev) => inserirDepoisNaLista(prev, idReferencia, uris[0]));
+        setRevisaoConfirmada(false);
+      } finally {
+        setIsReviewCapturing(false);
+      }
+    },
+    [aplicarFiltroDocumento],
+  );
 
   const reordenar = useCallback((novaLista: FolhaEscaneada[]) => {
     setFolhas(reordenarFolhas(novaLista));
@@ -436,6 +511,16 @@ export default function ScannerScreen() {
 
       const pagesHtml = pageBlocks.filter(Boolean).join("\n");
 
+      /*
+       * Segunda camada do modo documento. O filtro de pixels já entrega branco
+       * e preto puros — grayscale/contraste sobre 0 e 255 não mexe nesses
+       * extremos —, então aplicar aqui é inofensivo quando ele funcionou e
+       * salva a saída quando o WebView falhou no aparelho.
+       */
+      const imgFilter = modoDocumento
+        ? `filter:${SCAN_FILTER_CSS};-webkit-filter:${SCAN_FILTER_CSS};`
+        : "";
+
       const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -473,6 +558,7 @@ export default function ScannerScreen() {
     border: 0;
     object-fit: contain;
     object-position: top center;
+    ${imgFilter}
   }
 </style>
 </head>
@@ -615,6 +701,8 @@ export default function ScannerScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      {/* Motor do filtro P&B — WebView invisível, montado sempre */}
+      <ScanFilterEngine ref={filtroRef} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Card Scanner */}
         <View style={styles.card}>
@@ -648,6 +736,35 @@ export default function ScannerScreen() {
               <Text style={styles.buttonText}>Limpar</Text>
             </Pressable>
           </View>
+
+          <View style={styles.modoDocumentoRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modoDocumentoTitle}>
+                Modo documento (preto e branco)
+              </Text>
+              <Text style={styles.modoDocumentoHint}>
+                Papel branco e tinta preta, como um scanner de mesa. Preenchimento
+                feito com caneta colorida sai sem nenhum resíduo de cor.
+              </Text>
+            </View>
+            <Switch
+              value={modoDocumento}
+              onValueChange={alternarModoDocumento}
+              trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
+              thumbColor={modoDocumento ? "#2563EB" : "#F1F5F9"}
+              disabled={isScanning || filtrando !== null}
+            />
+          </View>
+
+          {filtrando ? (
+            <View style={styles.filtroBanner}>
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text style={styles.filtroBannerText}>
+                Convertendo folhas para preto e branco… {filtrando.feitas}/
+                {filtrando.total}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Card Apagar Escrita */}
@@ -1086,6 +1203,42 @@ const styles = StyleSheet.create({
     borderColor: "#FDE68A",
   },
   pendingBannerText: { color: "#92400E", fontSize: 12, fontWeight: "600", flex: 1 },
+  modoDocumentoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  modoDocumentoTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modoDocumentoHint: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  filtroBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  filtroBannerText: {
+    color: "#1E40AF",
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
   buttonPrimary: {
     backgroundColor: "#2563EB",
     flexDirection: "row",
