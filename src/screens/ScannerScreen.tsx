@@ -25,7 +25,10 @@ import ScannerReviewPanel from "../components/ScannerReviewPanel";
 import { eraseHandwriting } from "../services/handwritingEraser";
 import {
   arquivarGeracao,
+  excluirGeracao,
+  excluirTodasGeracoes,
   listarGeracoes,
+  type ResultadoExclusao,
 } from "../services/scannerGeracaoStorage";
 import {
   excluirFolha as excluirFolhaDaLista,
@@ -37,12 +40,15 @@ import {
   type FolhaEscaneada,
 } from "../utils/folhaEscaneada";
 import {
+  contarOutrasVersoesNaCadeia,
   folhasArquivadasParaRevisao,
   formatDataHoraBr,
+  formatarBytes,
   nextVersaoNaCadeia,
   resolveRootId,
   rotuloCorrecao,
   rotuloVersao,
+  somarTamanhoBytes,
   type GeracaoPdf,
 } from "../utils/scannerGeracao";
 
@@ -107,6 +113,8 @@ export default function ScannerScreen() {
   const [historicoLoading, setHistoricoLoading] = useState(true);
   /** Geração aberta para correção — o próximo PDF vira nova versão. */
   const [geracaoBase, setGeracaoBase] = useState<GeracaoPdf | null>(null);
+  /** Id em exclusão (bloqueia os botões do item) ou "*" para o histórico todo. */
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
 
   // Eraser mode
   const [eraserVisible, setEraserVisible] = useState(false);
@@ -194,6 +202,125 @@ export default function ScannerScreen() {
       Alert.alert("Erro", "Não foi possível compartilhar o PDF arquivado.");
     }
   }, []);
+
+  /**
+   * Roda uma exclusão e ressincroniza a tela.
+   * Se a geração em correção foi apagada, sai do modo correção (URIs mortas).
+   */
+  const executarExclusao = useCallback(
+    async (
+      travaId: string,
+      acao: () => Promise<ResultadoExclusao>,
+    ): Promise<void> => {
+      setExcluindoId(travaId);
+      try {
+        const { removidos, bytesLiberados, restantes } = await acao();
+        setHistorico(restantes);
+
+        const baseSobreviveu =
+          geracaoBase !== null &&
+          restantes.some((g) => g.geracaoId === geracaoBase.geracaoId);
+        if (geracaoBase && !baseSobreviveu) {
+          setGeracaoBase(null);
+          setFolhas([]);
+          setRevisaoConfirmada(false);
+          setReviewVisible(false);
+        }
+
+        if (removidos === 0) return;
+        const liberado = formatarBytes(bytesLiberados);
+        Alert.alert(
+          "Exclusão concluída",
+          `${removidos} ${removidos === 1 ? "geração removida" : "gerações removidas"} do dispositivo.${
+            liberado ? ` ${liberado} liberados.` : ""
+          }`,
+        );
+      } catch {
+        Alert.alert(
+          "Erro",
+          "Não foi possível excluir. Tente novamente.",
+        );
+        await refreshHistorico();
+      } finally {
+        setExcluindoId(null);
+      }
+    },
+    [geracaoBase, refreshHistorico],
+  );
+
+  /** Confirma e exclui uma geração (opcionalmente a cadeia inteira). */
+  const confirmarExclusaoGeracao = useCallback(
+    (geracao: GeracaoPdf) => {
+      const outras = contarOutrasVersoesNaCadeia(historico, geracao);
+      const nome = `${geracao.nomePdf || "sem-nome"} (${rotuloVersao(geracao)})`;
+      const tamanho = formatarBytes(geracao.tamanhoBytes);
+      const detalhe = tamanho ? ` Libera ${tamanho}.` : "";
+
+      if (outras === 0) {
+        Alert.alert(
+          "Excluir PDF arquivado",
+          `${nome} e suas folhas serão apagados do celular.${detalhe}\n\nEsta ação não pode ser desfeita.`,
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Excluir",
+              style: "destructive",
+              onPress: () =>
+                void executarExclusao(geracao.geracaoId, () =>
+                  excluirGeracao(geracao.geracaoId),
+                ),
+            },
+          ],
+        );
+        return;
+      }
+
+      const total = outras + 1;
+      Alert.alert(
+        "Excluir PDF arquivado",
+        `${nome} faz parte de uma cadeia com ${total} versões.\n\nEscolha o que apagar do celular. Esta ação não pode ser desfeita.`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Só esta versão",
+            onPress: () =>
+              void executarExclusao(geracao.geracaoId, () =>
+                excluirGeracao(geracao.geracaoId),
+              ),
+          },
+          {
+            text: `Todas as ${total} versões`,
+            style: "destructive",
+            onPress: () =>
+              void executarExclusao(geracao.geracaoId, () =>
+                excluirGeracao(geracao.geracaoId, { incluirCadeia: true }),
+              ),
+          },
+        ],
+      );
+    },
+    [executarExclusao, historico],
+  );
+
+  /** Limpa o histórico inteiro — uso típico ao encerrar o inventário. */
+  const confirmarLimparHistorico = useCallback(() => {
+    if (historico.length === 0) return;
+    const tamanho = formatarBytes(somarTamanhoBytes(historico));
+    Alert.alert(
+      "Limpar histórico",
+      `Todos os ${historico.length} PDFs arquivados e suas folhas serão apagados do celular.${
+        tamanho ? ` Libera ${tamanho}.` : ""
+      }\n\nEsta ação não pode ser desfeita.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Apagar tudo",
+          style: "destructive",
+          onPress: () => void executarExclusao("*", excluirTodasGeracoes),
+        },
+      ],
+    );
+  }, [executarExclusao, historico]);
 
   // ── Ações da revisão (id estável; nunca índice) ──────────────────────────
   const excluirFolha = useCallback((id: string) => {
@@ -477,6 +604,8 @@ export default function ScannerScreen() {
 
   const podeGerarPdf = folhas.length > 0 && revisaoConfirmada && !isSharing;
 
+  const espacoOcupado = formatarBytes(somarTamanhoBytes(historico));
+
   const proximaVersaoLabel = geracaoBase
     ? rotuloVersao({
         versao: nextVersaoNaCadeia(historico, resolveRootId(geracaoBase)),
@@ -623,13 +752,36 @@ export default function ScannerScreen() {
               <Text style={styles.historicoCount}>
                 {historico.length}{" "}
                 {historico.length === 1 ? "geração" : "gerações"}
+                {espacoOcupado ? ` · ${espacoOcupado}` : ""}
               </Text>
             )}
           </View>
           <Text style={[styles.subtitle, { marginBottom: 12 }]}>
             Cada PDF compartilhado fica arquivado. Abra para corrigir folhas e
-            gerar uma nova versão — o original permanece intacto.
+            gerar uma nova versão — o original permanece intacto. Ao encerrar o
+            inventário, exclua os arquivos para liberar memória.
           </Text>
+
+          {historico.length > 0 ? (
+            <Pressable
+              style={[
+                styles.btnLimparHistorico,
+                excluindoId !== null && styles.buttonDisabled,
+              ]}
+              onPress={confirmarLimparHistorico}
+              disabled={excluindoId !== null}
+              accessibilityLabel="Apagar todo o histórico de PDFs"
+            >
+              {excluindoId === "*" ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+              )}
+              <Text style={styles.btnLimparHistoricoText}>
+                Apagar todo o histórico
+              </Text>
+            </Pressable>
+          ) : null}
 
           {geracaoBase ? (
             <View style={styles.correctionBanner}>
@@ -655,6 +807,8 @@ export default function ScannerScreen() {
           ) : (
             historico.map((g) => {
               const correcao = rotuloCorrecao(g);
+              const tamanho = formatarBytes(g.tamanhoBytes);
+              const itemOcupado = excluindoId !== null;
               return (
                 <View key={g.geracaoId} style={styles.historicoItem}>
                   <View style={styles.historicoItemTop}>
@@ -668,6 +822,7 @@ export default function ScannerScreen() {
                       <Text style={styles.historicoMeta}>
                         {formatDataHoraBr(g.criadoEm)} · {g.qtdFolhas}{" "}
                         {g.qtdFolhas === 1 ? "folha" : "folhas"}
+                        {tamanho ? ` · ${tamanho}` : ""}
                       </Text>
                       {correcao ? (
                         <Text style={styles.historicoCorrecao}>{correcao}</Text>
@@ -676,18 +831,44 @@ export default function ScannerScreen() {
                   </View>
                   <View style={styles.historicoActions}>
                     <Pressable
-                      style={styles.historicoBtnSecondary}
+                      style={[
+                        styles.historicoBtnSecondary,
+                        itemOcupado && styles.buttonDisabled,
+                      ]}
                       onPress={() => void recompartilharPdf(g)}
+                      disabled={itemOcupado}
                     >
-                      <Ionicons name="share-outline" size={16} color="#2563EB" />
+                      <Ionicons name="share-outline" size={15} color="#2563EB" />
                       <Text style={styles.historicoBtnSecondaryText}>Enviar</Text>
                     </Pressable>
                     <Pressable
-                      style={styles.historicoBtnPrimary}
+                      style={[
+                        styles.historicoBtnPrimary,
+                        itemOcupado && styles.buttonDisabled,
+                      ]}
                       onPress={() => abrirCorrecao(g)}
+                      disabled={itemOcupado}
                     >
-                      <Ionicons name="create-outline" size={16} color="#fff" />
+                      <Ionicons name="create-outline" size={15} color="#fff" />
                       <Text style={styles.historicoBtnPrimaryText}>Corrigir</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.historicoBtnDanger,
+                        itemOcupado && styles.buttonDisabled,
+                      ]}
+                      onPress={() => confirmarExclusaoGeracao(g)}
+                      disabled={itemOcupado}
+                      accessibilityLabel={`Excluir ${g.nomePdf || "PDF"} ${rotuloVersao(g)}`}
+                    >
+                      {excluindoId === g.geracaoId ? (
+                        <ActivityIndicator size="small" color="#DC2626" />
+                      ) : (
+                        <>
+                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                          <Text style={styles.historicoBtnDangerText}>Excluir</Text>
+                        </>
+                      )}
                     </Pressable>
                   </View>
                 </View>
@@ -1133,21 +1314,57 @@ const styles = StyleSheet.create({
   },
   historicoActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   historicoBtnSecondary: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     borderWidth: 1,
     borderColor: "#2563EB",
     borderRadius: 10,
     paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   historicoBtnSecondaryText: {
     color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  historicoBtnDanger: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  historicoBtnDangerText: {
+    color: "#DC2626",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  btnLimparHistorico: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  btnLimparHistoricoText: {
+    color: "#DC2626",
     fontWeight: "700",
     fontSize: 13,
   },
@@ -1156,10 +1373,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     backgroundColor: "#2563EB",
     borderRadius: 10,
     paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   historicoBtnPrimaryText: {
     color: "#fff",

@@ -10,7 +10,11 @@ import type { FolhaEscaneada } from "../utils/folhaEscaneada";
 import {
   buildGeracaoPdf,
   createGeracaoId,
+  idsDaCadeia,
   ordenarGeracoesRecentes,
+  removerGeracoes,
+  resolveRootId,
+  somarTamanhoBytes,
   type FolhaArquivada,
   type GeracaoPdf,
 } from "../utils/scannerGeracao";
@@ -50,6 +54,17 @@ async function ensureDir(path: string): Promise<void> {
   const info = await FileSystem.getInfoAsync(path);
   if (!info.exists) {
     await FileSystem.makeDirectoryAsync(path, { intermediates: true });
+  }
+}
+
+/** Tamanho em bytes (0 quando o arquivo não existe ou o SO não informa). */
+async function fileSize(uri: string): Promise<number> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) return 0;
+    return Number.isFinite(info.size) ? info.size : 0;
+  } catch {
+    return 0;
   }
 }
 
@@ -129,16 +144,103 @@ export async function arquivarGeracao(params: {
   const pdfDest = `${dir}${pdfName}`;
   await copyFile(params.pdfSourceUri, pdfDest);
 
-  const registro = buildGeracaoPdf({
-    geracaoId,
-    nomePdf: pdfName.replace(/\.pdf$/i, ""),
-    pdfUri: pdfDest,
-    folhas: folhasArquivadas,
-    base: params.base ?? null,
-    existentes,
-  });
+  const tamanhos = await Promise.all(
+    [pdfDest, ...folhasArquivadas.map((f) => f.uri)].map(fileSize),
+  );
+  const tamanhoBytes = tamanhos.reduce((total, n) => total + n, 0);
+
+  const registro = {
+    ...buildGeracaoPdf({
+      geracaoId,
+      nomePdf: pdfName.replace(/\.pdf$/i, ""),
+      pdfUri: pdfDest,
+      folhas: folhasArquivadas,
+      base: params.base ?? null,
+      existentes,
+    }),
+    tamanhoBytes,
+  };
 
   const atualizado = ordenarGeracoesRecentes([registro, ...existentes]);
   await persistirIndice(atualizado);
   return registro;
+}
+
+export interface ResultadoExclusao {
+  /** Quantas gerações saíram do índice. */
+  removidos: number;
+  /** Bytes liberados (0 quando os registros não têm medida). */
+  bytesLiberados: number;
+  /** Índice já atualizado, mais recentes primeiro. */
+  restantes: GeracaoPdf[];
+}
+
+/** Apaga os arquivos de uma geração (diretório + PDF/folhas fora dele). */
+async function apagarArquivosDaGeracao(geracao: GeracaoPdf): Promise<void> {
+  const dir = geracaoDir(geracao.geracaoId);
+  await FileSystem.deleteAsync(dir, { idempotent: true });
+
+  // Defensivo: registros antigos podem ter arquivos fora do diretório padrão
+  const soltos = [geracao.pdfUri, ...geracao.folhas.map((f) => f.uri)].filter(
+    (uri) => typeof uri === "string" && uri.trim() && !uri.startsWith(dir),
+  );
+  for (const uri of soltos) {
+    try {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+    } catch {
+      // arquivo já ausente ou sem permissão — segue
+    }
+  }
+}
+
+/**
+ * Exclui uma geração arquivada (arquivos + índice).
+ * `incluirCadeia` remove também todas as outras versões do mesmo original.
+ */
+export async function excluirGeracao(
+  geracaoId: string,
+  opcoes?: { incluirCadeia?: boolean },
+): Promise<ResultadoExclusao> {
+  const todas = await listarGeracoes();
+  const alvo = todas.find((g) => g.geracaoId === geracaoId);
+  if (!alvo) {
+    return { removidos: 0, bytesLiberados: 0, restantes: todas };
+  }
+
+  const ids = opcoes?.incluirCadeia
+    ? idsDaCadeia(todas, resolveRootId(alvo))
+    : [alvo.geracaoId];
+  const alvos = todas.filter((g) => ids.includes(g.geracaoId));
+
+  for (const g of alvos) {
+    await apagarArquivosDaGeracao(g);
+  }
+
+  const restantes = ordenarGeracoesRecentes(removerGeracoes(todas, ids));
+  await persistirIndice(restantes);
+
+  return {
+    removidos: alvos.length,
+    bytesLiberados: somarTamanhoBytes(alvos),
+    restantes,
+  };
+}
+
+/** Limpa todo o histórico: apaga o diretório do scanner e zera o índice. */
+export async function excluirTodasGeracoes(): Promise<ResultadoExclusao> {
+  const todas = await listarGeracoes();
+  try {
+    await FileSystem.deleteAsync(rootDir(), { idempotent: true });
+  } catch {
+    // fallback: apaga geração a geração
+    for (const g of todas) {
+      await apagarArquivosDaGeracao(g);
+    }
+  }
+  await AsyncStorage.removeItem(STORAGE_KEY);
+  return {
+    removidos: todas.length,
+    bytesLiberados: somarTamanhoBytes(todas),
+    restantes: [],
+  };
 }

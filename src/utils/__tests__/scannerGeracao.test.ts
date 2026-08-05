@@ -1,11 +1,16 @@
 import {
   buildGeracaoPdf,
+  contarOutrasVersoesNaCadeia,
   folhasArquivadasParaRevisao,
+  formatarBytes,
+  idsDaCadeia,
   nextVersaoNaCadeia,
   ordenarGeracoesRecentes,
+  removerGeracoes,
   resolveRootId,
   rotuloCorrecao,
   rotuloVersao,
+  somarTamanhoBytes,
   type FolhaArquivada,
   type GeracaoPdf,
 } from "../scannerGeracao";
@@ -124,6 +129,88 @@ describe("scannerGeracao", () => {
     expect(rev.map((f) => f.id)).toEqual(["a", "b"]);
     expect(rev.map((f) => f.uri)).toEqual(["ua", "ub"]);
     expect(rev.map((f) => f.ordem)).toEqual([1, 2]);
+  });
+
+  it("idsDaCadeia agrupa raiz + correções e ignora outras cadeias", () => {
+    const lista = [
+      makeGeracao({ geracaoId: "a1" }),
+      makeGeracao({ geracaoId: "a2", geracaoOriginalId: "a1", versao: 2 }),
+      makeGeracao({ geracaoId: "a3", geracaoOriginalId: "a1", versao: 3 }),
+      makeGeracao({ geracaoId: "b1" }),
+    ];
+    expect(idsDaCadeia(lista, "a1").sort()).toEqual(["a1", "a2", "a3"]);
+    expect(idsDaCadeia(lista, "b1")).toEqual(["b1"]);
+  });
+
+  it("contarOutrasVersoesNaCadeia conta a partir de qualquer versão", () => {
+    const lista = [
+      makeGeracao({ geracaoId: "a1" }),
+      makeGeracao({ geracaoId: "a2", geracaoOriginalId: "a1", versao: 2 }),
+      makeGeracao({ geracaoId: "b1" }),
+    ];
+    expect(contarOutrasVersoesNaCadeia(lista, lista[0])).toBe(1);
+    expect(contarOutrasVersoesNaCadeia(lista, lista[1])).toBe(1);
+    expect(contarOutrasVersoesNaCadeia(lista, lista[2])).toBe(0);
+  });
+
+  it("removerGeracoes remove só os ids pedidos", () => {
+    const lista = [
+      makeGeracao({ geracaoId: "a1" }),
+      makeGeracao({ geracaoId: "a2", geracaoOriginalId: "a1", versao: 2 }),
+      makeGeracao({ geracaoId: "b1" }),
+    ];
+    const restantes = removerGeracoes(lista, ["a2"]);
+    expect(restantes.map((g) => g.geracaoId)).toEqual(["a1", "b1"]);
+  });
+
+  it("removerGeracoes promove nova raiz quando a original é apagada", () => {
+    const lista = [
+      makeGeracao({ geracaoId: "a1" }),
+      makeGeracao({ geracaoId: "a3", geracaoOriginalId: "a1", versao: 3 }),
+      makeGeracao({ geracaoId: "a2", geracaoOriginalId: "a1", versao: 2 }),
+    ];
+    const restantes = removerGeracoes(lista, ["a1"]);
+    const a2 = restantes.find((g) => g.geracaoId === "a2");
+    const a3 = restantes.find((g) => g.geracaoId === "a3");
+    // a mais antiga remanescente vira raiz; a outra passa a apontar para ela
+    expect(a2?.geracaoOriginalId).toBeNull();
+    expect(a3?.geracaoOriginalId).toBe("a2");
+    // versões preservadas — não há renumeração
+    expect(a2?.versao).toBe(2);
+    expect(a3?.versao).toBe(3);
+    // e a cadeia continua íntegra para novas correções
+    expect(nextVersaoNaCadeia(restantes, resolveRootId(a3!))).toBe(4);
+  });
+
+  it("removerGeracoes com a cadeia inteira esvazia sem sobras", () => {
+    const lista = [
+      makeGeracao({ geracaoId: "a1" }),
+      makeGeracao({ geracaoId: "a2", geracaoOriginalId: "a1", versao: 2 }),
+      makeGeracao({ geracaoId: "b1" }),
+    ];
+    const restantes = removerGeracoes(lista, idsDaCadeia(lista, "a1"));
+    expect(restantes.map((g) => g.geracaoId)).toEqual(["b1"]);
+    expect(removerGeracoes(lista, ["nao-existe"])).toHaveLength(3);
+  });
+
+  it("somarTamanhoBytes ignora registros antigos sem medida", () => {
+    expect(
+      somarTamanhoBytes([
+        { tamanhoBytes: 1000 },
+        { tamanhoBytes: undefined },
+        { tamanhoBytes: 2048 },
+      ]),
+    ).toBe(3048);
+    expect(somarTamanhoBytes([])).toBe(0);
+  });
+
+  it("formatarBytes usa B/KB/MB e retorna null sem medida", () => {
+    expect(formatarBytes(0)).toBeNull();
+    expect(formatarBytes(undefined)).toBeNull();
+    expect(formatarBytes(512)).toBe("512 B");
+    expect(formatarBytes(2048)).toBe("2,0 KB");
+    expect(formatarBytes(5 * 1024 * 1024)).toBe("5,0 MB");
+    expect(formatarBytes(24 * 1024 * 1024)).toBe("24 MB");
   });
 
   it("ordenarGeracoesRecentes coloca a mais nova primeiro", () => {
