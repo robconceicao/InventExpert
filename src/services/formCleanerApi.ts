@@ -3,10 +3,18 @@ export const cleanFormWithApi = async (
   customApiUrl?: string,
 ): Promise<{ success: boolean; pdfUri?: string; error?: string }> => {
   try {
-    // Endereço local da API FastAPI.
-    // Em produção, isso deve ser substituído pela URL do Vercel/Render.
-    // Lembre-se de mudar para o seu IP da rede local se rodar no celular físico (ex: 192.168.1.10)
-    const API_URL = customApiUrl || "http://192.168.0.153:8000/api/clean";
+    // Preferir URL injectada; evita hardcode de LAN em produção.
+    const API_URL =
+      customApiUrl ||
+      process.env.EXPO_PUBLIC_FORM_CLEANER_URL ||
+      "";
+    if (!API_URL) {
+      return {
+        success: false,
+        error:
+          "API de limpeza não configurada. Defina EXPO_PUBLIC_FORM_CLEANER_URL ou passe customApiUrl.",
+      };
+    }
 
     // Converte base64 para Blob para enviar como multipart/form-data
     const binary = atob(base64Jpeg);

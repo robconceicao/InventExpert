@@ -27,6 +27,14 @@ describe('parsePrcFile', () => {
     const r = parsePrcFile('linha_invalida\r\n' + PRC_83);
     expect(r).toHaveLength(4);
   });
+  it('rejeita quantidade zero ou negativa', () => {
+    // mesma linha base com qty 000000 no campo 74-79
+    const zeroQty =
+      '0000010000010000022022050720041441712954830P0000000PI003029000000078910041000000000';
+    const r = parsePrcFile(zeroQty + '\r\n' + PRC_83);
+    expect(r).toHaveLength(4);
+    expect(r.every((c) => c.quantidade > 0)).toBe(true);
+  });
 });
 
 describe('catalogoLookup', () => {

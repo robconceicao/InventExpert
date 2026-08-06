@@ -33,10 +33,11 @@ export function parsePrcFile(conteudo: string): ContagemDetalhada[] {
     const dataStr       = linha.substring(18, 26);
     const horaStr       = linha.substring(26, 32);
 
-    if (isNaN(quantidade)) continue;
+    // Integridade: rejeitar NaN, zero e negativos (distorcem bloco% / RAIO-X)
+    if (isNaN(quantidade) || quantidade <= 0) continue;
 
     resultado.push({
-      matricula,
+      matricula:      matricula.trim(),
       area_codigo:    codigoSecao,
       area_nome:      '',
       produto_codigo: codigoProduto,

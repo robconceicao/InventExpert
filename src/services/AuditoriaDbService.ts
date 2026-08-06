@@ -2,6 +2,11 @@ import { supabase } from './supabase';
 import { AuditoriaNivel1Result } from '../types';
 import { AuditoriaReconciliacaoResult } from './AuditoriaReconciliacaoService';
 
+/**
+ * Persistência de auditoria AAE.
+ * Fail-closed: se itens falharem após o cabeçalho, tenta apagar o cabeçalho
+ * (compensating delete) e propaga o erro — nunca devolve ID "órfão".
+ */
 export class AuditoriaDbService {
   static async salvarAuditoria(
     loja: string,
@@ -32,7 +37,7 @@ export class AuditoriaDbService {
       throw errorAuditoria;
     }
 
-    const auditoriaId = auditoria.id;
+    const auditoriaId = auditoria.id as string;
 
     const itensParaInserir = resultadosNivel1.map(r => ({
       auditoria_id: auditoriaId,
@@ -43,7 +48,6 @@ export class AuditoriaDbService {
       erro_atribuido: r.erro_atribuido,
       diferenca: r.diferenca,
       status: r.status,
-      // Evidências de terceiros + erros próprios por produto/setor
       detalhe_json: {
         secoes_divergentes: r.secoes_divergentes,
         divergencias_detalhadas: r.divergencias_detalhadas ?? []
@@ -56,7 +60,19 @@ export class AuditoriaDbService {
         .insert(itensParaInserir);
 
       if (errorItens) {
-        console.error('[AuditoriaDbService] Erro ao salvar itens:', errorItens);
+        console.error('[AuditoriaDbService] Erro ao salvar itens — compensando:', errorItens);
+        const { error: delErr } = await supabase
+          .from('auditoria_atribuicao')
+          .delete()
+          .eq('id', auditoriaId);
+        if (delErr) {
+          console.error(
+            '[AuditoriaDbService] FALHA CRÍTICA: cabeçalho órfão sem itens:',
+            auditoriaId,
+            delErr,
+          );
+        }
+        throw errorItens;
       }
     }
 

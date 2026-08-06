@@ -27,6 +27,9 @@ import {
     evaluateChecker,
     sortRanking,
 } from "../services/InventoryEvaluationService";
+import { canPublishProdutividade, resolveAppRole } from "../services/authz";
+import { ProdutividadePublishService } from "../services/ProdutividadePublishService";
+import { isSupabaseConfigured, supabase } from "../services/supabase";
 import type {
     ContagemDetalhada,
     InventoryCheckerEvaluation,
@@ -78,6 +81,12 @@ export default function InventExpImportScreen() {
   /** Nome do líder (Acompanhamento) — excluído da avaliação automática */
   const [leaderName, setLeaderName] = useState("");
   const [processing, setProcessing] = useState(false);
+  /** Publicação no histórico de produtividade (escala) */
+  const [publishDate, setPublishDate] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  const [publishRef, setPublishRef] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
   const handlePickFile = async () => {
     try {
@@ -423,6 +432,74 @@ export default function InventExpImportScreen() {
     );
   };
 
+  const handlePublishProdutividade = async () => {
+    if (evaluations.length === 0) {
+      Alert.alert("Sem dados", "Processe a avaliação antes de publicar.");
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      Alert.alert(
+        "Supabase",
+        "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no .env.",
+      );
+      return;
+    }
+    const role = await resolveAppRole();
+    if (!canPublishProdutividade(role)) {
+      Alert.alert(
+        "Acesso restrito",
+        "Publicar no histórico requer perfil LIDER ou ADMIN.",
+      );
+      return;
+    }
+    if (!publishRef.trim()) {
+      Alert.alert(
+        "Referência obrigatória",
+        "Informe a loja ou código do evento (ex.: LOJA-123) para publicação idempotente.",
+      );
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const svc = new ProdutividadePublishService(supabase);
+      const res = await svc.publicar({
+        evaluations,
+        dataInventario: publishDate.trim(),
+        inventarioRef: publishRef.trim(),
+        operationType,
+      });
+
+      const parts: string[] = [
+        `Publicados: ${res.publicados} (${res.inseridos} novos, ${res.atualizados} actualizados).`,
+      ];
+      if (res.naoEncontrados.length) {
+        parts.push(
+          `Sem match em colaboradores: ${res.naoEncontrados.slice(0, 8).join(", ")}` +
+            (res.naoEncontrados.length > 8
+              ? ` (+${res.naoEncontrados.length - 8})`
+              : "") +
+            ".",
+        );
+      }
+      if (res.erros.length) {
+        parts.push(`Erros: ${res.erros.slice(0, 3).join(" | ")}`);
+      }
+
+      Alert.alert(
+        res.publicados > 0 ? "Histórico actualizado" : "Publicação incompleta",
+        parts.join("\n\n"),
+      );
+    } catch (e) {
+      Alert.alert(
+        "Erro",
+        e instanceof Error ? e.message : "Falha ao publicar produtividade.",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1d4ed8" />
@@ -711,6 +788,53 @@ export default function InventExpImportScreen() {
                 />
               </View>
             )}
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>
+                Publicar no histórico (produtividade / escala)
+              </Text>
+              <Text style={styles.cardSubtitle}>
+                Grava scores em Supabase para o motor de escala. Idempotente por
+                colaborador + data + referência. Requer matrícula ou nome único
+                em Colaboradores.
+              </Text>
+              <Text style={styles.subtitle}>Data do inventário (YYYY-MM-DD)</Text>
+              <TextInput
+                value={publishDate}
+                onChangeText={setPublishDate}
+                placeholder="2026-07-16"
+                placeholderTextColor="#94A3B8"
+                style={styles.leaderInput}
+                autoCapitalize="none"
+              />
+              <Text style={styles.subtitle}>Referência (loja / evento)</Text>
+              <TextInput
+                value={publishRef}
+                onChangeText={setPublishRef}
+                placeholder="Ex.: LOJA-042 ou INV-2026-07-16"
+                placeholderTextColor="#94A3B8"
+                style={styles.leaderInput}
+                autoCapitalize="characters"
+              />
+              <Pressable
+                onPress={() => void handlePublishProdutividade()}
+                style={[
+                  styles.btnPrimary,
+                  {
+                    backgroundColor: "#0f766e",
+                    opacity: publishing ? 0.5 : 1,
+                  },
+                ]}
+                disabled={publishing}
+              >
+                <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+                <Text style={styles.btnTextWhite}>
+                  {publishing
+                    ? "A publicar…"
+                    : "Publicar scores no histórico"}
+                </Text>
+              </Pressable>
+            </View>
 
             <View style={styles.exportRow}>
               <Pressable

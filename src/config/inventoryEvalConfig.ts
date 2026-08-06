@@ -200,41 +200,66 @@ export function lookupLimiteBlocoArea(
  * - Operação ≠ FARMACIA → []
  * - Área sem entrada → console.warn e **não penaliza** (nunca default 20%)
  * - limite >= 9999 → ignora
+ *
+ * `limites` opcional: quando fornecido (mesmo array do path .prc / Supabase),
+ * usa essa fonte em vez do mapa local — evita divergência DB vs seed offline.
  */
 export function getViolacoesBloco(
   secoes: { area: string; pctBloco: number }[],
   operationType: InventoryOperationType,
+  limites?: LimiteBlocoRow[],
 ): ViolacaoBloco[] {
   if (operationType !== "FARMACIA") {
     return [];
   }
 
   const violacoes: ViolacaoBloco[] = [];
+  const useRows = limites && limites.length > 0;
 
   for (const sec of secoes) {
     const areaNome = (sec.area || "").trim();
     if (!areaNome) continue;
 
-    const regra = lookupLimiteBlocoArea(areaNome, operationType);
+    let limitePct: number;
+    let areaCritica: boolean;
 
-    if (!regra) {
-      console.warn(
-        `[Avaliação] Área sem limite configurado: "${areaNome}" — ignorando (sem penalidade).`,
+    if (useRows) {
+      const row = limites!.find(
+        (l) =>
+          l.tipo_operacao === operationType &&
+          l.nome_area.toUpperCase() === areaNome.toUpperCase(),
       );
+      if (!row) {
+        console.warn(
+          `[Avaliação] Área sem limite configurado: "${areaNome}" — ignorando (sem penalidade).`,
+        );
+        continue;
+      }
+      limitePct = row.limite_pct;
+      areaCritica = row.area_critica;
+    } else {
+      const regra = lookupLimiteBlocoArea(areaNome, operationType);
+      if (!regra) {
+        console.warn(
+          `[Avaliação] Área sem limite configurado: "${areaNome}" — ignorando (sem penalidade).`,
+        );
+        continue;
+      }
+      limitePct = regra.limite;
+      areaCritica = regra.critica;
+    }
+
+    if (limitePct >= LIMITE_BLOCO_SEM_LIMITE) {
       continue;
     }
 
-    if (regra.limite >= LIMITE_BLOCO_SEM_LIMITE) {
-      continue;
-    }
-
-    if (sec.pctBloco > regra.limite) {
+    if (sec.pctBloco > limitePct) {
       violacoes.push(
         buildViolacaoBloco({
           area_nome: areaNome,
           real_pct: sec.pctBloco,
-          limite_pct: regra.limite,
-          area_critica: regra.critica,
+          limite_pct: limitePct,
+          area_critica: areaCritica,
         }),
       );
     }

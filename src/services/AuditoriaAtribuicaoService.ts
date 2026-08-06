@@ -8,6 +8,26 @@ import {
   InventoryCheckerInput
 } from '../types';
 
+/** Match produto seguro: exact após strip zeros, ou suffix só se ambos ≥ 8 dígitos (EAN). */
+export function bipMatchesEan(bip: ContagemDetalhada, ean: string): boolean {
+  const eanNorm = (ean || '').replace(/\D/g, '').replace(/^0+/, '') || '';
+  if (!eanNorm) return false;
+  const candidates = [bip.produto_ean, bip.produto_codigo]
+    .map((s) => (s || '').replace(/\D/g, '').replace(/^0+/, '') || '')
+    .filter(Boolean);
+  for (const c of candidates) {
+    if (c === eanNorm) return true;
+    if (
+      c.length >= 8 &&
+      eanNorm.length >= 8 &&
+      (eanNorm.endsWith(c) || c.endsWith(eanNorm))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export class AuditoriaAtribuicaoService {
   /**
    * Executa a auditoria de Nível 1.
@@ -25,15 +45,22 @@ export class AuditoriaAtribuicaoService {
     const resultados: AuditoriaNivel1Result[] = [];
 
     // Mapeia todas as seções e seus ajustes a partir do arquivo de acuracidade
-    // Como a reconciliação é por seção e produto, podemos agrupar por seção.
-    // Mas o erro da seção é a soma de |AJST| de todos os produtos dessa seção.
-    // E precisamos rastrear o de/para.
     const acuracidadeMap = new Map<string, AuditoriaAcuracidadeRow[]>();
     for (const row of acuracidade) {
       if (!acuracidadeMap.has(row.secao)) {
         acuracidadeMap.set(row.secao, []);
       }
       acuracidadeMap.get(row.secao)!.push(row);
+    }
+
+    // Quantos agentes distintos biparam cada seção (fallback rateio)
+    const agentesPorSecao = new Map<string, Set<string>>();
+    for (const prc of prcs) {
+      const id = (prc.matricula || '').replace(/\D/g, '');
+      if (!id) continue;
+      const set = agentesPorSecao.get(prc.area_codigo) ?? new Set<string>();
+      set.add(id);
+      agentesPorSecao.set(prc.area_codigo, set);
     }
 
     for (const prod of producao) {
@@ -60,24 +87,45 @@ export class AuditoriaAtribuicaoService {
       const secoesContadas = new Set<string>();
       bipsDoAgente.forEach(bip => secoesContadas.add(bip.area_codigo));
 
-      // 3. Erro Real = soma de |AJST| de ACURACIDADE nas seções contadas
-      //    + detalhamento por produto/setor (ajst !== 0)
+      // 3. Erro Real:
+      //    - Se existir bip de produto (EAN/código ≥8) na seção → só agentes com match no produto
+      //    - Senão → rateio igual entre agentes da seção
       let erro_real = 0;
       const divergencias_detalhadas: DivergenciaProdutoSetor[] = [];
       for (const secao of secoesContadas) {
+        const nAgentesSecao = Math.max(1, agentesPorSecao.get(secao)?.size ?? 1);
+        const bipsSecao = prcs.filter((p) => p.area_codigo === secao);
         const itensDaSecao = acuracidadeMap.get(secao) || [];
         for (const item of itensDaSecao) {
-          erro_real += Math.abs(item.ajst);
-          if (item.ajst !== 0) {
-            divergencias_detalhadas.push({
-              secao,
-              ean: item.ean,
-              descricao: item.descricao,
-              c1: item.c1,
-              final: item.final,
-              ajst: item.ajst
-            });
+          if (item.ajst === 0) continue;
+
+          const productBips = bipsSecao.filter((b) => bipMatchesEan(b, item.ean));
+          let share: number;
+          if (productBips.length > 0) {
+            const agentesProduto = new Set(
+              productBips
+                .map((b) => (b.matricula || '').replace(/\D/g, ''))
+                .filter(Boolean),
+            );
+            const agenteNoProduto = [...possiveisIdsDispositivo].some((id) =>
+              agentesProduto.has(id),
+            );
+            if (!agenteNoProduto) continue; // outro contou este EAN
+            share = 1 / Math.max(1, agentesProduto.size);
+          } else {
+            share = 1 / nAgentesSecao;
           }
+
+          const ajstShare = item.ajst * share;
+          erro_real += Math.abs(ajstShare);
+          divergencias_detalhadas.push({
+            secao,
+            ean: item.ean,
+            descricao: item.descricao,
+            c1: item.c1,
+            final: item.final,
+            ajst: ajstShare,
+          });
         }
       }
 

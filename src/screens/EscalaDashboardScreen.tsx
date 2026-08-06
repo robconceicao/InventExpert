@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../services/supabase';
+import { canGenerateEscala, resolveAppRole } from '../services/authz';
 import { EscalaService } from '../modules/escala/service';
 import {
   useEscala,
@@ -34,10 +35,8 @@ export default function EscalaDashboardScreen() {
   const { inventarios, loading: loadingInv, recarregar: recarregarInv } =
     useInventarios(escalaService, 'AGENDADO');
 
-  // Hook extra apenas para a função de importação
   const { inserirLoteExcel } = useInventariosCrud(invService, {}, false);
 
-  // Hooks para a escala do inventário selecionado
   const {
     escala,
     agrupado,
@@ -49,7 +48,15 @@ export default function EscalaDashboardScreen() {
 
   const { preview, loading: loadingPreview } = usePreviewComposicao(escalaService, selectedId);
 
-  const handleGerarEscala = () => {
+  const handleGerarEscala = async () => {
+    const role = await resolveAppRole();
+    if (!canGenerateEscala(role)) {
+      Alert.alert(
+        'Acesso restrito',
+        'Gerar escala requer perfil LIDER ou ADMIN.',
+      );
+      return;
+    }
     Alert.alert(
       'Gerar Escala',
       'O motor de inteligência logística vai calcular a melhor equipa disponível. Continuar?',

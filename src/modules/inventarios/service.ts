@@ -243,7 +243,15 @@ export class InventariosService {
   // CREATE LOTE (IMPORTAÇÃO VIA EXCEL)
   // -------------------------------------------------------------------------
   async inserirLoteExcel(
-    linhas: { codigo_loja?: string; data?: string; headcount?: number; piv?: number; hora_inicio?: string; observacoes?: string }[]
+    linhas: {
+      codigo_loja?: string;
+      data?: string;
+      headcount?: number;
+      piv?: number;
+      hora_inicio?: string;
+      observacoes?: string;
+      tipo_operacao?: string;
+    }[]
   ): Promise<ICrudResult<number>> {
     try {
       if (!linhas || linhas.length === 0) {
@@ -271,20 +279,42 @@ export class InventariosService {
         if (c.codigo_loja) mapaClientes.set(String(c.codigo_loja).trim(), c.id);
       });
 
-      // 3. Montar payloads válidos
+      // Alinhado ao CHECK de inventarios (schema_v2): só estes 3 valores no DB
+      const TIPOS_DB = new Set(['FARMACIA', 'SUPERMERCADO', 'LOJA_GERAL']);
+      const mapTipo = (raw: string): IInventarioInput['tipo_operacao'] | null => {
+        const u = raw.trim().toUpperCase();
+        if (TIPOS_DB.has(u)) return u as IInventarioInput['tipo_operacao'];
+        // Perfis de avaliação → vizinho de inventário
+        if (u === 'HIPERMERCADO' || u === 'ATACADO') return 'SUPERMERCADO';
+        if (!u) return 'FARMACIA';
+        return null;
+      };
+
+      // 3. Montar payloads válidos (com conflito cliente+data e tipo_operacao)
       const payloads: (IInventarioInput & { observacoes?: string })[] = [];
       let ignorados = 0;
+      const chavesLote = new Set<string>(); // evita duplicata no mesmo Excel
 
       for (const linha of linhas) {
         const codigo = String(linha.codigo_loja || '').trim();
         const clienteId = mapaClientes.get(codigo);
-        if (!clienteId) { ignorados++; continue; } // Loja não cadastrada
+        if (!clienteId) { ignorados++; continue; }
 
         const dataInv = linha.data || '';
         if (validarData(dataInv)) { ignorados++; continue; }
 
         const hc = Number(linha.headcount) || Number(linha.piv) || 0;
         if (validarHeadcount(hc)) { ignorados++; continue; }
+
+        const tipoOp = mapTipo(String(linha.tipo_operacao || 'FARMACIA'));
+        if (!tipoOp) { ignorados++; continue; }
+
+        const chave = `${clienteId}|${dataInv}`;
+        if (chavesLote.has(chave)) { ignorados++; continue; }
+
+        const conflito = await this.repo.existeConflito(clienteId, dataInv);
+        if (conflito) { ignorados++; continue; }
+        chavesLote.add(chave);
 
         const tipoAgendamento = calcularTipoAgendamento(dataInv);
         const obs = prefixarObservacoes(tipoAgendamento, linha.observacoes);
@@ -293,14 +323,18 @@ export class InventariosService {
           cliente_id: clienteId,
           data: dataInv,
           headcount: hc,
-          tipo_operacao: 'FARMACIA', // Padrão
+          tipo_operacao: tipoOp,
           hora_inicio: linha.hora_inicio || undefined,
           observacoes: obs,
         });
       }
 
       if (payloads.length === 0) {
-        return { sucesso: false, erro: 'Nenhum registro válido. Lojas não cadastradas ou datas inválidas/retroativas.' };
+        return {
+          sucesso: false,
+          erro:
+            'Nenhum registro válido. Lojas não cadastradas, datas inválidas/retroativas, tipo inválido ou conflito de data.',
+        };
       }
 
       const dados = await this.repo.inserirLote(payloads);
@@ -308,8 +342,9 @@ export class InventariosService {
       return { 
         sucesso: true, 
         dados: dados.length, 
-        // Se houve ignorados, passamos via mensagem de erro amigável na UI
-        ...(ignorados > 0 && { erro: `Importados ${dados.length}. Porém, ${ignorados} linhas foram ignoradas (Loja não cadastrada ou dados incorretos).` })
+        ...(ignorados > 0 && {
+          erro: `Importados ${dados.length}. Porém, ${ignorados} linhas foram ignoradas (loja, data, tipo, duplicata ou conflito).`,
+        }),
       };
     } catch (e) {
       return { sucesso: false, erro: e instanceof Error ? e.message : 'Erro na importação.' };

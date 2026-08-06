@@ -51,3 +51,15 @@ jdk17/
 *.apk
 InventExpert-*.apk
 
+
+# locais/temporarios
+.idea/
+fix*.py
+fix*.js
+read_logs*.ps1
+search_prompts.ps1
+temp_log.txt
+tsc_errors.log
+all_prompts.md
+supabase/.temp/
+update_version.py

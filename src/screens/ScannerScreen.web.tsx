@@ -1,7 +1,7 @@
 /**
  * Web stub for ScannerScreen.
  * The document scanner uses native-only modules (react-native-document-scanner-plugin)
- * that cannot run in a browser. This tab is hidden on web via RootTabs.tsx,
+ * that cannot run in a browser. Scanner is hidden on web via HomeScreen.tsx,
  * but Metro requires a resolvable module — this stub satisfies that.
  */
 import React from "react";

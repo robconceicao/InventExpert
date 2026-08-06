@@ -1,14 +1,19 @@
-import { AuditoriaAtribuicaoService } from '../AuditoriaAtribuicaoService';
+import { AuditoriaAtribuicaoService, bipMatchesEan } from '../AuditoriaAtribuicaoService';
 import { ContagemDetalhada, AuditoriaAcuracidadeRow, AuditoriaAgenteInfo, InventoryCheckerInput } from '../../types';
 
 describe('AuditoriaAtribuicaoService Nível 1', () => {
-  const criarBip = (matricula: string, secao: string): ContagemDetalhada => ({
+  const criarBip = (
+    matricula: string,
+    secao: string,
+    opts?: { produto_ean?: string; produto_codigo?: string },
+  ): ContagemDetalhada => ({
     matricula,
     area_codigo: secao,
     area_nome: 'TESTE',
-    produto_codigo: '123',
+    produto_codigo: opts?.produto_codigo ?? '123',
     produto_nome: 'PROD',
-    produto_ean: '123',
+    // curto de propósito: não match EAN ≥8 (mantém rateio por seção nos testes legados)
+    produto_ean: opts?.produto_ean ?? '123',
     produto_classe: '',
     quantidade: 10,
     is_bloco: false,
@@ -169,5 +174,89 @@ describe('AuditoriaAtribuicaoService Nível 1', () => {
     const resultado = AuditoriaAtribuicaoService.calcularNivel1(prcs, acuracidade, producao, agentes);
     expect(resultado[0].erro_real).toBe(0);
     expect(resultado[0].divergencias_detalhadas).toEqual([]);
+  });
+
+  it('(i) Rateia |AJST| quando dois agentes biparam a mesma seção', () => {
+    const agentes = new Map<string, AuditoriaAgenteInfo>([
+      ['11111111111', { codigo: '000001', nome: 'João', cpf: '11111111111' }],
+      ['22222222222', { codigo: '000002', nome: 'Maria', cpf: '22222222222' }],
+    ]);
+    const prcs = [
+      criarBip('11111111111', 'SHARED'),
+      criarBip('22222222222', 'SHARED'),
+    ];
+    // |AJST| = 10 na seção compartilhada → cada um recebe 5
+    const acuracidade = [criarAcuracidade('SHARED', 'EANX', 10)];
+    const producao = [
+      criarProducao('11111111111', 5),
+      criarProducao('22222222222', 5),
+    ];
+
+    const resultado = AuditoriaAtribuicaoService.calcularNivel1(
+      prcs,
+      acuracidade,
+      producao,
+      agentes,
+    );
+    expect(resultado).toHaveLength(2);
+    for (const r of resultado) {
+      expect(r.erro_real).toBe(5);
+      expect(r.status).toBe('OK');
+    }
+    // Soma das contribuições = AJST total da seção
+    const somaReais = resultado.reduce((s, r) => s + r.erro_real, 0);
+    expect(somaReais).toBe(10);
+  });
+
+  it('(j) Com EAN no bip, só o agente que contou o produto recebe o AJST', () => {
+    const ean = '7891234567890';
+    const agentes = new Map<string, AuditoriaAgenteInfo>([
+      ['11111111111', { codigo: '000001', nome: 'João', cpf: '11111111111' }],
+      ['22222222222', { codigo: '000002', nome: 'Maria', cpf: '22222222222' }],
+    ]);
+    const prcs = [
+      criarBip('11111111111', 'SEC1', { produto_ean: ean }),
+      criarBip('22222222222', 'SEC1', { produto_ean: '7899999999999' }),
+    ];
+    const acuracidade = [criarAcuracidade('SEC1', ean, 8)];
+    const producao = [
+      criarProducao('11111111111', 8),
+      criarProducao('22222222222', 0),
+    ];
+
+    const resultado = AuditoriaAtribuicaoService.calcularNivel1(
+      prcs,
+      acuracidade,
+      producao,
+      agentes,
+    );
+    const joao = resultado.find((r) => r.cpf === '11111111111')!;
+    const maria = resultado.find((r) => r.cpf === '22222222222')!;
+    expect(joao.erro_real).toBe(8);
+    expect(maria.erro_real).toBe(0);
+    expect(joao.status).toBe('OK');
+  });
+});
+
+describe('bipMatchesEan', () => {
+  const bip = (ean: string, codigo = ''): ContagemDetalhada => ({
+    matricula: '1',
+    area_codigo: '1',
+    area_nome: '',
+    produto_codigo: codigo,
+    produto_nome: '',
+    produto_ean: ean,
+    produto_classe: '',
+    quantidade: 1,
+    is_bloco: false,
+    data_hora: new Date(),
+  });
+
+  it('não faz match curto (evita 123 ⊂ 789123)', () => {
+    expect(bipMatchesEan(bip('123'), '789123')).toBe(false);
+  });
+
+  it('match exact EAN', () => {
+    expect(bipMatchesEan(bip('7891234567890'), '7891234567890')).toBe(true);
   });
 });

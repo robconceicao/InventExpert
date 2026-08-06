@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import * as Speech from "expo-speech";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -19,9 +20,20 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+    ALARM_VOICE_MSG,
+    canTriggerAdvanceAlarm,
+    evaluateAdvancesAndMaybeStop,
+    isNearWarningTime,
+    isWarningTime,
+    MONITORED_ADVANCES,
+    setReportFilling,
+} from "../services/advanceAlarmService";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportA } from "../types";
+import { applyMirrorToReportG, mapReportAToG } from "../utils/mirrorToReportG";
 import { formatReportA } from "../utils/parsers";
+import { formatTimeInputH, formatTimeNowH } from "../utils/timeFormat";
 
 // ---------------------------------------------------------------------------
 // Notificações locais
@@ -38,8 +50,6 @@ Notifications.setNotificationHandler({
 
 const STORAGE_KEY = "inventexpert:reportA";
 const HISTORY_KEY = "inventexpert:reportA:history";
-const ALARM_VOICE_MSG =
-  "Solicitar conferentes que exportem os dados dos coletores.";
 
 const initialState: ReportA = {
   lojaNum: "",
@@ -73,98 +83,12 @@ const initialState: ReportA = {
   contagemAntecipada: null,
 };
 
-// Horários monitorados para aviso (15 min antes)
-const MONITORED_ADVANCES = [
-  { label: "22h00", hour: 22, minute: 0 },
-  { label: "00h00", hour: 0, minute: 0 },
-  { label: "01h00", hour: 1, minute: 0 },
-  { label: "03h00", hour: 3, minute: 0 },
-  { label: "04h00", hour: 4, minute: 0 },
-];
-
-// Retorna true se agora está entre 0 e 15 min antes do horário alvo (janela de aviso)
-const isWarningTime = (targetHour: number, targetMin: number): boolean => {
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  // alvo em minutos do dia
-  let targetMins = targetHour * 60 + targetMin;
-  // Ajuste: horários noturnos (0-5h) considerados como "dia seguinte"
-  if (targetHour < 18 && now.getHours() >= 18) {
-    targetMins += 1440;
-  }
-  const diff = targetMins - nowMins;
-  return diff >= 0 && diff <= 15;
-};
-
-// Retorna true se agora está próximo da janela de aviso (de 17 min antes a 5 min depois)
-const isNearWarningTime = (targetHour: number, targetMin: number): boolean => {
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  let targetMins = targetHour * 60 + targetMin;
-  if (targetHour < 18 && now.getHours() >= 18) {
-    targetMins += 1440;
-  }
-  const diff = targetMins - nowMins;
-  return diff >= -5 && diff <= 17;
-};
-
-// Configura e agenda alarmes no nível do Sistema Operacional (iOS/Android)
-const scheduleAdvanceAlerts = async () => {
-  if (Platform.OS === "web") return;
-
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== "granted") {
-    console.warn("[ReportA] Permissão de notificação negada.");
-    return;
-  }
-
-  // Configura canal de notificação prioritário para Android (necessário para som/vibração a partir da API 26)
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("alarms", {
-      name: "Alarme de Avanços",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7A",
-      sound: "default",
-    });
-  }
-
-  // Cancela agendamentos anteriores para evitar duplicados acumulados
-  await Notifications.cancelAllScheduledNotificationsAsync();
-
-  // Agenda alarmes diários recorrentes exatamente 15 minutos antes de cada avanço
-  for (const adv of MONITORED_ADVANCES) {
-    let alarmHour = adv.hour;
-    let alarmMinute = adv.minute - 15;
-    if (alarmMinute < 0) {
-      alarmMinute += 60;
-      alarmHour -= 1;
-      if (alarmHour < 0) {
-        alarmHour += 24;
-      }
-    }
-
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `⏰ Avanço ${adv.label} em 15 minutos`,
-          body: ALARM_VOICE_MSG,
-          sound: true,
-          data: { label: adv.label },
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: alarmHour,
-          minute: alarmMinute,
-          channelId: "alarms",
-        } as any,
-      });
-    } catch (err) {
-      console.warn(`[ReportA] Erro ao agendar alarme para ${adv.label}:`, err);
-    }
-  }
-  console.log("[ReportA] Todos os alarmes diários de OS agendados!");
-};
+const reportAHasContent = (r: ReportA): boolean =>
+  Object.values(r).some((v) => {
+    if (v === null || v === undefined || v === "") return false;
+    if (typeof v === "boolean") return true;
+    return String(v).trim().length > 0;
+  });
 
 export default function ReportAScreen() {
   const [report, setReport] = useState<ReportA>(initialState);
@@ -252,128 +176,18 @@ export default function ReportAScreen() {
     }
   };
 
-  // ── Auto-save sempre que report muda, e sincroniza com ReportB
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
+  const reportRef = useRef(report);
+  reportRef.current = report;
 
-    AsyncStorage.getItem("inventexpert:reportB").then((res) => {
-      const bReport = res ? JSON.parse(res) : {};
-      const updatedB = {
-        ...bReport,
-        cliente: report.lojaNome || bReport.cliente || "",
-        lojaNum: report.lojaNum || bReport.lojaNum || "",
-        chegadaEquipe: report.hrChegada || bReport.chegadaEquipe || "",
-        inicioDeposito: report.inicioContagemEstoque || bReport.inicioDeposito || "",
-        terminoDeposito: report.terminoContagemEstoque || bReport.terminoDeposito || "",
-        inicioLoja: report.inicioContagemLoja || bReport.inicioLoja || "",
-        terminoLoja: report.terminoContagemLoja || bReport.terminoLoja || "",
-        inicioDivergencia: report.inicioDivergencia || bReport.inicioDivergencia || "",
-        envioArquivo1: report.envioArquivo1 || bReport.envioArquivo1 || "",
-        envioArquivo2: report.envioArquivo2 || bReport.envioArquivo2 || "",
-        envioArquivo3: report.envioArquivo3 || bReport.envioArquivo3 || "",
-        avalPrepDeposito: report.avalEstoque || bReport.avalPrepDeposito || "",
-        avalPrepLoja: report.avalLoja || bReport.avalPrepLoja || "",
-        satisfacao: report.satisfacao || bReport.satisfacao || "",
-        responsavel: report.lider || bReport.responsavel || "",
-        terminoInventario: report.terminoInventario || bReport.terminoInventario || "",
-      };
-      AsyncStorage.setItem("inventexpert:reportB", JSON.stringify(updatedB)).catch(() => null);
-    });
-  }, [report]);
-
-  // ── Inicializa permissões, agenda alarmes de OS e escuta eventos de notificações
-  useEffect(() => {
-    // Agenda alarmes no nível do SO
-    void scheduleAdvanceAlerts();
-
-    // Ouvinte para quando a notificação é recebida em primeiro plano (foreground)
-    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
-      const label = notification.request.content.data?.label as string | undefined;
-      if (label) {
-        const adv = MONITORED_ADVANCES.find((a) => a.label === label);
-        if (adv && isNearWarningTime(adv.hour, adv.minute)) {
-          const dateStr = new Date().toDateString();
-          const key = `${dateStr}_${label}`;
-          if (!firedRef.current.has(key)) {
-            void persistFiredAlarm(key);
-            triggerAlarm(label);
-          }
-        } else {
-          console.log(`[ReportA] Ignorando notificação descompassada recebida para ${label}`);
-        }
-      }
-    });
-
-    // Ouvinte para quando o usuário clica na notificação (trazendo o app de background/fechado)
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const label = response.notification.request.content.data?.label as string | undefined;
-      if (label) {
-        const adv = MONITORED_ADVANCES.find((a) => a.label === label);
-        if (adv && isNearWarningTime(adv.hour, adv.minute)) {
-          const dateStr = new Date().toDateString();
-          const key = `${dateStr}_${label}`;
-          if (!firedRef.current.has(key)) {
-            void persistFiredAlarm(key);
-            triggerAlarm(label);
-          }
-        } else {
-          console.log(`[ReportA] Ignorando clique de notificação descompassada para ${label}`);
-        }
-      }
-    });
-
-    // Polling secundário local em primeiro plano a cada 30s como contingência elegante
-    monitorTimerRef.current = setInterval(() => {
-      const dateStr = new Date().toDateString();
-      for (const adv of MONITORED_ADVANCES) {
-        const key = `${dateStr}_${adv.label}`;
-        if (!firedRef.current.has(key) && isWarningTime(adv.hour, adv.minute)) {
-          void persistFiredAlarm(key);
-          triggerAlarm(adv.label);
-          break;
-        }
-      }
-    }, 30_000);
-
-    return () => {
-      receivedSubscription.remove();
-      responseSubscription.remove();
-      if (monitorTimerRef.current) clearInterval(monitorTimerRef.current);
-      stopAlarm();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVoice]); // Recria ouvintes caso a voz mude
-
-  const triggerAlarm = (label: string) => {
-    // Se o alarme já estiver ativo para este mesmo rótulo, evita reinstanciar
-    if (alarmActive && alarmLabel === label) {
-      return;
-    }
-
-    // Garante a parada absoluta de qualquer aviso anterior
-    stopAlarm();
-
-    setAlarmLabel(label);
-    setAlarmActive(true);
-
-    // Dispara balão local imediato caso o app esteja ativo
+  const stopAlarm = useCallback(() => {
     if (Platform.OS !== "web") {
-      void Notifications.scheduleNotificationAsync({
-        content: {
-          title: `⏰ Avanço ${label} em 15 minutos`,
-          body: ALARM_VOICE_MSG,
-          sound: true,
-          data: { label },
-        },
-        trigger: null,
-      });
+      void Speech.stop();
     }
+    setAlarmActive(false);
+    setAlarmLabel("");
+  }, []);
 
-    // Voz sintetizada imediata executada exatamente UMA vez (sem loop infinito irritante)
-    speakWarning();
-  };
-
-  const speakWarning = () => {
+  const speakWarning = useCallback(() => {
     if (Platform.OS !== "web") {
       void Speech.stop().then(() => {
         Speech.speak(ALARM_VOICE_MSG, {
@@ -384,24 +198,120 @@ export default function ReportAScreen() {
         });
       });
     }
-  };
+  }, [selectedVoice]);
 
-  const stopAlarm = () => {
-    if (Platform.OS !== "web") {
-      void Speech.stop();
-    }
-    setAlarmActive(false);
-    setAlarmLabel("");
-  };
+  const triggerAlarm = useCallback(
+    (label: string) => {
+      setAlarmActive((active) => {
+        setAlarmLabel((currentLabel) => {
+          if (active && currentLabel === label) return currentLabel;
+          return label;
+        });
+        return true;
+      });
+
+      if (Platform.OS !== "web") {
+        void Speech.stop();
+        void Notifications.scheduleNotificationAsync({
+          content: {
+            title: `⏰ Avanço ${label} em 15 minutos`,
+            body: ALARM_VOICE_MSG,
+            sound: true,
+            data: { label, type: "advance_alarm" },
+          },
+          trigger: null,
+        });
+      }
+      speakWarning();
+    },
+    [speakWarning],
+  );
+
+  // ── Auto-save, espelho ReportG, preenchimento A e parada em 100%
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(report)).catch(() => null);
+    void applyMirrorToReportG(mapReportAToG(report));
+    void setReportFilling("A", reportAHasContent(report));
+    void evaluateAdvancesAndMaybeStop(report).then((stopped) => {
+      if (stopped) stopAlarm();
+    });
+  }, [report, stopAlarm]);
+
+  // ── Foco: marca ReportA em preenchimento (habilita alarmes se permitido)
+  useFocusEffect(
+    useCallback(() => {
+      void setReportFilling("A", true);
+      return () => {
+        void setReportFilling("A", reportAHasContent(reportRef.current));
+      };
+    }, []),
+  );
+
+  // ── Escuta notificações / polling — só dispara se A–F em preenchimento e sem 100%
+  useEffect(() => {
+    const tryFire = async (label: string) => {
+      if (!(await canTriggerAdvanceAlarm())) {
+        console.log(`[ReportA] Alarme ${label} ignorado (sem A–F ativo ou avanço 100%).`);
+        return;
+      }
+      const dateStr = new Date().toDateString();
+      const key = `${dateStr}_${label}`;
+      if (firedRef.current.has(key)) return;
+      void persistFiredAlarm(key);
+      triggerAlarm(label);
+    };
+
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      const label = notification.request.content.data?.label as string | undefined;
+      if (!label) return;
+      const adv = MONITORED_ADVANCES.find((a) => a.label === label);
+      if (adv && isNearWarningTime(adv.hour, adv.minute)) {
+        void tryFire(label);
+      } else {
+        console.log(`[ReportA] Ignorando notificação descompassada recebida para ${label}`);
+      }
+    });
+
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const label = response.notification.request.content.data?.label as string | undefined;
+      if (!label) return;
+      const adv = MONITORED_ADVANCES.find((a) => a.label === label);
+      if (adv && isNearWarningTime(adv.hour, adv.minute)) {
+        void tryFire(label);
+      } else {
+        console.log(`[ReportA] Ignorando clique de notificação descompassada para ${label}`);
+      }
+    });
+
+    monitorTimerRef.current = setInterval(() => {
+      void (async () => {
+        if (!(await canTriggerAdvanceAlarm())) return;
+        const dateStr = new Date().toDateString();
+        for (const adv of MONITORED_ADVANCES) {
+          const key = `${dateStr}_${adv.label}`;
+          if (!firedRef.current.has(key) && isWarningTime(adv.hour, adv.minute)) {
+            void persistFiredAlarm(key);
+            triggerAlarm(adv.label);
+            break;
+          }
+        }
+      })();
+    }, 30_000);
+
+    return () => {
+      receivedSubscription.remove();
+      responseSubscription.remove();
+      if (monitorTimerRef.current) clearInterval(monitorTimerRef.current);
+      stopAlarm();
+    };
+  }, [selectedVoice, triggerAlarm, stopAlarm]);
 
   const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
     setReport((prev) => ({ ...prev, [key]: value }));
   };
 
   const setTimeNow = (key: keyof ReportA) => {
-    const now = new Date();
-    const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    setField(key, time);
+    setField(key, formatTimeNowH());
   };
 
   const renderTimeField = (label: string, field: keyof ReportA) => (
@@ -411,8 +321,8 @@ export default function ReportAScreen() {
         <TextInput
           style={[styles.input, { flex: 1 }]}
           value={String(report[field])}
-          onChangeText={(t) => setField(field, t)}
-          placeholder="00:00"
+          onChangeText={(t) => setField(field, formatTimeInputH(t))}
+          placeholder="00h00"
           keyboardType="numbers-and-punctuation"
         />
         <Pressable onPress={() => setTimeNow(field)} style={styles.nowBtn}>

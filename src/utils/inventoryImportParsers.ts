@@ -188,7 +188,11 @@ export function parseProducaoSecaoCsv(text: string): SectionAccuracyRecord[] {
 // Enriquecimento .prc × seções × limites
 // ---------------------------------------------------------------------------
 
-/** Filtra contagens de um conferente (matrícula, com fallback por nome). */
+/**
+ * Filtra contagens de um conferente (matrícula primeiro).
+ * Fallback por nome só funciona se `ContagemDetalhada.nome` foi enriquecido
+ * (parsePrcFile não preenche nome — usar mapa agentes/CadFun antes se necessário).
+ */
 export function filtrarContagensDoConferente(
   contagens: ContagemDetalhada[],
   matricula?: string,
@@ -199,7 +203,18 @@ export function filtrarContagensDoConferente(
     if (byMat.length > 0) return byMat;
   }
   if (nome) {
-    return contagens.filter((c) => nomesIguais(c.nome, nome));
+    const byNome = contagens.filter(
+      (c) => c.nome != null && c.nome.length > 0 && nomesIguais(c.nome, nome),
+    );
+    if (byNome.length > 0) return byNome;
+    // Evita falso negativo silencioso: matrícula não bateu e nome não está nas contagens
+    if (matricula) {
+      console.warn(
+        `[InventExp] Nenhuma contagem .prc para matrícula="${matricula}"` +
+          (nome ? ` / nome="${nome}"` : "") +
+          " — bloco por área e RAIO-X ficarão incompletos.",
+      );
+    }
   }
   return [];
 }

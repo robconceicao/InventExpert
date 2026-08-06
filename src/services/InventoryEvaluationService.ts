@@ -222,7 +222,8 @@ function resolverViolacoes(args: {
     area: getSectionAreaNome(s),
     pctBloco: getSectionBlocoPct(s),
   }));
-  return getViolacoesBloco(secoesParaAvaliacao, operationType);
+  // Mesma fonte de limites do path .prc (Supabase ou fallback)
+  return getViolacoesBloco(secoesParaAvaliacao, operationType, limites);
 }
 
 function aplicarPenalidadeBloco(violacoes: ViolacaoBloco[]): number {
