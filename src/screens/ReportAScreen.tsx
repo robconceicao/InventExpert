@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
-import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
@@ -21,14 +20,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+    ALARM_TITLE,
     ALARM_VOICE_MSG,
+    AVANCOS_MONITORADOS,
+    avisoLiberado,
+    buscarAvancoPorLabel,
     canTriggerAdvanceAlarm,
     evaluateAdvancesAndMaybeStop,
     isNearWarningTime,
     isWarningTime,
-    MONITORED_ADVANCES,
     setReportFilling,
+    SOM_AVISO,
+    syncAdvanceAlarms,
 } from "../services/advanceAlarmService";
+import { speak as falarAviso, stop as pararFala } from "../services/ttsService";
 import { enqueueSyncItem, syncQueue } from "../services/sync";
 import type { ReportA } from "../types";
 import { applyMirrorToReportG, mapReportAToG } from "../utils/mirrorToReportG";
@@ -98,52 +103,12 @@ export default function ReportAScreen() {
   const [alarmLabel, setAlarmLabel] = useState("");
   const monitorTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const firedRef = useRef<Set<string>>(new Set());
-  const [selectedVoice, setSelectedVoice] = useState<string | undefined>(undefined);
 
   // ── Carrega dados salvos (apenas na montagem, sem auto-save no mount)
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((res) => {
       if (res) setReport(JSON.parse(res));
     });
-  }, []);
-
-  // ── Carrega a melhor voz masculina em português disponível no sistema
-  useEffect(() => {
-    const initVoice = async () => {
-      try {
-        const voices = await Speech.getAvailableVoicesAsync();
-        const ptVoices = voices.filter((v) => v.language.startsWith("pt"));
-        
-        // Prioridade para vozes masculinas conhecidas (Daniel no iOS ou Google TTS no Android)
-        const male = ptVoices.find((v) => {
-          const name = v.name.toLowerCase();
-          const id = v.identifier.toLowerCase();
-          return (
-            name.includes("daniel") ||
-            name.includes("male") ||
-            name.includes("masculino") ||
-            id.includes("daniel") ||
-            id.includes("male") ||
-            id.includes("pt-br-x-gfs") ||
-            id.includes("pt-br-x-afs") ||
-            id.includes("pt-br-x-cts")
-          );
-        });
-
-        if (male) {
-          setSelectedVoice(male.identifier);
-          console.log("[ReportA] Voz masculina configurada:", male.name);
-        } else {
-          // Fallback para a primeira voz pt-BR aprimorada ou genérica
-          const fallback = ptVoices.find((v) => v.quality === "Enhanced") || ptVoices[0];
-          setSelectedVoice(fallback?.identifier);
-          console.log("[ReportA] Usando fallback de voz pt-BR:", fallback?.name || "Padrão OS");
-        }
-      } catch (err) {
-        console.warn("[ReportA] Erro ao carregar vozes do dispositivo:", err);
-      }
-    };
-    void initVoice();
   }, []);
 
   // ── Carrega alarmes disparados hoje do AsyncStorage para evitar disparos na inicialização
@@ -180,25 +145,10 @@ export default function ReportAScreen() {
   reportRef.current = report;
 
   const stopAlarm = useCallback(() => {
-    if (Platform.OS !== "web") {
-      void Speech.stop();
-    }
+    void pararFala();
     setAlarmActive(false);
     setAlarmLabel("");
   }, []);
-
-  const speakWarning = useCallback(() => {
-    if (Platform.OS !== "web") {
-      void Speech.stop().then(() => {
-        Speech.speak(ALARM_VOICE_MSG, {
-          language: "pt-BR",
-          rate: 0.9,
-          pitch: 1.0,
-          voice: selectedVoice,
-        });
-      });
-    }
-  }, [selectedVoice]);
 
   const triggerAlarm = useCallback(
     (label: string) => {
@@ -211,20 +161,22 @@ export default function ReportAScreen() {
       });
 
       if (Platform.OS !== "web") {
-        void Speech.stop();
         void Notifications.scheduleNotificationAsync({
           content: {
-            title: `⏰ Avanço ${label} em 15 minutos`,
+            title: ALARM_TITLE,
+            subtitle: `Avanço ${label}`,
             body: ALARM_VOICE_MSG,
-            sound: true,
+            sound: SOM_AVISO ?? "default",
+            interruptionLevel: "timeSensitive",
             data: { label, type: "advance_alarm" },
           },
           trigger: null,
         });
       }
-      speakWarning();
+      // Voz em primeiro plano; com a tela apagada quem fala é o som da notificação
+      void falarAviso(ALARM_VOICE_MSG);
     },
-    [speakWarning],
+    [],
   );
 
   // ── Auto-save, espelho ReportG, preenchimento A e parada em 100%
@@ -236,6 +188,22 @@ export default function ReportAScreen() {
       if (stopped) stopAlarm();
     });
   }, [report, stopAlarm]);
+
+  // ── Reagenda os alarmes do SO quando o preenchimento dos avanços muda:
+  //    é o que libera o aviso do próximo avanço assim que o anterior é lançado.
+  //    Depende só dos avanços — reagendar cancela e recria notificações no SO.
+  const avancosKey = [
+    report.avanco22h,
+    report.avanco00h,
+    report.avanco01h,
+    report.avanco03h,
+    report.avanco04h,
+  ].join("|");
+
+  useEffect(() => {
+    void syncAdvanceAlarms(reportRef.current);
+     
+  }, [avancosKey]);
 
   // ── Foco: marca ReportA em preenchimento (habilita alarmes se permitido)
   useFocusEffect(
@@ -250,12 +218,19 @@ export default function ReportAScreen() {
   // ── Escuta notificações / polling — só dispara se A–F em preenchimento e sem 100%
   useEffect(() => {
     const tryFire = async (label: string) => {
+      const adv = buscarAvancoPorLabel(label);
+      if (!adv) return;
       if (!(await canTriggerAdvanceAlarm())) {
         console.log(`[ReportA] Alarme ${label} ignorado (sem A–F ativo ou avanço 100%).`);
         return;
       }
-      const dateStr = new Date().toDateString();
-      const key = `${dateStr}_${label}`;
+      if (!avisoLiberado(adv, reportRef.current)) {
+        console.log(
+          `[ReportA] Aviso de ${label} bloqueado: avanço anterior (${adv.campoAnterior}) não preenchido ou avanço já lançado.`,
+        );
+        return;
+      }
+      const key = `${new Date().toDateString()}_${label}`;
       if (firedRef.current.has(key)) return;
       void persistFiredAlarm(key);
       triggerAlarm(label);
@@ -264,7 +239,7 @@ export default function ReportAScreen() {
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       const label = notification.request.content.data?.label as string | undefined;
       if (!label) return;
-      const adv = MONITORED_ADVANCES.find((a) => a.label === label);
+      const adv = buscarAvancoPorLabel(label);
       if (adv && isNearWarningTime(adv.hour, adv.minute)) {
         void tryFire(label);
       } else {
@@ -275,7 +250,7 @@ export default function ReportAScreen() {
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const label = response.notification.request.content.data?.label as string | undefined;
       if (!label) return;
-      const adv = MONITORED_ADVANCES.find((a) => a.label === label);
+      const adv = buscarAvancoPorLabel(label);
       if (adv && isNearWarningTime(adv.hour, adv.minute)) {
         void tryFire(label);
       } else {
@@ -284,18 +259,12 @@ export default function ReportAScreen() {
     });
 
     monitorTimerRef.current = setInterval(() => {
-      void (async () => {
-        if (!(await canTriggerAdvanceAlarm())) return;
-        const dateStr = new Date().toDateString();
-        for (const adv of MONITORED_ADVANCES) {
-          const key = `${dateStr}_${adv.label}`;
-          if (!firedRef.current.has(key) && isWarningTime(adv.hour, adv.minute)) {
-            void persistFiredAlarm(key);
-            triggerAlarm(adv.label);
-            break;
-          }
+      for (const adv of AVANCOS_MONITORADOS) {
+        if (isWarningTime(adv.hour, adv.minute)) {
+          void tryFire(adv.label);
+          break;
         }
-      })();
+      }
     }, 30_000);
 
     return () => {
@@ -304,7 +273,7 @@ export default function ReportAScreen() {
       if (monitorTimerRef.current) clearInterval(monitorTimerRef.current);
       stopAlarm();
     };
-  }, [selectedVoice, triggerAlarm, stopAlarm]);
+  }, [triggerAlarm, stopAlarm]);
 
   const setField = <K extends keyof ReportA>(key: K, value: ReportA[K]) => {
     setReport((prev) => ({ ...prev, [key]: value }));

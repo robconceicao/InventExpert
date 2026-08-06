@@ -3,37 +3,67 @@
  *
  * Regras:
  * - Só agenda/dispara se algum Report A–F estiver em preenchimento.
+ * - Só avisa o avanço cujo **avanço anterior já está preenchido** — é ele que
+ *   comprova que a operação chegou até ali. O avanço das 22h00 nunca avisa:
+ *   é o inicial (0%) e não tem anterior.
  * - Se qualquer avanço (ReportA) atingir 100%, cancela e encerra.
+ *
+ * Tela apagada: o texto e a voz saem pela notificação agendada no SO — canal
+ * de importância máxima, visível na tela de bloqueio e com o som da voz
+ * gravada (ver docs/AVISO_VOZ_ELEVENLABS.md).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import {
+  AVANCOS_MONITORADOS,
+  avancosComAviso,
+  horarioDoAviso,
   isAdvanceAt100,
-  isNearWarningTime,
-  isWarningTime,
+  type AvancoMonitorado,
+  type ReportComAvancos,
 } from "../utils/advanceAlarmRules";
 
 export type FillingReportId = "A" | "B" | "C" | "D" | "E" | "F";
 
 export {
+  AVANCOS_MONITORADOS,
+  avancosComAviso,
+  avisoLiberado,
+  buscarAvancoPorLabel,
+  campoPreenchido,
+  horarioDoAviso,
   isAdvanceAt100,
   isNearWarningTime,
   isWarningTime,
+  type AvancoMonitorado,
 } from "../utils/advanceAlarmRules";
 
+/** Texto único do aviso — notificação, banner na tela e voz falam o mesmo. */
 export const ALARM_VOICE_MSG =
-  "Solicitar conferentes que exportem os dados dos coletores.";
+  "Atenção, estamos a quinze minutos do próximo avanço. Solicite aos conferentes que exportem os dados do coletor.";
 
-/** Avanços monitorados para alarme (15 min antes).
- *  O primeiro avanço (22h00) NÃO gera alarme — só a partir de 00h00. */
-export const MONITORED_ADVANCES = [
-  { label: "00h00", hour: 0, minute: 0, field: "avanco00h" as const },
-  { label: "01h00", hour: 1, minute: 0, field: "avanco01h" as const },
-  { label: "03h00", hour: 3, minute: 0, field: "avanco03h" as const },
-  { label: "04h00", hour: 4, minute: 0, field: "avanco04h" as const },
-];
+export const ALARM_TITLE = "⏰ Próximo avanço em 15 minutos";
 
+/**
+ * Som customizado da notificação = voz masculina gravada no ElevenLabs.
+ *
+ * O arquivo precisa existir em assets/sounds/aviso_avanco.mp3 e estar
+ * registrado no plugin expo-notifications do app.json — sem ele o build falha
+ * ao copiar o som para res/raw. Ver docs/AVISO_VOZ_ELEVENLABS.md.
+ *
+ * MP3 serve: no Android o recurso é resolvido pelo nome base, sem a extensão
+ * (SoundResolver.filenameToBasename). iOS exigiria WAV/AIFF/CAF.
+ */
+export const SOM_AVISO: string | null = "aviso_avanco.mp3";
+
+/** `sound` aceito pelo expo-notifications: nome do arquivo ou som padrão. */
+function somDaNotificacao(): string {
+  return SOM_AVISO ?? "default";
+}
+
+/** ReportA persistido pela tela — fonte do preenchimento dos avanços. */
+const REPORT_A_KEY = "inventexpert:reportA";
 const FILLING_KEY = "inventexpert:alarm:fillingReports";
 const STOPPED_100_KEY = "inventexpert:alarm:stopped100Date";
 const SCHEDULED_FLAG = "inventexpert:alarm:scheduled";
@@ -85,6 +115,17 @@ export async function hasAnyReportFilling(): Promise<boolean> {
   return set.size > 0;
 }
 
+/** Lê o ReportA salvo para avaliar quais avanços já foram registrados. */
+export async function lerAvancosSalvos(): Promise<ReportComAvancos | null> {
+  try {
+    const raw = await AsyncStorage.getItem(REPORT_A_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ReportComAvancos;
+  } catch {
+    return null;
+  }
+}
+
 /** Cancela todos os alarmes agendados no SO. */
 export async function cancelAdvanceAlarms(): Promise<void> {
   if (Platform.OS === "web") {
@@ -100,8 +141,29 @@ export async function cancelAdvanceAlarms(): Promise<void> {
   console.log("[advanceAlarm] Alarmes cancelados.");
 }
 
-/** Agenda alarmes diários 15 min antes de cada avanço (só se permitido). */
-export async function scheduleAdvanceAlarms(): Promise<void> {
+/** Registra o canal Android do alarme (importância máxima + tela de bloqueio). */
+export async function garantirCanalDeAlarme(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync("alarms", {
+    name: "Alarme de Avanços",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#FF231F7A",
+    sound: somDaNotificacao(),
+    // Mostra o texto completo com o aparelho bloqueado
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    enableVibrate: true,
+    showBadge: true,
+  });
+}
+
+/**
+ * Agenda alarmes diários 15 min antes de cada avanço liberado.
+ * Só entram os avanços cujo anterior já está preenchido — 22h00 nunca entra.
+ */
+export async function scheduleAdvanceAlarms(
+  report?: ReportComAvancos | null,
+): Promise<void> {
   if (Platform.OS === "web") return;
 
   const { status } = await Notifications.requestPermissionsAsync();
@@ -110,39 +172,35 @@ export async function scheduleAdvanceAlarms(): Promise<void> {
     return;
   }
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("alarms", {
-      name: "Alarme de Avanços",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7A",
-      sound: "default",
-    });
-  }
-
+  await garantirCanalDeAlarme();
   await Notifications.cancelAllScheduledNotificationsAsync();
 
-  for (const adv of MONITORED_ADVANCES) {
-    let alarmHour = adv.hour;
-    let alarmMinute = adv.minute - 15;
-    if (alarmMinute < 0) {
-      alarmMinute += 60;
-      alarmHour -= 1;
-      if (alarmHour < 0) alarmHour += 24;
-    }
+  const avancos = avancosComAviso(report ?? (await lerAvancosSalvos()));
+  if (avancos.length === 0) {
+    await AsyncStorage.setItem(SCHEDULED_FLAG, "0");
+    console.log(
+      "[advanceAlarm] Nenhum avanço liberado — aguardando o avanço anterior ser preenchido.",
+    );
+    return;
+  }
 
+  for (const adv of avancos) {
+    const { hour, minute } = horarioDoAviso(adv);
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `⏰ Avanço ${adv.label} em 15 minutos`,
+          title: ALARM_TITLE,
+          subtitle: `Avanço ${adv.label}`,
           body: ALARM_VOICE_MSG,
-          sound: true,
+          sound: somDaNotificacao(),
+          // iOS: fura Foco/Não perturbe, como alarme operacional
+          interruptionLevel: "timeSensitive",
           data: { label: adv.label, type: "advance_alarm" },
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: alarmHour,
-          minute: alarmMinute,
+          hour,
+          minute,
           channelId: "alarms",
         } as Notifications.NotificationTriggerInput,
       });
@@ -151,21 +209,27 @@ export async function scheduleAdvanceAlarms(): Promise<void> {
     }
   }
   await AsyncStorage.setItem(SCHEDULED_FLAG, "1");
-  console.log("[advanceAlarm] Alarmes diários agendados (A–F em preenchimento).");
+  console.log(
+    "[advanceAlarm] Agendados:",
+    avancos.map((a) => a.label).join(", "),
+  );
 }
 
 /**
  * Decide se deve agendar ou cancelar com base em:
  * - algum A–F em preenchimento
  * - não ter parado por 100%
+ * - haver avanço liberado pelo preenchimento do anterior
  */
-export async function syncAdvanceAlarms(): Promise<void> {
+export async function syncAdvanceAlarms(
+  report?: ReportComAvancos | null,
+): Promise<void> {
   if (await isStoppedDueTo100()) {
     await cancelAdvanceAlarms();
     return;
   }
   if (await hasAnyReportFilling()) {
-    await scheduleAdvanceAlarms();
+    await scheduleAdvanceAlarms(report);
   } else {
     await cancelAdvanceAlarms();
   }
@@ -202,4 +266,15 @@ export async function evaluateAdvancesAndMaybeStop(report: {
 export async function canTriggerAdvanceAlarm(): Promise<boolean> {
   if (await isStoppedDueTo100()) return false;
   return hasAnyReportFilling();
+}
+
+/** Alarmes agendados no SO — usado para conferir o estado atual. */
+export async function listarAlarmesAgendados(): Promise<AvancoMonitorado[]> {
+  const report = await lerAvancosSalvos();
+  return avancosComAviso(report);
+}
+
+/** Todos os avanços monitorados (22h00 não está na lista, é o inicial). */
+export function todosAvancosMonitorados(): AvancoMonitorado[] {
+  return AVANCOS_MONITORADOS;
 }

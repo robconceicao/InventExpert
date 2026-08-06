@@ -28,6 +28,8 @@ export interface GeracaoPdf {
   pdfUri: string;
   folhas: FolhaArquivada[];
   qtdFolhas: number;
+  /** Bytes ocupados (PDF + folhas). Ausente em registros antigos. */
+  tamanhoBytes?: number;
 }
 
 export function createGeracaoId(): string {
@@ -53,6 +55,86 @@ export function nextVersaoNaCadeia(
 
 export function rotuloVersao(geracao: Pick<GeracaoPdf, "versao">): string {
   return `v${geracao.versao}`;
+}
+
+/** Ids de todas as gerações da cadeia da raiz (inclui a própria raiz). */
+export function idsDaCadeia(
+  todas: Array<Pick<GeracaoPdf, "geracaoId" | "geracaoOriginalId">>,
+  rootId: string,
+): string[] {
+  return todas
+    .filter((g) => g.geracaoId === rootId || g.geracaoOriginalId === rootId)
+    .map((g) => g.geracaoId);
+}
+
+/** Quantas outras versões existem na mesma cadeia da geração informada. */
+export function contarOutrasVersoesNaCadeia(
+  todas: Array<Pick<GeracaoPdf, "geracaoId" | "geracaoOriginalId">>,
+  geracao: Pick<GeracaoPdf, "geracaoId" | "geracaoOriginalId">,
+): number {
+  const ids = idsDaCadeia(todas, resolveRootId(geracao));
+  return ids.filter((id) => id !== geracao.geracaoId).length;
+}
+
+/**
+ * Remove gerações do índice por id.
+ * Se uma raiz cair e ainda restarem correções dela, a versão mais antiga
+ * remanescente vira a nova raiz (evita órfãos apontando para id inexistente).
+ * Os números de versão são preservados — não há renumeração.
+ */
+export function removerGeracoes(
+  lista: GeracaoPdf[],
+  ids: string[],
+): GeracaoPdf[] {
+  const remover = new Set(ids);
+  const restantes = lista.filter((g) => !remover.has(g.geracaoId));
+  const presentes = new Set(restantes.map((g) => g.geracaoId));
+
+  // Agrupa órfãos (perderam a raiz) pelo id de raiz antigo
+  const novaRaizPorRoot = new Map<string, string>();
+  for (const g of restantes) {
+    const rootId = g.geracaoOriginalId;
+    if (!rootId || presentes.has(rootId)) continue;
+    const atual = novaRaizPorRoot.get(rootId);
+    if (!atual) {
+      novaRaizPorRoot.set(rootId, g.geracaoId);
+      continue;
+    }
+    const candidato = restantes.find((r) => r.geracaoId === atual);
+    if (candidato && g.versao < candidato.versao) {
+      novaRaizPorRoot.set(rootId, g.geracaoId);
+    }
+  }
+
+  return restantes.map((g) => {
+    const rootId = g.geracaoOriginalId;
+    if (!rootId || presentes.has(rootId)) return g;
+    const novaRaiz = novaRaizPorRoot.get(rootId);
+    if (!novaRaiz) return g;
+    return {
+      ...g,
+      geracaoOriginalId: g.geracaoId === novaRaiz ? null : novaRaiz,
+    };
+  });
+}
+
+/** Soma o espaço ocupado (bytes) das gerações que registram tamanho. */
+export function somarTamanhoBytes(
+  lista: Array<Pick<GeracaoPdf, "tamanhoBytes">>,
+): number {
+  return lista.reduce((total, g) => total + (g.tamanhoBytes ?? 0), 0);
+}
+
+/** Formata bytes em texto curto (pt-BR). Retorna null se não houver medida. */
+export function formatarBytes(bytes: number | undefined | null): string | null {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) {
+    return null;
+  }
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0).replace(".", ",")} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 1 : 0).replace(".", ",")} MB`;
 }
 
 /** Texto de UI para correções (null se for a original). */

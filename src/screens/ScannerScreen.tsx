@@ -4,7 +4,8 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,17 +16,24 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
 import DocumentScanner from "react-native-document-scanner-plugin";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ScanFilterEngine, {
+  type ScanFilterEngineRef,
+} from "../components/ScanFilterEngine";
 import ScannerReviewPanel from "../components/ScannerReviewPanel";
 import { eraseHandwriting } from "../services/handwritingEraser";
 import {
   arquivarGeracao,
+  excluirGeracao,
+  excluirTodasGeracoes,
   listarGeracoes,
+  type ResultadoExclusao,
 } from "../services/scannerGeracaoStorage";
 import {
   excluirFolha as excluirFolhaDaLista,
@@ -37,14 +45,21 @@ import {
   type FolhaEscaneada,
 } from "../utils/folhaEscaneada";
 import {
+  contarOutrasVersoesNaCadeia,
   folhasArquivadasParaRevisao,
   formatDataHoraBr,
+  formatarBytes,
   nextVersaoNaCadeia,
   resolveRootId,
   rotuloCorrecao,
   rotuloVersao,
+  somarTamanhoBytes,
   type GeracaoPdf,
 } from "../utils/scannerGeracao";
+import { SCAN_FILTER_CSS } from "../utils/scanFilter";
+
+/** Preferência do modo documento (P&B) — sobrevive ao fechamento do app. */
+const MODO_DOCUMENTO_KEY = "inventexpert:scanner_modo_documento";
 
 // ---------------------------------------------------------------------------
 // Helper: converte URI de imagem para base64 com orientação portrait corrigida
@@ -107,6 +122,15 @@ export default function ScannerScreen() {
   const [historicoLoading, setHistoricoLoading] = useState(true);
   /** Geração aberta para correção — o próximo PDF vira nova versão. */
   const [geracaoBase, setGeracaoBase] = useState<GeracaoPdf | null>(null);
+  /** Id em exclusão (bloqueia os botões do item) ou "*" para o histórico todo. */
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+
+  // Modo documento: papel branco e tinta preta, como um scanner de verdade
+  const [modoDocumento, setModoDocumento] = useState(true);
+  const [filtrando, setFiltrando] = useState<{ feitas: number; total: number } | null>(
+    null,
+  );
+  const filtroRef = useRef<ScanFilterEngineRef>(null);
 
   // Eraser mode
   const [eraserVisible, setEraserVisible] = useState(false);
@@ -133,13 +157,64 @@ export default function ScannerScreen() {
     void refreshHistorico();
   }, [refreshHistorico]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const salvo = await AsyncStorage.getItem(MODO_DOCUMENTO_KEY);
+        if (salvo !== null) setModoDocumento(salvo === "1");
+      } catch {
+        // preferência é acessório — mantém o padrão (ligado)
+      }
+    })();
+  }, []);
+
+  const alternarModoDocumento = useCallback((valor: boolean) => {
+    setModoDocumento(valor);
+    void AsyncStorage.setItem(MODO_DOCUMENTO_KEY, valor ? "1" : "0").catch(
+      () => undefined,
+    );
+  }, []);
+
+  /**
+   * Converte as capturas em preto e branco neutro (papel branco, tinta preta).
+   * Sem isso, caneta azul/vermelha continua colorida no PDF.
+   * Falha aqui nunca perde a captura: devolve as URIs originais e o filtro CSS
+   * do PDF ainda tira a cor.
+   */
+  const aplicarFiltroDocumento = useCallback(
+    async (uris: string[]): Promise<string[]> => {
+      if (!modoDocumento || uris.length === 0) return uris;
+      const engine = filtroRef.current;
+      if (!engine) return uris;
+
+      setFiltrando({ feitas: 0, total: uris.length });
+      try {
+        const { uris: filtradas, falhas } = await engine.filtrarUris(
+          uris,
+          (feitas, total) => setFiltrando({ feitas, total }),
+        );
+        if (falhas > 0) {
+          console.warn(`[Scanner] ${falhas} folha(s) sem filtro de pixels.`);
+        }
+        return filtradas;
+      } catch (e) {
+        console.warn("[Scanner] Filtro documento indisponível:", e);
+        return uris;
+      } finally {
+        setFiltrando(null);
+      }
+    },
+    [modoDocumento],
+  );
+
   // ── Escanear documento (portrait: o plugin já orienta corretamente em modo
   //    portrait do dispositivo; forçamos re-encode para garantir metadados EXIF)
   const handleScan = async (append = false) => {
     try {
       setIsScanning(true);
-      const newImages = await abrirCamera(10);
-      if (newImages.length === 0) return;
+      const capturadas = await abrirCamera(10);
+      if (capturadas.length === 0) return;
+      const newImages = await aplicarFiltroDocumento(capturadas);
 
       if (!append) {
         // Novo lote: não é correção de geração arquivada
@@ -195,35 +270,162 @@ export default function ScannerScreen() {
     }
   }, []);
 
+  /**
+   * Roda uma exclusão e ressincroniza a tela.
+   * Se a geração em correção foi apagada, sai do modo correção (URIs mortas).
+   */
+  const executarExclusao = useCallback(
+    async (
+      travaId: string,
+      acao: () => Promise<ResultadoExclusao>,
+    ): Promise<void> => {
+      setExcluindoId(travaId);
+      try {
+        const { removidos, bytesLiberados, restantes } = await acao();
+        setHistorico(restantes);
+
+        const baseSobreviveu =
+          geracaoBase !== null &&
+          restantes.some((g) => g.geracaoId === geracaoBase.geracaoId);
+        if (geracaoBase && !baseSobreviveu) {
+          setGeracaoBase(null);
+          setFolhas([]);
+          setRevisaoConfirmada(false);
+          setReviewVisible(false);
+        }
+
+        if (removidos === 0) return;
+        const liberado = formatarBytes(bytesLiberados);
+        Alert.alert(
+          "Exclusão concluída",
+          `${removidos} ${removidos === 1 ? "geração removida" : "gerações removidas"} do dispositivo.${
+            liberado ? ` ${liberado} liberados.` : ""
+          }`,
+        );
+      } catch {
+        Alert.alert(
+          "Erro",
+          "Não foi possível excluir. Tente novamente.",
+        );
+        await refreshHistorico();
+      } finally {
+        setExcluindoId(null);
+      }
+    },
+    [geracaoBase, refreshHistorico],
+  );
+
+  /** Confirma e exclui uma geração (opcionalmente a cadeia inteira). */
+  const confirmarExclusaoGeracao = useCallback(
+    (geracao: GeracaoPdf) => {
+      const outras = contarOutrasVersoesNaCadeia(historico, geracao);
+      const nome = `${geracao.nomePdf || "sem-nome"} (${rotuloVersao(geracao)})`;
+      const tamanho = formatarBytes(geracao.tamanhoBytes);
+      const detalhe = tamanho ? ` Libera ${tamanho}.` : "";
+
+      if (outras === 0) {
+        Alert.alert(
+          "Excluir PDF arquivado",
+          `${nome} e suas folhas serão apagados do celular.${detalhe}\n\nEsta ação não pode ser desfeita.`,
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Excluir",
+              style: "destructive",
+              onPress: () =>
+                void executarExclusao(geracao.geracaoId, () =>
+                  excluirGeracao(geracao.geracaoId),
+                ),
+            },
+          ],
+        );
+        return;
+      }
+
+      const total = outras + 1;
+      Alert.alert(
+        "Excluir PDF arquivado",
+        `${nome} faz parte de uma cadeia com ${total} versões.\n\nEscolha o que apagar do celular. Esta ação não pode ser desfeita.`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Só esta versão",
+            onPress: () =>
+              void executarExclusao(geracao.geracaoId, () =>
+                excluirGeracao(geracao.geracaoId),
+              ),
+          },
+          {
+            text: `Todas as ${total} versões`,
+            style: "destructive",
+            onPress: () =>
+              void executarExclusao(geracao.geracaoId, () =>
+                excluirGeracao(geracao.geracaoId, { incluirCadeia: true }),
+              ),
+          },
+        ],
+      );
+    },
+    [executarExclusao, historico],
+  );
+
+  /** Limpa o histórico inteiro — uso típico ao encerrar o inventário. */
+  const confirmarLimparHistorico = useCallback(() => {
+    if (historico.length === 0) return;
+    const tamanho = formatarBytes(somarTamanhoBytes(historico));
+    Alert.alert(
+      "Limpar histórico",
+      `Todos os ${historico.length} PDFs arquivados e suas folhas serão apagados do celular.${
+        tamanho ? ` Libera ${tamanho}.` : ""
+      }\n\nEsta ação não pode ser desfeita.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Apagar tudo",
+          style: "destructive",
+          onPress: () => void executarExclusao("*", excluirTodasGeracoes),
+        },
+      ],
+    );
+  }, [executarExclusao, historico]);
+
   // ── Ações da revisão (id estável; nunca índice) ──────────────────────────
   const excluirFolha = useCallback((id: string) => {
     setFolhas((prev) => excluirFolhaDaLista(prev, id));
     setRevisaoConfirmada(false);
   }, []);
 
-  const reescanearFolha = useCallback(async (id: string) => {
-    setIsReviewCapturing(true);
-    try {
-      const uris = await abrirCamera(1);
-      if (uris.length === 0) return;
-      setFolhas((prev) => reescanearFolhaNaLista(prev, id, uris[0]));
-      setRevisaoConfirmada(false);
-    } finally {
-      setIsReviewCapturing(false);
-    }
-  }, []);
+  const reescanearFolha = useCallback(
+    async (id: string) => {
+      setIsReviewCapturing(true);
+      try {
+        const capturadas = await abrirCamera(1);
+        if (capturadas.length === 0) return;
+        const uris = await aplicarFiltroDocumento(capturadas);
+        setFolhas((prev) => reescanearFolhaNaLista(prev, id, uris[0]));
+        setRevisaoConfirmada(false);
+      } finally {
+        setIsReviewCapturing(false);
+      }
+    },
+    [aplicarFiltroDocumento],
+  );
 
-  const inserirDepois = useCallback(async (idReferencia: string) => {
-    setIsReviewCapturing(true);
-    try {
-      const uris = await abrirCamera(1);
-      if (uris.length === 0) return;
-      setFolhas((prev) => inserirDepoisNaLista(prev, idReferencia, uris[0]));
-      setRevisaoConfirmada(false);
-    } finally {
-      setIsReviewCapturing(false);
-    }
-  }, []);
+  const inserirDepois = useCallback(
+    async (idReferencia: string) => {
+      setIsReviewCapturing(true);
+      try {
+        const capturadas = await abrirCamera(1);
+        if (capturadas.length === 0) return;
+        const uris = await aplicarFiltroDocumento(capturadas);
+        setFolhas((prev) => inserirDepoisNaLista(prev, idReferencia, uris[0]));
+        setRevisaoConfirmada(false);
+      } finally {
+        setIsReviewCapturing(false);
+      }
+    },
+    [aplicarFiltroDocumento],
+  );
 
   const reordenar = useCallback((novaLista: FolhaEscaneada[]) => {
     setFolhas(reordenarFolhas(novaLista));
@@ -309,6 +511,16 @@ export default function ScannerScreen() {
 
       const pagesHtml = pageBlocks.filter(Boolean).join("\n");
 
+      /*
+       * Segunda camada do modo documento. O filtro de pixels já entrega branco
+       * e preto puros — grayscale/contraste sobre 0 e 255 não mexe nesses
+       * extremos —, então aplicar aqui é inofensivo quando ele funcionou e
+       * salva a saída quando o WebView falhou no aparelho.
+       */
+      const imgFilter = modoDocumento
+        ? `filter:${SCAN_FILTER_CSS};-webkit-filter:${SCAN_FILTER_CSS};`
+        : "";
+
       const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -346,6 +558,7 @@ export default function ScannerScreen() {
     border: 0;
     object-fit: contain;
     object-position: top center;
+    ${imgFilter}
   }
 </style>
 </head>
@@ -477,6 +690,8 @@ export default function ScannerScreen() {
 
   const podeGerarPdf = folhas.length > 0 && revisaoConfirmada && !isSharing;
 
+  const espacoOcupado = formatarBytes(somarTamanhoBytes(historico));
+
   const proximaVersaoLabel = geracaoBase
     ? rotuloVersao({
         versao: nextVersaoNaCadeia(historico, resolveRootId(geracaoBase)),
@@ -486,6 +701,8 @@ export default function ScannerScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      {/* Motor do filtro P&B — WebView invisível, montado sempre */}
+      <ScanFilterEngine ref={filtroRef} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Card Scanner */}
         <View style={styles.card}>
@@ -519,6 +736,35 @@ export default function ScannerScreen() {
               <Text style={styles.buttonText}>Limpar</Text>
             </Pressable>
           </View>
+
+          <View style={styles.modoDocumentoRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modoDocumentoTitle}>
+                Modo documento (preto e branco)
+              </Text>
+              <Text style={styles.modoDocumentoHint}>
+                Papel branco e tinta preta, como um scanner de mesa. Preenchimento
+                feito com caneta colorida sai sem nenhum resíduo de cor.
+              </Text>
+            </View>
+            <Switch
+              value={modoDocumento}
+              onValueChange={alternarModoDocumento}
+              trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
+              thumbColor={modoDocumento ? "#2563EB" : "#F1F5F9"}
+              disabled={isScanning || filtrando !== null}
+            />
+          </View>
+
+          {filtrando ? (
+            <View style={styles.filtroBanner}>
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text style={styles.filtroBannerText}>
+                Convertendo folhas para preto e branco… {filtrando.feitas}/
+                {filtrando.total}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Card Apagar Escrita */}
@@ -623,13 +869,36 @@ export default function ScannerScreen() {
               <Text style={styles.historicoCount}>
                 {historico.length}{" "}
                 {historico.length === 1 ? "geração" : "gerações"}
+                {espacoOcupado ? ` · ${espacoOcupado}` : ""}
               </Text>
             )}
           </View>
           <Text style={[styles.subtitle, { marginBottom: 12 }]}>
             Cada PDF compartilhado fica arquivado. Abra para corrigir folhas e
-            gerar uma nova versão — o original permanece intacto.
+            gerar uma nova versão — o original permanece intacto. Ao encerrar o
+            inventário, exclua os arquivos para liberar memória.
           </Text>
+
+          {historico.length > 0 ? (
+            <Pressable
+              style={[
+                styles.btnLimparHistorico,
+                excluindoId !== null && styles.buttonDisabled,
+              ]}
+              onPress={confirmarLimparHistorico}
+              disabled={excluindoId !== null}
+              accessibilityLabel="Apagar todo o histórico de PDFs"
+            >
+              {excluindoId === "*" ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+              )}
+              <Text style={styles.btnLimparHistoricoText}>
+                Apagar todo o histórico
+              </Text>
+            </Pressable>
+          ) : null}
 
           {geracaoBase ? (
             <View style={styles.correctionBanner}>
@@ -655,6 +924,8 @@ export default function ScannerScreen() {
           ) : (
             historico.map((g) => {
               const correcao = rotuloCorrecao(g);
+              const tamanho = formatarBytes(g.tamanhoBytes);
+              const itemOcupado = excluindoId !== null;
               return (
                 <View key={g.geracaoId} style={styles.historicoItem}>
                   <View style={styles.historicoItemTop}>
@@ -668,6 +939,7 @@ export default function ScannerScreen() {
                       <Text style={styles.historicoMeta}>
                         {formatDataHoraBr(g.criadoEm)} · {g.qtdFolhas}{" "}
                         {g.qtdFolhas === 1 ? "folha" : "folhas"}
+                        {tamanho ? ` · ${tamanho}` : ""}
                       </Text>
                       {correcao ? (
                         <Text style={styles.historicoCorrecao}>{correcao}</Text>
@@ -676,18 +948,44 @@ export default function ScannerScreen() {
                   </View>
                   <View style={styles.historicoActions}>
                     <Pressable
-                      style={styles.historicoBtnSecondary}
+                      style={[
+                        styles.historicoBtnSecondary,
+                        itemOcupado && styles.buttonDisabled,
+                      ]}
                       onPress={() => void recompartilharPdf(g)}
+                      disabled={itemOcupado}
                     >
-                      <Ionicons name="share-outline" size={16} color="#2563EB" />
+                      <Ionicons name="share-outline" size={15} color="#2563EB" />
                       <Text style={styles.historicoBtnSecondaryText}>Enviar</Text>
                     </Pressable>
                     <Pressable
-                      style={styles.historicoBtnPrimary}
+                      style={[
+                        styles.historicoBtnPrimary,
+                        itemOcupado && styles.buttonDisabled,
+                      ]}
                       onPress={() => abrirCorrecao(g)}
+                      disabled={itemOcupado}
                     >
-                      <Ionicons name="create-outline" size={16} color="#fff" />
+                      <Ionicons name="create-outline" size={15} color="#fff" />
                       <Text style={styles.historicoBtnPrimaryText}>Corrigir</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.historicoBtnDanger,
+                        itemOcupado && styles.buttonDisabled,
+                      ]}
+                      onPress={() => confirmarExclusaoGeracao(g)}
+                      disabled={itemOcupado}
+                      accessibilityLabel={`Excluir ${g.nomePdf || "PDF"} ${rotuloVersao(g)}`}
+                    >
+                      {excluindoId === g.geracaoId ? (
+                        <ActivityIndicator size="small" color="#DC2626" />
+                      ) : (
+                        <>
+                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                          <Text style={styles.historicoBtnDangerText}>Excluir</Text>
+                        </>
+                      )}
                     </Pressable>
                   </View>
                 </View>
@@ -905,6 +1203,42 @@ const styles = StyleSheet.create({
     borderColor: "#FDE68A",
   },
   pendingBannerText: { color: "#92400E", fontSize: 12, fontWeight: "600", flex: 1 },
+  modoDocumentoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  modoDocumentoTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modoDocumentoHint: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  filtroBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  filtroBannerText: {
+    color: "#1E40AF",
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
   buttonPrimary: {
     backgroundColor: "#2563EB",
     flexDirection: "row",
@@ -1133,21 +1467,57 @@ const styles = StyleSheet.create({
   },
   historicoActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   historicoBtnSecondary: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     borderWidth: 1,
     borderColor: "#2563EB",
     borderRadius: 10,
     paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   historicoBtnSecondaryText: {
     color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  historicoBtnDanger: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  historicoBtnDangerText: {
+    color: "#DC2626",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  btnLimparHistorico: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  btnLimparHistoricoText: {
+    color: "#DC2626",
     fontWeight: "700",
     fontSize: 13,
   },
@@ -1156,10 +1526,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     backgroundColor: "#2563EB",
     borderRadius: 10,
     paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   historicoBtnPrimaryText: {
     color: "#fff",

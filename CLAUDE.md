@@ -303,9 +303,13 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
 | "Perfil Operacional" removido do relatório | Baseado em histórico: incoerente com classificação do evento atual |
 | Alerta formal se crítica OU limite ≤ 5% | Visibilidade para OTC e áreas ANVISA |
+| Aviso de avanço preso ao preenchimento do avanço anterior | O anterior é a prova de que a operação chegou ali; 22h00 é inicial (0%) e nunca avisa |
+| Voz do aviso com tela apagada = som da notificação | Sem player de áudio no projeto; TTS só toca com o app aberto — ver `docs/AVISO_VOZ_ELEVENLABS.md` |
 | catalogoLookup prefere invent_DSP sobre cadastro.txt | invent_DSP tem EAN real e classificação legal |
 | qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
+| Filtro P&B do scanner via WebView + canvas (`scanFilter.ts`) | Nem `expo-image-manipulator` nem o plugin de scanner expõem operação de cor; canal de tinta = `min(R,G,B)` elimina o matiz de caneta colorida |
+| Algoritmo do filtro guardado como string, não como função | Hermes descarta o corpo em `Function.prototype.toString()`; a string é injetada no WebView **e** avaliada nos testes — fonte única |
 
 ---
 
