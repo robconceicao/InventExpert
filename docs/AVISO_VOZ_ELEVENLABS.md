@@ -130,20 +130,36 @@ eas build --platform android --profile production
 
 ## 5. Conferir no aparelho
 
-1. Preencha o avanço das **22h00** no Acompanhamento → DSP. É esse
-   preenchimento que libera o aviso das 00h00.
-2. Confira no log: `[advanceAlarm] Agendados: 00h00`.
-3. Bloqueie a tela e espere as 23h45 — ou, para testar na hora, mude o
-   relógio do aparelho para 23h44.
-4. Esperado: notificação na tela de bloqueio com o texto completo + a voz
-   masculina tocando.
+O jeito rápido: **Acompanhamento → DSP → seção "3. Avanço (%)" → botão
+"Testar aviso de voz (2 min, tela bloqueada)"**. Ele agenda a mesma
+notificação do alarme real, no mesmo canal e com o mesmo som — bloqueie a
+tela e aguarde 2 minutos. O alerta de confirmação também lista quais avanços
+estão com aviso ativo naquele momento.
 
-Se aparecer a notificação mas o som for o padrão do sistema:
+Fluxo real: preencha o avanço das **22h00** (libera o aviso das 00h00),
+confira `[advanceAlarm] Agendados: 00h00` no log e aguarde as 23h45 com a
+tela bloqueada.
 
-- o canal `alarms` do Android guarda o som de quando foi criado. Desinstale e
-  reinstale o app (ou limpe os dados) para o canal ser recriado com o novo som;
-- confirme que o arquivo está em `res/raw` no build (`aviso_avanco.mp3`);
-- confirme que o aparelho não está em Não Perturbe sem exceção para o app.
+### Se o som sair como o padrão do sistema (sem voz)
+
+O Android **congela** as configurações de um canal de notificação na primeira
+criação — atualizar o app não troca o som de canal existente. Por isso o
+canal é **versionado** (`CANAL_ALARME = "avanco-voz-v2"` em
+`advanceAlarmService.ts`): um id novo cria canal novo já com a voz, mesmo em
+instalação por cima. Se um dia trocar o arquivo de som, **incremente o
+sufixo do id**. Além disso, confirme que `aviso_avanco.mp3` está em
+`res/raw` no build e que Não Perturbe tem exceção para o app.
+
+### Se o aviso atrasar ou não chegar com a tela apagada
+
+No Android 12+ o expo-notifications só usa alarme **exato** se o app tiver a
+permissão — sem ela, cai em alarme inexato, que o modo Doze pode segurar por
+muitos minutos (verificado em `ExpoSchedulingDelegate.kt`:
+`canScheduleExactAlarms()`). O `app.json` declara
+`SCHEDULE_EXACT_ALARM` + `USE_EXACT_ALARM` para garantir o disparo pontual —
+essas permissões só entram no APK após `expo prebuild` + build novo. Em
+aparelhos Xiaomi/Oppo/Realme, confira também a otimização de bateria do app
+(colocar como "Sem restrição").
 
 ---
 

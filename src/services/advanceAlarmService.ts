@@ -62,6 +62,16 @@ function somDaNotificacao(): string {
   return SOM_AVISO ?? "default";
 }
 
+/**
+ * Id do canal Android VERSIONADO. O Android congela as configurações de um
+ * canal na primeira criação — atualizar o app não troca o som de um canal
+ * existente. O id antigo ("alarms") nasceu com som padrão em instalações
+ * anteriores; um id novo força canal novo já com a voz gravada, sem exigir
+ * desinstalação. Se trocar o som no futuro, incremente o sufixo.
+ */
+export const CANAL_ALARME = "avanco-voz-v2";
+const CANAL_ANTIGO = "alarms";
+
 /** ReportA persistido pela tela — fonte do preenchimento dos avanços. */
 const REPORT_A_KEY = "inventexpert:reportA";
 const FILLING_KEY = "inventexpert:alarm:fillingReports";
@@ -144,8 +154,8 @@ export async function cancelAdvanceAlarms(): Promise<void> {
 /** Registra o canal Android do alarme (importância máxima + tela de bloqueio). */
 export async function garantirCanalDeAlarme(): Promise<void> {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync("alarms", {
-    name: "Alarme de Avanços",
+  await Notifications.setNotificationChannelAsync(CANAL_ALARME, {
+    name: "Alarme de Avanços (voz)",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
     lightColor: "#FF231F7A",
@@ -155,6 +165,12 @@ export async function garantirCanalDeAlarme(): Promise<void> {
     enableVibrate: true,
     showBadge: true,
   });
+  // Remove o canal legado (som padrão) para não confundir nas configurações
+  try {
+    await Notifications.deleteNotificationChannelAsync(CANAL_ANTIGO);
+  } catch {
+    // canal pode nem existir — irrelevante
+  }
 }
 
 /**
@@ -201,7 +217,7 @@ export async function scheduleAdvanceAlarms(
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour,
           minute,
-          channelId: "alarms",
+          channelId: CANAL_ALARME,
         } as Notifications.NotificationTriggerInput,
       });
     } catch (err) {
@@ -277,4 +293,39 @@ export async function listarAlarmesAgendados(): Promise<AvancoMonitorado[]> {
 /** Todos os avanços monitorados (22h00 não está na lista, é o inicial). */
 export function todosAvancosMonitorados(): AvancoMonitorado[] {
   return AVANCOS_MONITORADOS;
+}
+
+/**
+ * Agenda um aviso de TESTE para daqui a `segundos` no canal do alarme —
+ * mesma notificação, mesmo som. Serve para validar a voz com a tela
+ * bloqueada sem esperar o horário real. Retorna os rótulos dos avanços
+ * atualmente liberados (para exibir junto no alerta de confirmação).
+ */
+export async function agendarTesteDeAviso(
+  segundos = 120,
+): Promise<{ ok: boolean; agendados: string[] }> {
+  if (Platform.OS === "web") return { ok: false, agendados: [] };
+
+  const { status } = await Notifications.requestPermissionsAsync();
+  if (status !== "granted") return { ok: false, agendados: [] };
+
+  await garantirCanalDeAlarme();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: ALARM_TITLE,
+      subtitle: "TESTE do aviso",
+      body: ALARM_VOICE_MSG,
+      sound: somDaNotificacao(),
+      interruptionLevel: "timeSensitive",
+      data: { type: "advance_alarm_test" },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(segundos, 5),
+      channelId: CANAL_ALARME,
+    } as Notifications.NotificationTriggerInput,
+  });
+
+  const liberados = await listarAlarmesAgendados();
+  return { ok: true, agendados: liberados.map((a) => a.label) };
 }

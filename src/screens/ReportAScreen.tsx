@@ -20,8 +20,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+    agendarTesteDeAviso,
     ALARM_TITLE,
     ALARM_VOICE_MSG,
+    CANAL_ALARME,
     AVANCOS_MONITORADOS,
     avisoLiberado,
     buscarAvancoPorLabel,
@@ -170,7 +172,9 @@ export default function ReportAScreen() {
             interruptionLevel: "timeSensitive",
             data: { label, type: "advance_alarm" },
           },
-          trigger: null,
+          // trigger com channelId = entrega imediata NO canal da voz
+          // (trigger: null cairia no canal padrão, com som padrão)
+          trigger: { channelId: CANAL_ALARME },
         });
       }
       // Voz em primeiro plano; com a tela apagada quem fala é o som da notificação
@@ -421,6 +425,32 @@ export default function ReportAScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>3. Avanço (%)</Text>
+            <Pressable
+              style={styles.btnTesteAviso}
+              onPress={() => {
+                void (async () => {
+                  const r = await agendarTesteDeAviso(120);
+                  if (!r.ok) {
+                    Alert.alert(
+                      "Sem permissão",
+                      "Permita notificações para o InventExpert e tente de novo.",
+                    );
+                    return;
+                  }
+                  Alert.alert(
+                    "Teste agendado",
+                    `Bloqueie a tela agora — a voz tocará em 2 minutos.\n\nAvisos de avanço ativos: ${
+                      r.agendados.length > 0 ? r.agendados.join(", ") : "nenhum (preencha o avanço anterior)"
+                    }`,
+                  );
+                })();
+              }}
+            >
+              <Ionicons name="volume-high-outline" size={16} color="#7C3AED" />
+              <Text style={styles.btnTesteAvisoText}>
+                Testar aviso de voz (2 min, tela bloqueada)
+              </Text>
+            </Pressable>
             <View style={styles.row}>
               <View style={styles.half}>
                 <Text style={styles.label}>22:00</Text>
@@ -648,6 +678,23 @@ const styles = StyleSheet.create({
   alarmTitle: { color: "#fff", fontWeight: "bold", fontSize: 14 },
   alarmMsg: { color: "#FEE2E2", fontSize: 12, marginTop: 2 },
   alarmStopBtn: { alignItems: "center", justifyContent: "center", gap: 2 },
+  btnTesteAviso: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#7C3AED",
+    borderStyle: "dashed",
+    borderRadius: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  btnTesteAvisoText: {
+    color: "#7C3AED",
+    fontWeight: "600",
+    fontSize: 12,
+  },
   alarmStopTxt: { color: "#fff", fontSize: 10, fontWeight: "bold" },
   scrollContent: { padding: 16 },
   section: {
