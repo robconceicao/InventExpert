@@ -44,8 +44,8 @@ react-native + expo
 typescript
 supabase-js
 @react-navigation/native
-expo-document-picker     ← leitura de arquivos .xls, .prc, .txt
-expo-file-system         ← leitura de conteúdo de arquivos
+expo-document-picker     ← leitura de arquivos .xls, .prc, .txt (picker sempre `*/*`)
+expo-file-system/legacy  ← readAsStringAsync (SDK 54 removeu do import raiz)
 expo-sharing / expo-print ← exportação PDF
 xlsx (SheetJS)           ← parse de arquivos .xls/.xlsx
 expo-speech              ← TTS (usar ttsService, não speak() direto)
@@ -77,7 +77,10 @@ src/
 │   ├── inventoryImportParsers.ts       ← PRODUÇÃO_SEÇÃO + match matrícula/nome + bloco%
 │   ├── inventExpUtils.ts               ← normalizarNomeArea()
 │   ├── parsers.ts                      ← parseInventoryCheckersCsv() (+ matrícula)
-│   ├── fileImport.ts                   ← leitura arquivos
+│   ├── fileFormat.ts                   ← detecção por magic bytes + encoding (puro, testável)
+│   ├── spreadsheetReader.ts            ← bytes → workbook → CSV `;` (puro, testável)
+│   ├── fileImport.ts                   ← leitura arquivos (IO: expo-file-system/legacy + web)
+│   ├── excelParser.ts                  ← pickAndParseExcel() (picker + JSON)
 │   └── export.ts                       ← CSV/texto/PDF (sharePdfFromHtml)
 │
 ├── components/
@@ -195,6 +198,24 @@ objeto de opções no estilo expo-speech — causa crash em produção
 | `cadastro.txt` | Texto fixo 38 chars/linha, latin-1 | Código interno → descrição produto |
 | `invent_DSP_[DATA].old` | CSV `;`, latin-1 | Código → EAN real → descrição + classe legal |
 
+### Leitura de arquivos — formato pelo conteúdo, nunca pela extensão
+
+O Android entrega quase tudo como `application/octet-stream` e o nome copiado
+para o cache pode vir sem extensão. Por isso:
+
+- **Picker sempre `type: "*/*"`.** Lista de MIME deixa o arquivo cinza e
+  impossível de selecionar — foi o que quebrou o import da Avaliação.
+- **Formato decidido por magic bytes** em `fileFormat.ts`:
+  `PK\x03\x04` = XLSX · `D0CF11E0` = XLS · BOF `09 00/02/04/08` = BIFF cru ·
+  `<html>/<table>/MIME-Version` = HTML/MHTML (export "Excel" do Crystal
+  Reports é isso) · resto = texto.
+- **Encoding decidido pelo conteúdo:** UTF-8 quando válido, senão
+  windows-1252 — sem esse fallback "SEÇÃO" chega como "SE?ÃO" e
+  `normalizarNomeArea()` não acha a área.
+- **HTML/CSV abrem com `raw: true`** no SheetJS, para "395,33" e "1,73%"
+  chegarem ao parser em pt-BR em vez de virarem `395.33`/`1.73`.
+- Divergência entre extensão e conteúdo = `console.warn`, nunca falha silenciosa.
+
 ### Formato .prc (posições fixas, 83 chars)
 
 ```
@@ -255,7 +276,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v2.1 (2026-07):** **≥70 testes / 6 suites** · `tsc --noEmit` = 0 erros.
+**Baseline (2026-08):** **206 testes / 18 suites** · `tsc --noEmit` = 0 erros.
 
 Arquivos de teste relevantes:
 ```
@@ -263,6 +284,8 @@ src/services/__tests__/InventoryEvaluationService.test.ts  ← motor, líder, vi
 src/utils/__tests__/prcParser.integration.test.ts          ← parser .prc + catalogoLookup + normalizarNomeArea
 src/utils/__tests__/relatorioOutput.test.ts                ← Everaldo / Elen / Tania + alerta OTC ≤5%
 src/utils/__tests__/parseInventoryCheckersCsv.test.ts
+src/utils/__tests__/fileFormat.test.ts                     ← magic bytes, extensão, UTF-8 vs cp1252, MHTML
+src/utils/__tests__/spreadsheetReader.test.ts              ← XLS/XLSX/HTML do Crystal Reports → CSV `;`
 src/services/__tests__/AuditoriaAtribuicaoService.test.ts
 src/services/__tests__/AuditoriaReconciliacaoService.test.ts
 ```
@@ -310,6 +333,10 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
 | Filtro P&B do scanner via WebView + canvas (`scanFilter.ts`) | Nem `expo-image-manipulator` nem o plugin de scanner expõem operação de cor; canal de tinta = `min(R,G,B)` elimina o matiz de caneta colorida |
 | Algoritmo do filtro guardado como string, não como função | Hermes descarta o corpo em `Function.prototype.toString()`; a string é injetada no WebView **e** avaliada nos testes — fonte única |
+| Formato do arquivo por magic bytes, não por extensão/MIME | Android manda `octet-stream` e o cache do picker pode perder o nome; extensão só serve para mensagem e `console.warn` |
+| Picker sempre `type: "*/*"` | Filtro de MIME deixava .xls/.prc/.txt cinza e inselecionáveis no Android |
+| IO separado da conversão (`fileImport` vs `spreadsheetReader`/`fileFormat`) | O miolo (bytes → planilha → CSV) roda no Jest sem mock de React Native |
+| `readAsStringAsync` sempre de `expo-file-system/legacy` | No SDK 54 o import raiz **lança em runtime** — foi a causa de "Não foi possível ler a planilha" |
 
 ---
 
@@ -321,6 +348,9 @@ Sempre incrementar `versionCode` no `app.json` antes de gerar release.
 - ❌ Não penalizar bloco em operações que não sejam FARMÁCIA
 - ❌ Não usar linguagem de vínculo empregatício no relatório FREE
 - ❌ Não processar apenas um .prc — sempre acumular todos os arquivos selecionados
+- ❌ Não filtrar o DocumentPicker por MIME — usar `type: "*/*"` e validar pelo conteúdo
+- ❌ Não decidir "é planilha ou texto" pela extensão — usar `detectarFormato()`
+- ❌ Não importar `readAsStringAsync` de `expo-file-system` (só de `/legacy`)
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não recriar policies `USING (true)` / `WITH CHECK (true)` nas tabelas core
 - ❌ Não conceder `EXECUTE` de `gerar_escala`/`listar_escala` a `anon` ou `PUBLIC`

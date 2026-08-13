@@ -59,7 +59,7 @@ export default function AuditoriaAtribuicaoScreen() {
       const arquivos = result.assets;
       const allContagens: ContagemDetalhada[] = [];
       for (const arquivo of arquivos) {
-        const conteudo = await readFileAsText(arquivo.uri);
+        const conteudo = await readFileAsText(arquivo.uri, arquivo.name ?? undefined);
         allContagens.push(...parsePrcFile(conteudo));
       }
       setPrcContagens(allContagens);
@@ -96,7 +96,12 @@ export default function AuditoriaAtribuicaoScreen() {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
       if (result.canceled) return;
-      const text = await readFileAsCsvText(result.assets[0].uri);
+      const file = result.assets[0];
+      const text = await readFileAsCsvText(
+        file.uri,
+        file.mimeType ?? undefined,
+        file.name ?? undefined,
+      );
       // Converter CSV text para matriz
       const matriz = text.split(/\r?\n/).map(l => l.split(';'));
       const extraido = parseAcuracidadeXlsMatrix(matriz);
@@ -111,7 +116,12 @@ export default function AuditoriaAtribuicaoScreen() {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
       if (result.canceled) return;
-      const text = await readFileAsCsvText(result.assets[0].uri);
+      const file = result.assets[0];
+      const text = await readFileAsCsvText(
+        file.uri,
+        file.mimeType ?? undefined,
+        file.name ?? undefined,
+      );
       setProducaoRaw(text);
       Alert.alert("Sucesso", "PRODUÇÃO carregado.");
     } catch {
@@ -121,9 +131,11 @@ export default function AuditoriaAtribuicaoScreen() {
 
   const handlePickAgentes = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "text/plain", copyToCacheDirectory: true });
+      // `text/plain` deixava .txt de coletor cinza no Android (chega como octet-stream).
+      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
       if (result.canceled) return;
-      const text = await readFileAsText(result.assets[0].uri);
+      const file = result.assets[0];
+      const text = await readFileAsText(file.uri, file.name ?? undefined);
       const map = buildAgentesIndex(text);
       setAgentesMap(map);
       Alert.alert("Sucesso", `Agentes carregados: ${map.size} registros.`);
