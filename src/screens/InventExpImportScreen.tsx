@@ -74,7 +74,11 @@ import {
   type BlocoRow,
   type DobroRow,
 } from "../utils/avaliacaoV3Parsers";
-import { construirMapaAreas, type ProdSecaoRow } from "../services/AreaMappingService";
+import {
+    construirMapaAreas,
+    type MapaAreas,
+    type ProdSecaoRow,
+} from "../services/AreaMappingService";
 import { gerarRelatorioV3Html } from "../utils/inventExpReportV3";
 import ModalidadeContratoModal, {
   type ConferenteParaMarcar,
@@ -475,6 +479,9 @@ export default function InventExpImportScreen() {
     parsed: ReturnType<typeof parseInventoryCheckersCsv>,
     contagens: ContagemDetalhada[],
     leader?: string,
+    /** Mapa já construído pelo v2.1 — reaproveitado para não pagar duas vezes
+     *  a busca por permutação do `construirMapaAreas()`. */
+    mapaPronto?: MapaAreas | null,
   ) => {
     if (contagens.length === 0 || prodSecaoRows.length === 0 || acuracidade.length === 0) {
       setAvaliacoesV3([]);
@@ -482,7 +489,7 @@ export default function InventExpImportScreen() {
       return;
     }
 
-    const mapa = construirMapaAreas(prodSecaoRows, contagens);
+    const mapa = mapaPronto ?? construirMapaAreas(prodSecaoRows, contagens);
 
     const { custoPorEan, familiaPorEan } = montarCadastroProduto(
       inventDspText,
@@ -630,6 +637,39 @@ export default function InventExpImportScreen() {
         if (stripped) secaoMap.set(stripped, s.nome_area);
       }
 
+      /*
+       * Mapa Seção → Área do próprio evento, por cima do `secao_lookup`.
+       *
+       * `secao_lookup` é opcional e costuma estar vazia: quando está, o v2.1
+       * não conseguia casar contagem com área, `enriquecerSecoesComBloco()`
+       * não achava nenhuma bipada da área e o bloco% caía no valor da planilha
+       * — sem erro nenhum. Numa planilha sem coluna de bloco isso zera o
+       * percentual e a violação passa despercebida, contra a regra de que
+       * Qualidade nunca pode ser 100 com violação de bloco.
+       *
+       * `construirMapaAreas()` resolve isso sem depender do banco: reconstrói
+       * o mapa a partir do PROD_SEÇÃO + `.prc`. É específico deste inventário,
+       * então vence o lookup global quando os dois existem.
+       */
+      const mapaAreas =
+        prodSecaoRows.length > 0 && prcContagens.length > 0
+          ? construirMapaAreas(prodSecaoRows, prcContagens)
+          : null;
+
+      if (mapaAreas) {
+        for (const [secao, area] of mapaAreas.secaoParaArea) {
+          secaoMap.set(secao, area);
+          const semZeros = secao.replace(/^0+/, "");
+          if (semZeros) secaoMap.set(semZeros, area);
+          secaoMap.set(secao.padStart(6, "0"), area);
+        }
+      } else if (secaoRows.length === 0) {
+        console.warn(
+          "[InventExp] Sem secao_lookup e sem PROD_SEÇÃO: área da contagem fica " +
+            "sendo o código da seção, e o bloco% por área vem da planilha.",
+        );
+      }
+
       let limites: LimiteBlocoRow[] = await getLimitesBlocoArea(operationType);
       if (!limites.length) {
         limites = getLimitesBlocoFallback(operationType);
@@ -704,7 +744,7 @@ export default function InventExpImportScreen() {
         );
       }
 
-      processarV3(parsed, contagensAtualizadas, leader);
+      processarV3(parsed, contagensAtualizadas, leader, mapaAreas);
     } catch (e) {
       console.warn("[InventExp] Erro ao processar avaliação:", e);
       Alert.alert("Erro", "Falha ao processar a avaliação. Verifique os arquivos.");
