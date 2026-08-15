@@ -193,10 +193,12 @@ PROD_SEÇÃO"). Os dois motores reagem de formas diferentes:
 **v3 não usa a tabela.** `construirMapaAreas()` reconstrói Seção → Área a partir
 do `PROD_SEÇÃO` + `.prc`, sem tocar no banco. Imune.
 
-**v2.1 degrada em silêncio.** `handleProcess()` chama `getSecaoLookup()`, recebe
-lista vazia, e `resolverAreasNasContagens()` deixa `area_nome` vazio em todas as
-contagens. Em `enriquecerSecoesComBloco()` o filtro por área não casa com nada,
-`daArea` fica vazio, e o `bloco_pct` **cai no valor que veio da planilha**
+**v2.1 degradava em silêncio.** `handleProcess()` chama `getSecaoLookup()`,
+recebe lista vazia, e `resolverAreasNasContagens()` cai no último fallback da
+cadeia — o `area_codigo`. O `area_nome` da contagem vira o **código da seção**
+(`"0217"`), não uma string vazia. Em `enriquecerSecoesComBloco()` o filtro
+compara esse código com o nome da área do PROD_SEÇÃO (`"MEDICAMENTOS"`), nunca
+casa, `daArea` fica vazio, e o `bloco_pct` **cai no valor que veio da planilha**
 (`s.bloco_pct ?? s.pctBloco ?? 0`) em vez de ser calculado das bipadas.
 
 Consequência prática: se o `PROD_SEÇÃO` trouxer a coluna de bloco, a violação
@@ -204,12 +206,17 @@ continua sendo detectada; se não trouxer, `bloco_pct` vira 0 e **a violação
 deixa de ser detectada** — Qualidade pode chegar a 100 com bloco em área
 crítica, que é justamente a regra absoluta do `CLAUDE.md`.
 
-Não dá erro em lugar nenhum. Duas saídas:
+Não dava erro em lugar nenhum.
 
-1. popular `secao_lookup` por evento (o que o comentário da tabela pede); ou
-2. alimentar o caminho v2.1 com o `MapaAreas` que o v3 já constrói e valida —
-   dispensa o banco e reaproveita um mapeamento conferido em 68 das 72
-   combinações do DPSP L2601.
+**Corrigido:** o caminho v2.1 passou a sobrepor ao lookup o `MapaAreas` que o v3
+constrói do PROD_SEÇÃO + `.prc` — dispensa o banco e reaproveita um mapeamento
+conferido em 68 das 72 combinações do DPSP L2601. O mapa do evento vence o
+lookup global; o lookup continua valendo para seções que o PROD_SEÇÃO não cobre.
+Regressão fixada em `src/utils/__tests__/blocoPorAreaSemSecaoLookup.test.ts`.
+
+Popular a `secao_lookup` por evento — o que o comentário da tabela pede —
+continua sendo útil para quem roda a avaliação **sem** o PROD_SEÇÃO, único caso
+em que o app ainda depende dela.
 
 ---
 
