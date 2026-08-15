@@ -23,12 +23,14 @@ import {
     agendarTesteDeAviso,
     ALARM_TITLE,
     ALARM_VOICE_MSG,
-    CANAL_ALARME,
+    ALARM_CHANNEL_ID,
     AVANCOS_MONITORADOS,
     avisoLiberado,
     buscarAvancoPorLabel,
     canTriggerAdvanceAlarm,
+    diagnosticarCanalDeAlarme,
     evaluateAdvancesAndMaybeStop,
+    garantirCanalDeAlarme,
     isNearWarningTime,
     isWarningTime,
     setReportFilling,
@@ -174,7 +176,7 @@ export default function ReportAScreen() {
           },
           // trigger com channelId = entrega imediata NO canal da voz
           // (trigger: null cairia no canal padrão, com som padrão)
-          trigger: { channelId: CANAL_ALARME },
+          trigger: { channelId: ALARM_CHANNEL_ID },
         });
       }
       // Voz em primeiro plano; com a tela apagada quem fala é o som da notificação
@@ -192,6 +194,13 @@ export default function ReportAScreen() {
       if (stopped) stopAlarm();
     });
   }, [report, stopAlarm]);
+
+  // ── Canal de notificação: garante na montagem, não só ao agendar.
+  //    O canal do Android é imutável — o que vale é o estado que o
+  //    diagnóstico devolve, não o que o código pediu. Ver docs/AVISO_VOZ_ELEVENLABS.md.
+  useEffect(() => {
+    void garantirCanalDeAlarme().then(() => diagnosticarCanalDeAlarme());
+  }, []);
 
   // ── Reagenda os alarmes do SO quando o preenchimento dos avanços muda:
   //    é o que libera o aviso do próximo avanço assim que o anterior é lançado.

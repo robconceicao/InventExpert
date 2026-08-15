@@ -12,16 +12,39 @@ const PRC_83 = [
 const CADASTRO   = '000000000695815COD PAR 500MG 12CP  NNN\r\n000000078910041GRT PAST.HORTELA17G NNN\r\n';
 const INVENT_DSP = '695815; 7899420506918; COD PAR 500MG 12CP  A2\r\n311910; 7891317481629; SIBUTR.15 EU.30CS  -B2\r\n';
 
+/**
+ * As expectativas de `area_codigo` e `is_bloco` mudaram na v3, depois da
+ * conferência do layout contra 38.588 registros reais do inventário DPSP L2601:
+ *
+ *   area_codigo — a seção são os ÚLTIMOS 4 dígitos do endereço, não os 6.
+ *                 Confirmado contra RELATORIOS/BLOCO.xls.
+ *   is_bloco    — bloco é quantidade > 1, não a flag da posição 43. A regra
+ *                 antiga (flag === 'X') cobria 0,9% dos registros que o sistema
+ *                 classifica como bloco; a nova cobre 99,7%.
+ *
+ * Todas as 4 linhas da fixture têm quantidade acima de 1, logo todas são bloco.
+ */
 describe('parsePrcFile', () => {
   it('parseia 4 linhas de 83 chars', () => {
     const r = parsePrcFile(PRC_83);
     expect(r).toHaveLength(4);
     expect(r[0].matricula).toBe('41712954830');
-    expect(r[0].area_codigo).toBe('003029');
+    expect(r[0].area_codigo).toBe('3029');
     expect(r[0].produto_codigo).toBe('78910041');
     expect(r[0].quantidade).toBe(33);
-    expect(r[0].is_bloco).toBe(false);
+    expect(r[0].is_bloco).toBe(true);
+    expect(r[2].quantidade).toBe(9);
     expect(r[2].is_bloco).toBe(true);
+  });
+
+  it('não usa a flag da posição 43 para decidir bloco', () => {
+    // linha com flag 'P' e quantidade 1 → unitária
+    const unitariaComFlagP =
+      '0000010000010000022022050720041441712954830P0000000PI003029000000078910041000001000';
+    const [c] = parsePrcFile(unitariaComFlagP);
+    expect(c.flag_origem).toBe('P');
+    expect(c.quantidade).toBe(1);
+    expect(c.is_bloco).toBe(false);
   });
   it('ignora linhas sem prefixo PI', () => {
     const r = parsePrcFile('linha_invalida\r\n' + PRC_83);

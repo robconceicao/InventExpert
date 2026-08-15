@@ -1,5 +1,6 @@
 import { AuditoriaAtribuicaoService, bipMatchesEan } from '../AuditoriaAtribuicaoService';
 import { ContagemDetalhada, AuditoriaAcuracidadeRow, AuditoriaAgenteInfo, InventoryCheckerInput } from '../../types';
+import { parsePrcFile } from '../../utils/prcParser';
 
 describe('AuditoriaAtribuicaoService Nível 1', () => {
   const criarBip = (
@@ -258,5 +259,63 @@ describe('bipMatchesEan', () => {
 
   it('match exact EAN', () => {
     expect(bipMatchesEan(bip('7891234567890'), '7891234567890')).toBe(true);
+  });
+});
+
+/**
+ * Regressão do formato da seção.
+ *
+ * Até a v3 o `prcParser` guardava a seção com 6 dígitos ('002312') enquanto o
+ * ACURACIDADE publica 4 ('2312'). Com arquivos reais o cruzamento nunca casava,
+ * `erro_real` saía zero para todo mundo e todos apareciam como
+ * ERRO_DE_TERCEIRO_RECEBIDO. As fixtures antigas escondiam a falha porque
+ * usavam o mesmo valor dos dois lados.
+ *
+ * Este teste amarra as duas pontas ao parser de verdade.
+ */
+describe('AuditoriaAtribuicaoService — seção do prcParser casa com o ACURACIDADE', () => {
+  const LINHA_PRC =
+    '0000010000010000012026080700153629291408875P0000000PI002312007896658027796000016000';
+
+  it('a seção extraída do .prc tem 4 dígitos e bate com a do relatório', () => {
+    const [bip] = parsePrcFile(LINHA_PRC);
+    expect(bip.area_codigo).toBe('2312');
+  });
+
+  it('calcula erro_real diferente de zero com dados no formato real', () => {
+    const bips = parsePrcFile(LINHA_PRC);
+    const acuracidade: AuditoriaAcuracidadeRow[] = [
+      {
+        secao: '2312',
+        ean: '007896658027796',
+        descricao: 'COLIDIS 5 ML',
+        c1: 16,
+        a1: -14,
+        a2: 0,
+        a3: 0,
+        final: 2,
+        ajst: -14,
+      },
+    ];
+    const producao: InventoryCheckerInput[] = [
+      {
+        nome: 'AMARILDO DA SILVA',
+        matricula: '29291408875',
+        qtde: 4798,
+        qtde1a1: 857,
+        produtividade: 1151,
+        erro: 14,
+      },
+    ];
+
+    const [r] = AuditoriaAtribuicaoService.calcularNivel1(
+      bips,
+      acuracidade,
+      producao,
+      new Map(),
+    );
+
+    expect(r.erro_real).toBeCloseTo(14, 2);
+    expect(r.status).toBe('OK');
   });
 });

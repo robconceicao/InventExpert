@@ -84,10 +84,19 @@ export async function lerArquivoBase64(uri: string): Promise<string> {
   });
 }
 
-async function lerEDetectar(uri: string): Promise<ArquivoLido> {
+/**
+ * Lê o arquivo e devolve bytes + formato reconhecido pelo conteúdo.
+ *
+ * Exposto para quem precisa decidir o caminho por conta própria — o
+ * `pickSheetAsMatrix()` usa isso para mandar texto ao parser de matriz e
+ * planilha ao SheetJS.
+ */
+export async function lerArquivoDetectado(uri: string): Promise<ArquivoLido> {
   const base64 = await lerArquivoBase64(uri);
   return identificarArquivo(base64, decodeBase64(base64));
 }
+
+const lerEDetectar = lerArquivoDetectado;
 
 /**
  * Abre qualquer arquivo tabular (XLS, XLSX, HTML do Crystal Reports, CSV) como

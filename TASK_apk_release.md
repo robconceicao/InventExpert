@@ -1,7 +1,7 @@
 # Task — APK Release (InventExpert)
 
 > Esta task não altera código-fonte — apenas prepara e executa o build.
-> Baseline a preservar: 0 erros TS / 52 testes verdes.
+> Baseline a preservar: 0 erros TS / ~150 testes verdes (9 suites, v3 2026-08).
 
 ---
 
@@ -15,6 +15,15 @@ Esta release consolida:
 - Overhaul completo do módulo Avaliação (limites de bloco por área)
 - Perfil ATACADO
 - Sistema de evolução do conferente (se concluído antes deste build)
+
+**Release 1.6.0 (versionCode 18) — motor de Avaliação v3:**
+- `prcParser` corrigido: bloco pela quantidade, seção de 4 dígitos, quantidade
+  de 9 dígitos, endereço digitado à mão e relógio de coletor fora de data
+- Mapa Seção → Área física → Conferente (`AreaMappingService`)
+- Divergência atribuída por SEÇÃO+EAN, com reconciliação obrigatória
+- Produtos não contados com área e responsável provável em 3 níveis
+- Auditoria dirigida separada do cálculo de produtividade
+- Tela de Avaliação com os arquivos obrigatórios e complementares separados
 
 ---
 
@@ -89,9 +98,42 @@ cd android
 APK gerado em:
 `android/app/build/outputs/apk/release/app-release.apk`
 
-> Se o build local falhar por JDK, usar o JDK local do projeto:
-> `$env:JAVA_HOME = "C:\Users\robtc\InventExpert\jdk17"`
-> `$env:Path = "$env:JAVA_HOME\bin;" + $env:Path`
+#### JDK — atenção
+
+A pasta `jdk17/` do projeto está no `.gitignore` e **não existe mais** na máquina.
+Apontar `JAVA_HOME` para ela devolve *"JAVA_HOME is set to an invalid directory"*.
+
+Gradle 8.14.3 exige **JDK 17** (21 também serve; 11 e 24 não).
+
+Para descobrir os JDKs instalados:
+
+```powershell
+Get-ChildItem "C:\Program Files\Android\Android Studio\jbr", `
+              "C:\Program Files\Eclipse Adoptium", `
+              "C:\Program Files\Java", `
+              "$env:LOCALAPPDATA\Programs\Eclipse Adoptium" `
+              -ErrorAction SilentlyContinue | Select-Object FullName
+```
+
+Caminhos confirmados nesta máquina (07/08/2026), em ordem de preferência:
+
+1. `C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot` — JDK 17 completo e versionado
+2. `C:\Program Files\Java\jdk-17`
+3. `C:\Program Files\Android\Android Studio\jbr` — runtime da JetBrains, também 17
+
+Definir para a sessão atual:
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot"
+$env:Path = "$env:JAVA_HOME\bin;" + $env:Path
+java -version   # tem de mostrar 17.x
+```
+
+Para fixar de vez (e reabrir o terminal depois):
+
+```powershell
+[Environment]::SetEnvironmentVariable("JAVA_HOME","C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot","User")
+```
 
 ---
 

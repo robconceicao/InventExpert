@@ -31,7 +31,9 @@ import { canPublishProdutividade, resolveAppRole } from "../services/authz";
 import { ProdutividadePublishService } from "../services/ProdutividadePublishService";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 import type {
+    AuditoriaAgenteInfo,
     ContagemDetalhada,
+    ModalidadeContratoCanonico,
     InventoryCheckerEvaluation,
     InventoryOperationType,
     SectionAccuracyRecord,
@@ -53,11 +55,49 @@ import {
     extractProductivityTotals,
     filtrarContagensDoConferente,
     filtrarSecoesDoConferente,
-    parseProducaoSecaoCsv,
     resolverAreasNasContagens,
 } from "../utils/inventoryImportParsers";
 import { parseInventoryCheckersCsv } from "../utils/parsers";
-import { parsePrcFile } from "../utils/prcParser";
+import { parsePrcFiles } from "../utils/prcParser";
+import { pickSheetAsMatrix } from "../utils/excelParser";
+import { buildAgentesIndex } from "../utils/auditoriaParsers";
+import {
+  montarCadastroProduto,
+  parseAcuracidadeMatrix,
+  parseAuditoriaDirigida,
+  parseControladosMatrix,
+  parseBlocoMatrix,
+  parseDobroMatrix,
+  parseNaoContadosMatrix,
+  parseProdSecaoMatrix,
+  prodSecaoParaSecoes,
+  type BlocoRow,
+  type DobroRow,
+} from "../utils/avaliacaoV3Parsers";
+import { construirMapaAreas, type ProdSecaoRow } from "../services/AreaMappingService";
+import { gerarRelatorioV3Html } from "../utils/inventExpReportV3";
+import ModalidadeContratoModal, {
+  type ConferenteParaMarcar,
+} from "../components/ModalidadeContratoModal";
+import {
+  getModalidades,
+  salvarModalidades,
+} from "../repositories/modalidadeRepository";
+import {
+  atribuirDivergencias,
+  conferirBloco,
+  conferirReconciliacao,
+  contarDobroPorConferente,
+  type AcuracidadeRow,
+  type ConferenciaBloco,
+} from "../services/ErroAtribuicaoService";
+import { atribuirNaoContados, type NaoContadoInput } from "../services/NaoContadoService";
+import {
+  avaliarConferenteV3,
+  medianaProdutividade,
+  ordenarRankingV3,
+  type AvaliacaoV3,
+} from "../services/AvaliacaoV3Service";
 
 
 /**
@@ -91,8 +131,44 @@ export default function InventExpImportScreen() {
   const [evaluations, setEvaluations] = useState<InventoryCheckerEvaluation[]>(
     [],
   );
-  const [prcInfo, setPrcInfo] = useState<{ count: number; totalLines: number } | null>(null);
+  const [prcInfo, setPrcInfo] = useState<{
+    count: number;
+    totalLines: number;
+    enderecosForaPadrao: number;
+    datas: string[];
+    ignoradas: number;
+  } | null>(null);
   const [prcContagens, setPrcContagens] = useState<ContagemDetalhada[]>([]);
+
+  // --- entradas do motor v3 ---
+  const [prodSecaoRows, setProdSecaoRows] = useState<ProdSecaoRow[]>([]);
+  const [acuracidade, setAcuracidade] = useState<AcuracidadeRow[]>([]);
+  const [naoContadosArq, setNaoContadosArq] = useState<NaoContadoInput[]>([]);
+  const [auditoriaTexto, setAuditoriaTexto] = useState("");
+  const [saldoAuditoriaText, setSaldoAuditoriaText] = useState("");
+  const [controlados, setControlados] = useState<Set<string>>(new Set());
+  const [dobroRows, setDobroRows] = useState<DobroRow[]>([]);
+  const [modalidades, setModalidades] = useState<Map<string, ModalidadeContratoCanonico>>(new Map());
+  const [modalVisivel, setModalVisivel] = useState(false);
+  const [paraMarcar, setParaMarcar] = useState<ConferenteParaMarcar[]>([]);
+  const [salvandoModalidade, setSalvandoModalidade] = useState(false);
+  const [blocoRows, setBlocoRows] = useState<BlocoRow[]>([]);
+  const [agentesMap, setAgentesMap] = useState<Map<string, AuditoriaAgenteInfo>>(new Map());
+  const [avaliacoesV3, setAvaliacoesV3] = useState<AvaliacaoV3[]>([]);
+  const [diagV3, setDiagV3] = useState<{
+    secoesMapeadas: number;
+    areasNaoConformes: number;
+    divergencias: number;
+    orfas: number;
+    compartilhadas: number;
+    reconciliacaoOk: boolean;
+    falhasReconciliacao: { matricula: string; esperado: number; apurado: number }[];
+    naoContados: number;
+    naoContadosAlta: number;
+    dobro: number;
+    bloco: ConferenciaBloco | null;
+  } | null>(null);
+  const [medianaEquipe, setMedianaEquipe] = useState(0);
 
   const [cadastroText, setCadastroText] = useState("");
   const [inventDspText, setInventDspText] = useState("");
@@ -118,10 +194,7 @@ export default function InventExpImportScreen() {
         file.name ?? undefined,
       );
       setRawText(text);
-      Alert.alert(
-        "Arquivo carregado",
-        `${file.name} importado. Clique em Processar Avaliação.`,
-      );
+      await abrirMarcacaoModalidade(text);
     } catch (e) {
       Alert.alert("Erro", mensagemDeErro(e, "Não foi possível ler o arquivo."));
     }
@@ -136,18 +209,37 @@ export default function InventExpImportScreen() {
       if (result.canceled) return;
 
       const arquivos = result.assets;
-      const allContagens: ContagemDetalhada[] = [];
-
+      const conteudos: string[] = [];
       for (const arquivo of arquivos) {
-        const conteudo = await readFileAsText(arquivo.uri, arquivo.name ?? undefined);
-        allContagens.push(...parsePrcFile(conteudo));
+        conteudos.push(await readFileAsText(arquivo.uri, arquivo.name ?? undefined));
       }
 
-      setPrcContagens(allContagens);
-      setPrcInfo({ count: arquivos.length, totalLines: allContagens.length });
+      const r = parsePrcFiles(conteudos);
+      setPrcContagens(r.contagens);
+      setPrcInfo({
+        count: arquivos.length,
+        totalLines: r.contagens.length,
+        enderecosForaPadrao: r.enderecosForaPadrao,
+        datas: r.datasDistintas,
+        ignoradas: r.linhasIgnoradas,
+      });
+
+      const avisos: string[] = [];
+      if (r.datasDistintas.length > 1) {
+        avisos.push(
+          `Relógio: ${r.datasDistintas.length} datas distintas (${r.datasDistintas.join(", ")}). ` +
+            "Volume e sequência valem; hora absoluta, não.",
+        );
+      }
+      if (r.enderecosForaPadrao > 0) {
+        avisos.push(
+          `${r.enderecosForaPadrao} endereço(s) fora do padrão — digitação manual no coletor.`,
+        );
+      }
       Alert.alert(
         "Arquivos .prc",
-        `✓ ${arquivos.length} arquivo(s) · ${allContagens.length.toLocaleString("pt-BR")} linhas válidas`,
+        `✓ ${arquivos.length} arquivo(s) · ${r.contagens.length.toLocaleString("pt-BR")} bipadas` +
+          (avisos.length ? `\n\n⚠ ${avisos.join("\n⚠ ")}` : ""),
       );
     } catch (e) {
       Alert.alert("Erro", mensagemDeErro(e, "Não foi possível ler os arquivos .prc."));
@@ -178,20 +270,326 @@ export default function InventExpImportScreen() {
     }
   };
 
+  /**
+   * Um único arquivo alimenta os dois motores: as linhas viram `ProdSecaoRow`
+   * para o mapa de áreas do v3 e `SectionAccuracyRecord` para o motor v2.1.
+   */
   const handlePickProducaoSecao = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
-      if (result.canceled) return;
-      const file = result.assets[0];
-      const text = await readFileAsCsvText(
-        file.uri,
-        file.mimeType ?? undefined,
-        file.name ?? undefined,
+      const { matriz, erro } = await pickSheetAsMatrix();
+      if (erro) { Alert.alert("Erro", erro); return; }
+      if (matriz.length === 0) return;
+
+      const linhas = parseProdSecaoMatrix(matriz);
+      if (linhas.length === 0) {
+        Alert.alert(
+          "PROD_SEÇÃO",
+          "Nenhuma linha reconhecida. Confira se o arquivo tem as colunas AREA, MATRICULA e Qtd(C1).",
+        );
+        return;
+      }
+      setProdSecaoRows(linhas);
+      setProducaoSecao(prodSecaoParaSecoes(linhas));
+      const areas = new Set(linhas.map((l) => l.area)).size;
+      Alert.alert(
+        "PROD_SEÇÃO carregado",
+        `${linhas.length} combinação(ões) · ${areas} área(s) físicas`,
       );
-      setProducaoSecao(parseProducaoSecaoCsv(text));
-      Alert.alert("Sucesso", "PRODUÇÃO_SEÇÃO carregado.");
-    } catch (e) {
-      Alert.alert("Erro", mensagemDeErro(e, "Falha ao ler PRODUÇÃO_SEÇÃO."));
+    } catch (e: any) {
+      Alert.alert("Erro", "Falha ao ler PROD_SEÇÃO: " + (e?.message ?? ""));
+    }
+  };
+
+  const handlePickAcuracidade = async () => {
+    try {
+      const { matriz, erro } = await pickSheetAsMatrix();
+      if (erro) { Alert.alert("Erro", erro); return; }
+      if (matriz.length === 0) return;
+      const linhas = parseAcuracidadeMatrix(matriz);
+      setAcuracidade(linhas);
+      const div = linhas.filter((l) => l.ajuste !== 0).length;
+      Alert.alert(
+        "ACURACIDADE carregado",
+        `${linhas.length.toLocaleString("pt-BR")} itens · ${div} com divergência`,
+      );
+    } catch (e: any) {
+      Alert.alert("Erro", "Falha ao ler ACURACIDADE: " + (e?.message ?? ""));
+    }
+  };
+
+  const handlePickNaoContados = async () => {
+    try {
+      const { matriz, erro } = await pickSheetAsMatrix();
+      if (erro) { Alert.alert("Erro", erro); return; }
+      if (matriz.length === 0) return;
+      const itens = parseNaoContadosMatrix(matriz);
+      setNaoContadosArq(itens);
+      Alert.alert("NÃO CONTADOS carregado", `${itens.length} produto(s) sem coleta`);
+    } catch (e: any) {
+      Alert.alert("Erro", "Falha ao ler NAO CONTADOS: " + (e?.message ?? ""));
+    }
+  };
+
+  const handlePickDobro = async () => {
+    try {
+      const { matriz, erro } = await pickSheetAsMatrix();
+      if (erro) { Alert.alert("Erro", erro); return; }
+      if (matriz.length === 0) return;
+      const linhas = parseDobroMatrix(matriz);
+      setDobroRows(linhas);
+      Alert.alert("DOBRO carregado", `${linhas.length} bipada(s) em duplicidade`);
+    } catch {
+      Alert.alert("Erro", "Falha ao ler DOBRO.");
+    }
+  };
+
+  const handlePickBloco = async () => {
+    try {
+      const { matriz, erro } = await pickSheetAsMatrix();
+      if (erro) { Alert.alert("Erro", erro); return; }
+      if (matriz.length === 0) return;
+      const linhas = parseBlocoMatrix(matriz);
+      setBlocoRows(linhas);
+      Alert.alert(
+        "BLOCO carregado",
+        `${linhas.length} linha(s). Serve de conferência independente da seção e da regra de bloco.`,
+      );
+    } catch {
+      Alert.alert("Erro", "Falha ao ler BLOCO.");
+    }
+  };
+
+  const handlePickControlados = async () => {
+    try {
+      const { matriz, erro } = await pickSheetAsMatrix();
+      if (erro) { Alert.alert("Erro", erro); return; }
+      if (matriz.length === 0) return;
+      const eans = parseControladosMatrix(matriz);
+      setControlados(eans);
+      Alert.alert("CONTROLADOS carregado", `${eans.size} código(s) de barras`);
+    } catch {
+      Alert.alert("Erro", "Falha ao ler CONTROLADOS.");
+    }
+  };
+
+  /** Arquivo de saldo/auditoria do CadProd — traz o custo unitário. */
+  const handlePickSaldoAuditoria = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const texto = await readFileAsText(result.assets[0].uri);
+      setSaldoAuditoriaText(texto);
+      Alert.alert("Sucesso", "Saldo/custo do CadProd carregado.");
+    } catch {
+      Alert.alert("Erro", "Falha ao ler o arquivo de saldo do CadProd.");
+    }
+  };
+
+  const handlePickAgentes = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const texto = await readFileAsText(result.assets[0].uri);
+      const map = buildAgentesIndex(texto);
+      setAgentesMap(map);
+      Alert.alert("Sucesso", `${map.size} agente(s) indexado(s).`);
+    } catch {
+      Alert.alert("Erro", "Falha ao ler agentes.txt / CadFun.txt.");
+    }
+  };
+
+  /**
+   * Abre a marcação de modalidade logo após a leitura do arquivo de produtividade.
+   *
+   * O relatório individual muda de linguagem conforme o vínculo, e o arquivo não
+   * traz essa informação. Quem já tem marcação no cadastro vem preenchido; os
+   * demais aparecem em branco e precisam de escolha explícita.
+   */
+  const abrirMarcacaoModalidade = async (texto: string) => {
+    const conferentes = parseInventoryCheckersCsv(texto).filter((c) => c.matricula);
+    if (conferentes.length === 0) {
+      Alert.alert(
+        "Nenhum conferente reconhecido",
+        "Confira se o arquivo é o RProInv_Produtividade e se tem as colunas de matrícula e nome.",
+      );
+      return;
+    }
+
+    const conhecidas = await getModalidades(conferentes.map((c) => c.matricula!));
+    const chave = (m: string) => m.replace(/\D/g, "") || m;
+
+    setParaMarcar(
+      conferentes.map((c) => ({
+        matricula: c.matricula!,
+        nome: c.nome,
+        modalidade: conhecidas.get(chave(c.matricula!)) ?? null,
+        jaConhecido: conhecidas.has(chave(c.matricula!)),
+      })),
+    );
+    setModalVisivel(true);
+  };
+
+  const confirmarModalidades = async (lista: ConferenteParaMarcar[]) => {
+    setSalvandoModalidade(true);
+    try {
+      const sincronizou = await salvarModalidades(
+        lista.map((c) => ({ matricula: c.matricula, nome: c.nome, modalidade: c.modalidade })),
+      );
+
+      const mapa = new Map<string, ModalidadeContratoCanonico>();
+      for (const c of lista) {
+        if (c.modalidade) mapa.set(c.matricula.replace(/\D/g, "") || c.matricula, c.modalidade);
+      }
+      setModalidades(mapa);
+      setModalVisivel(false);
+
+      const free = lista.filter((c) => c.modalidade === "FREE").length;
+      Alert.alert(
+        "Modalidades registradas",
+        `${lista.length} conferente(s) marcados` +
+          (free > 0 ? ` · ${free} como prestador de serviço` : "") +
+          (sincronizou
+            ? ""
+            : "\n\nAtenção: não foi possível gravar no cadastro. A marcação vale só neste aparelho até a próxima sincronização."),
+      );
+    } finally {
+      setSalvandoModalidade(false);
+    }
+  };
+
+  /** Conferentes do arquivo que ainda estão sem modalidade definida. */
+  const semModalidade = useMemo(() => {
+    if (rawText.length === 0) return [];
+    return parseInventoryCheckersCsv(rawText)
+      .filter((c) => c.matricula)
+      .filter((c) => !modalidades.has(c.matricula!.replace(/\D/g, "") || c.matricula!))
+      .map((c) => c.nome);
+  }, [rawText, modalidades]);
+
+  /**
+   * Motor v3 — só roda quando as três entradas essenciais estão presentes:
+   * .prc, PROD_SEÇÃO e ACURACIDADE. Sem qualquer uma delas não há mapa de
+   * áreas nem divergência para atribuir, e a tela segue apenas com o v2.1.
+   */
+  const processarV3 = (
+    parsed: ReturnType<typeof parseInventoryCheckersCsv>,
+    contagens: ContagemDetalhada[],
+    leader?: string,
+  ) => {
+    if (contagens.length === 0 || prodSecaoRows.length === 0 || acuracidade.length === 0) {
+      setAvaliacoesV3([]);
+      setDiagV3(null);
+      return;
+    }
+
+    const mapa = construirMapaAreas(prodSecaoRows, contagens);
+
+    const { custoPorEan, familiaPorEan } = montarCadastroProduto(
+      inventDspText,
+      saldoAuditoriaText,
+    );
+
+    const datasValidas = new Set(
+      (prcInfo?.datas ?? []).length > 0
+        ? [...(prcInfo?.datas ?? [])].sort().slice(-2)
+        : [],
+    );
+
+    const atribuicao = atribuirDivergencias(acuracidade, contagens, mapa, {
+      custoPorEan,
+      eansControlados: controlados,
+      datasValidas: datasValidas.size > 0 ? datasValidas : undefined,
+    });
+
+    // Conferência obrigatória: a soma atribuída tem de reproduzir Erro (Qtde).
+    const erroPorMatricula = new Map<string, number>();
+    for (const p of parsed) {
+      if (p.matricula) erroPorMatricula.set(p.matricula, p.erro || 0);
+    }
+    const falhas = conferirReconciliacao(atribuicao, erroPorMatricula);
+
+    const itensNaoContados = [
+      ...parseAuditoriaDirigida(auditoriaTexto),
+      ...naoContadosArq,
+    ];
+    const naoContados = atribuirNaoContados(
+      itensNaoContados,
+      acuracidade,
+      contagens,
+      mapa,
+      atribuicao.divergencias,
+      { familiaPorEan },
+    );
+
+    // A mediana precisa das peças/h já sem a auditoria dirigida, então roda
+    // uma primeira passada só para obter o ritmo de cada conferente.
+    const contexto0 = { medianaProdutividade: 1, mapa, datasValidas, agentes: agentesMap };
+    const ritmos: number[] = [];
+    for (const item of parsed) {
+      if (!item.matricula) continue;
+      const r = avaliarConferenteV3(
+        { ...item, matricula: item.matricula, valorContado: 1, valorAjustado: 0, horas: 1 },
+        operationType,
+        contagens,
+        [],
+        [],
+        contexto0,
+        0,
+        0,
+        leader,
+      );
+      if (r) ritmos.push(r.produtividade);
+    }
+    const mediana = medianaProdutividade(ritmos);
+    setMedianaEquipe(mediana);
+
+    const dobroPorConferente = contarDobroPorConferente(dobroRows, contagens);
+
+    const contexto = { medianaProdutividade: mediana, mapa, datasValidas, agentes: agentesMap };
+    const resultados: AvaliacaoV3[] = [];
+    for (const item of parsed) {
+      if (!item.matricula) continue;
+      const r = avaliarConferenteV3(
+        {
+          ...item,
+          matricula: item.matricula,
+          valorContado: item.valorC1 ?? 0,
+          valorAjustado: item.valorAjuste ?? 0,
+          horas: item.horas ?? 0,
+        },
+        operationType,
+        contagens,
+        atribuicao.divergencias,
+        naoContados,
+        contexto,
+        atribuicao.auditadosPorMatricula.get(item.matricula) ?? 0,
+        dobroPorConferente.get(item.matricula) ?? 0,
+        leader,
+      );
+      if (r) resultados.push(r);
+    }
+
+    setAvaliacoesV3(ordenarRankingV3(resultados));
+    setDiagV3({
+      secoesMapeadas: mapa.secaoParaArea.size,
+      areasNaoConformes: mapa.naoConformes.length,
+      divergencias: atribuicao.divergencias.length,
+      orfas: atribuicao.orfas.length,
+      compartilhadas: atribuicao.divergencias.filter((d) => d.compartilhada).length,
+      reconciliacaoOk: falhas.length === 0,
+      falhasReconciliacao: falhas,
+      naoContados: naoContados.length,
+      naoContadosAlta: naoContados.filter((n) => n.nivel === "ALTA").length,
+      dobro: dobroRows.length,
+      bloco: blocoRows.length > 0 ? conferirBloco(blocoRows, contagens) : null,
+    });
+
+    if (falhas.length > 0) {
+      Alert.alert(
+        "Reconciliação não fechou",
+        `${falhas.length} conferente(s) com soma de divergências diferente do Erro (Qtde) do sistema. ` +
+          "A cadeia de atribuição quebrou — não publicar a avaliação antes de investigar.",
+      );
     }
   };
 
@@ -208,6 +606,18 @@ export default function InventExpImportScreen() {
     setProcessing(true);
     try {
       const { totalPecas, duracaoHoras } = extractProductivityTotals(rawText);
+
+      // A modalidade define a linguagem do relatório individual. Sem ela o
+      // gerador cai em CLT, o que produziria documento com termos de vínculo
+      // para quem presta serviço sem contrato.
+      for (const item of parsed) {
+        const k = (item.matricula || "").replace(/\D/g, "") || item.matricula || "";
+        const mod = modalidades.get(k);
+        if (mod) {
+          item.modalidadeContrato = mod;
+          item.modalidade = mod;
+        }
+      }
       const catalogoIdx = buildCatalogoIndex(cadastroText);
       const inventDspIdx = buildInventDspIndex(inventDspText);
 
@@ -293,6 +703,8 @@ export default function InventExpImportScreen() {
           "Nenhum conferente restante após exclusão de líderes / filtros.",
         );
       }
+
+      processarV3(parsed, contagensAtualizadas, leader);
     } catch (e) {
       console.warn("[InventExp] Erro ao processar avaliação:", e);
       Alert.alert("Erro", "Falha ao processar a avaliação. Verifique os arquivos.");
@@ -449,6 +861,31 @@ export default function InventExpImportScreen() {
     );
   };
 
+  /**
+   * Ficha individual do v3, com áreas, erro localizado e não contados.
+   * A linguagem sai adequada ao vínculo — o gerador lê `avaliacao.modalidade`.
+   */
+  const exportarFichaV3 = async (a: AvaliacaoV3, posicao: number) => {
+    const html = gerarRelatorioV3Html(a, {
+      operacao: operationType,
+      dataInventario: new Date().toLocaleDateString("pt-BR"),
+      posicao,
+      totalConferentes: avaliacoesV3.length,
+      medianaEquipe,
+    });
+    const nome = (a.nome || "conferente")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "_")
+      .slice(0, 40);
+    await sharePdfFromHtml(
+      `ficha_${nome}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      html,
+      a.modalidade === "FREE"
+        ? "Exportar ficha — prestador de serviço"
+        : "Exportar ficha de avaliação",
+    );
+  };
+
   const handlePublishProdutividade = async () => {
     if (evaluations.length === 0) {
       Alert.alert("Sem dados", "Processe a avaliação antes de publicar.");
@@ -556,42 +993,146 @@ export default function InventExpImportScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Arquivos Auxiliares (Opcional)</Text>
+          <Text style={styles.cardTitle}>Arquivos obrigatórios</Text>
+          <Text style={styles.subtitle}>
+            Sem os três, a avaliação sai apenas com produtividade e erro total —
+            sem área física, sem erro localizado e sem cobertura.
+          </Text>
           <View style={styles.importRow}>
-            <Pressable style={styles.btnAttach} onPress={handlePickPrcFiles}>
-              <Ionicons name="documents-outline" size={20} color="#2563EB" />
-              <Text style={styles.btnAttachText}>Carregar .prc</Text>
+            <Pressable style={[styles.btnAttach, rawText.length > 0 && styles.btnAttachDone]} onPress={() => void handlePickFile()}>
+              <Ionicons name="people-outline" size={20} color={rawText.length ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, rawText.length > 0 && styles.btnAttachTextGreen]}>RProInv_Produtividade</Text>
             </Pressable>
-            <Pressable style={styles.btnAttach} onPress={handlePickCadastro}>
-              <Ionicons name="document-text-outline" size={20} color="#2563EB" />
-              <Text style={styles.btnAttachText}>cadastro.txt</Text>
+            <Pressable style={[styles.btnAttach, prodSecaoRows.length > 0 && styles.btnAttachDone]} onPress={handlePickProducaoSecao}>
+              <Ionicons name="grid-outline" size={20} color={prodSecaoRows.length ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, prodSecaoRows.length > 0 && styles.btnAttachTextGreen]}>PROD_SEÇÃO</Text>
             </Pressable>
-            <Pressable style={styles.btnAttach} onPress={handlePickInventDsp}>
-              <Ionicons name="server-outline" size={20} color="#2563EB" />
-              <Text style={styles.btnAttachText}>invent_DSP</Text>
+            <Pressable style={[styles.btnAttach, acuracidade.length > 0 && styles.btnAttachDone]} onPress={handlePickAcuracidade}>
+              <Ionicons name="analytics-outline" size={20} color={acuracidade.length ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, acuracidade.length > 0 && styles.btnAttachTextGreen]}>ACURACIDADE</Text>
             </Pressable>
-            <Pressable style={styles.btnAttach} onPress={handlePickProducaoSecao}>
-              <Ionicons name="grid-outline" size={20} color="#2563EB" />
-              <Text style={styles.btnAttachText}>PROD_SEÇÃO</Text>
+            <Pressable style={[styles.btnAttach, prcInfo && styles.btnAttachDone]} onPress={handlePickPrcFiles}>
+              <Ionicons name="documents-outline" size={20} color={prcInfo ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, prcInfo && styles.btnAttachTextGreen]}>Arquivos .prc</Text>
             </Pressable>
           </View>
+
+          {rawText.length > 0 && (
+            <Text style={styles.prcPreview}>✓ RProInv_Produtividade carregado</Text>
+          )}
           {prcInfo && (
+            <>
+              <Text style={styles.prcPreview}>
+                ✓ {prcInfo.count} arquivo(s) .prc ·{" "}
+                {prcInfo.totalLines.toLocaleString("pt-BR")} bipadas
+              </Text>
+              {prcInfo.datas.length > 1 && (
+                <Text style={styles.warnText}>
+                  ⚠ Relógio de coletor: {prcInfo.datas.length} datas distintas (
+                  {prcInfo.datas.join(", ")}). Volume e sequência valem; hora absoluta, não.
+                </Text>
+              )}
+              {prcInfo.enderecosForaPadrao > 0 && (
+                <Text style={styles.warnText}>
+                  ⚠ {prcInfo.enderecosForaPadrao} endereço(s) fora do padrão — digitação
+                  manual no coletor.
+                </Text>
+              )}
+            </>
+          )}
+          {prodSecaoRows.length > 0 && (
             <Text style={styles.prcPreview}>
-              ✓ {prcInfo.count} arquivo(s) .prc ·{" "}
-              {prcInfo.totalLines.toLocaleString("pt-BR")} linhas
+              ✓ PROD_SEÇÃO · {prodSecaoRows.length} combinações ·{" "}
+              {new Set(prodSecaoRows.map((r) => r.area)).size} áreas
             </Text>
           )}
-          {cadastroText ? (
-            <Text style={styles.prcPreview}>✓ cadastro.txt carregado</Text>
-          ) : null}
-          {inventDspText ? (
-            <Text style={styles.prcPreview}>✓ invent_DSP.old carregado</Text>
-          ) : null}
-          {producaoSecao.length > 0 ? (
+          {acuracidade.length > 0 && (
             <Text style={styles.prcPreview}>
-              ✓ PRODUÇÃO_SEÇÃO carregado ({producaoSecao.length} linhas)
+              ✓ ACURACIDADE · {acuracidade.length.toLocaleString("pt-BR")} itens ·{" "}
+              {acuracidade.filter((a) => a.ajuste !== 0).length} divergências
             </Text>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Arquivos complementares</Text>
+          <Text style={styles.subtitle}>
+            Cada um habilita uma parte da análise. A ausência vira ressalva no relatório.
+            O CadProd são dois arquivos: o invent_DSP liga EAN ao código, o de saldo traz o custo.
+          </Text>
+          <View style={styles.importRow}>
+            <Pressable style={[styles.btnAttach, naoContadosArq.length > 0 && styles.btnAttachDone]} onPress={handlePickNaoContados}>
+              <Ionicons name="alert-circle-outline" size={20} color={naoContadosArq.length ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, naoContadosArq.length > 0 && styles.btnAttachTextGreen]}>NÃO CONTADOS</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, dobroRows.length > 0 && styles.btnAttachDone]} onPress={handlePickDobro}>
+              <Ionicons name="copy-outline" size={20} color={dobroRows.length ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, dobroRows.length > 0 && styles.btnAttachTextGreen]}>DOBRO</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, blocoRows.length > 0 && styles.btnAttachDone]} onPress={handlePickBloco}>
+              <Ionicons name="cube-outline" size={20} color={blocoRows.length ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, blocoRows.length > 0 && styles.btnAttachTextGreen]}>BLOCO</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, controlados.size > 0 && styles.btnAttachDone]} onPress={handlePickControlados}>
+              <Ionicons name="medkit-outline" size={20} color={controlados.size ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, controlados.size > 0 && styles.btnAttachTextGreen]}>CONTROLADOS</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, inventDspText ? styles.btnAttachDone : null]} onPress={handlePickInventDsp}>
+              <Ionicons name="server-outline" size={20} color={inventDspText ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, inventDspText ? styles.btnAttachTextGreen : null]}>CadProd 1 · invent_DSP</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, saldoAuditoriaText ? styles.btnAttachDone : null]} onPress={handlePickSaldoAuditoria}>
+              <Ionicons name="pricetag-outline" size={20} color={saldoAuditoriaText ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, saldoAuditoriaText ? styles.btnAttachTextGreen : null]}>CadProd 2 · saldo/custo</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, agentesMap.size > 0 && styles.btnAttachDone]} onPress={handlePickAgentes}>
+              <Ionicons name="id-card-outline" size={20} color={agentesMap.size ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, agentesMap.size > 0 && styles.btnAttachTextGreen]}>Agentes / CadFun</Text>
+            </Pressable>
+            <Pressable style={[styles.btnAttach, cadastroText ? styles.btnAttachDone : null]} onPress={handlePickCadastro}>
+              <Ionicons name="document-text-outline" size={20} color={cadastroText ? "#059669" : "#2563EB"} />
+              <Text style={[styles.btnAttachText, cadastroText ? styles.btnAttachTextGreen : null]}>cadastro.txt</Text>
+            </Pressable>
+          </View>
+          {naoContadosArq.length > 0 && (
+            <Text style={styles.prcPreview}>
+              ✓ NÃO CONTADOS · {naoContadosArq.length} produtos
+            </Text>
+          )}
+          {dobroRows.length > 0 && (
+            <Text style={styles.prcPreview}>✓ DOBRO · {dobroRows.length} bipadas em duplicidade</Text>
+          )}
+          {blocoRows.length > 0 && (
+            <Text style={styles.prcPreview}>✓ BLOCO · {blocoRows.length} linhas</Text>
+          )}
+          {controlados.size > 0 && (
+            <Text style={styles.prcPreview}>✓ CONTROLADOS · {controlados.size} códigos</Text>
+          )}
+          {agentesMap.size > 0 && (
+            <Text style={styles.prcPreview}>✓ Agentes · {agentesMap.size} registros</Text>
+          )}
+          {saldoAuditoriaText ? (
+            <Text style={styles.prcPreview}>✓ Custo unitário do CadProd carregado</Text>
           ) : null}
+
+          <Text style={styles.subtitle}>
+            Auditoria dirigida — transcreva a folha assinada, uma linha por produto:
+            EAN; descrição; quantidade; preço unitário
+          </Text>
+          <TextInput
+            value={auditoriaTexto}
+            onChangeText={setAuditoriaTexto}
+            placeholder={"007896585628206;COLIDIS 10ML;14;111,59\n007896094606600;TAMARINE 12MG 4CS;18;12,88"}
+            placeholderTextColor="#94A3B8"
+            multiline
+            style={styles.auditoriaArea}
+            textAlignVertical="top"
+          />
+          {auditoriaTexto.trim().length > 0 && (
+            <Text style={styles.prcPreview}>
+              ✓ {parseAuditoriaDirigida(auditoriaTexto).length} item(ns) recuperado(s)
+            </Text>
+          )}
 
           <Text style={styles.subtitle}>
             Líder da operação (excluído da avaliação automática)
@@ -606,18 +1147,140 @@ export default function InventExpImportScreen() {
           />
         </View>
 
+        {semModalidade.length > 0 && (
+          <View style={[styles.card, styles.cardAlerta]}>
+            <Text style={styles.cardTitle}>Modalidade pendente</Text>
+            <Text style={styles.erroText}>
+              {semModalidade.length} conferente(s) sem modalidade de contratação. O
+              relatório individual muda de linguagem conforme o vínculo, então a
+              avaliação não roda enquanto houver pendência.
+            </Text>
+            <Text style={styles.prcPreview}>{semModalidade.join(" · ")}</Text>
+            <Pressable
+              style={styles.btnPrimary}
+              onPress={() => void abrirMarcacaoModalidade(rawText)}
+            >
+              <Text style={styles.btnTextWhite}>Marcar modalidades</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {rawText.length > 0 && semModalidade.length === 0 && (
+          <Pressable
+            style={styles.btnSecundario}
+            onPress={() => void abrirMarcacaoModalidade(rawText)}
+          >
+            <Ionicons name="pricetags-outline" size={18} color="#1F3864" />
+            <Text style={styles.btnSecundarioTexto}>Revisar modalidades de contratação</Text>
+          </Pressable>
+        )}
+
         <Pressable
           style={[
             styles.btnPrimary,
-            (rawText.length === 0 || processing) && { opacity: 0.5 },
+            (rawText.length === 0 || processing || semModalidade.length > 0) && { opacity: 0.5 },
           ]}
           onPress={() => void handleProcess()}
-          disabled={rawText.length === 0 || processing}
+          disabled={rawText.length === 0 || processing || semModalidade.length > 0}
         >
           <Text style={styles.btnTextWhite}>
             {processing ? "Processando…" : "Processar Avaliação"}
           </Text>
         </Pressable>
+
+        {diagV3 && (
+          <View style={[styles.card, !diagV3.reconciliacaoOk && styles.cardAlerta]}>
+            <Text style={styles.cardTitle}>Conferência da atribuição</Text>
+            <Text style={diagV3.reconciliacaoOk ? styles.okText : styles.erroText}>
+              {diagV3.reconciliacaoOk
+                ? "✓ Reconciliação fechou: a soma das divergências atribuídas reproduz o Erro (Qtde) do sistema, conferente a conferente."
+                : `✗ Reconciliação NÃO fechou em ${diagV3.falhasReconciliacao.length} conferente(s). Não publicar antes de investigar.`}
+            </Text>
+            {!diagV3.reconciliacaoOk &&
+              diagV3.falhasReconciliacao.slice(0, 6).map((f) => (
+                <Text key={f.matricula} style={styles.warnText}>
+                  · {f.matricula}: sistema {f.esperado} · apurado {f.apurado}
+                </Text>
+              ))}
+            <Text style={styles.prcPreview}>
+              Seções mapeadas: {diagV3.secoesMapeadas}
+              {diagV3.areasNaoConformes > 0
+                ? ` · ${diagV3.areasNaoConformes} combinação(ões) de área fora da tolerância`
+                : " · todas as áreas conformes"}
+            </Text>
+            <Text style={styles.prcPreview}>
+              Divergências atribuídas: {diagV3.divergencias}
+              {diagV3.orfas > 0 ? ` · ${diagV3.orfas} órfã(s)` : ""}
+              {diagV3.compartilhadas > 0 ? ` · ${diagV3.compartilhadas} compartilhada(s)` : ""}
+            </Text>
+            <Text style={styles.prcPreview}>
+              Não contados: {diagV3.naoContados} · {diagV3.naoContadosAlta} com confiança
+              ALTA (os únicos que pesam na nota)
+            </Text>
+            {diagV3.dobro > 0 && (
+              <Text style={styles.prcPreview}>
+                Itens em dobro: {diagV3.dobro} bipadas repetidas (indicador de método, não erro
+                de quantidade)
+              </Text>
+            )}
+            {diagV3.bloco && (
+              <Text
+                style={
+                  diagV3.bloco.coberturaPct >= 95 && diagV3.bloco.cpfDivergente === 0
+                    ? styles.okText
+                    : styles.warnText
+                }
+              >
+                {diagV3.bloco.coberturaPct >= 95 && diagV3.bloco.cpfDivergente === 0
+                  ? `✓ BLOCO confere: ${diagV3.bloco.coberturaPct}% dos ${diagV3.bloco.totalRelatorio} itens do relatório batem com as bipadas, e nenhum CPF divergiu. Seção e regra de bloco estão corretas.`
+                  : `⚠ BLOCO: cobertura de ${diagV3.bloco.coberturaPct}% · ${diagV3.bloco.comQuantidadeUm} com quantidade 1 · ${diagV3.bloco.semBipada} sem bipada · ${diagV3.bloco.cpfDivergente} com CPF divergente. Layout do coletor pode ter mudado.`}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {avaliacoesV3.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Ranking v3 — quatro eixos</Text>
+            <Text style={styles.subtitle}>
+              Acuracidade 35% · Produtividade 25% · Valor 25% · Cobertura 15%
+            </Text>
+            {avaliacoesV3.map((a, i) => (
+              <View key={a.matricula} style={styles.v3Row}>
+                <Text style={styles.v3Pos}>{i + 1}º</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.v3Nome}>{a.nome}</Text>
+                  <Text style={styles.v3Meta}>
+                    {a.modalidade === "FREE"
+                      ? "Prestador de serviço"
+                      : a.modalidade === "INTERMITENTE"
+                        ? "Intermitente"
+                        : "CLT"}
+                    {" · "}
+                    {a.areas.map((x) => x.area).join(" · ") || "sem área mapeada"}
+                  </Text>
+                  <Text style={styles.v3Meta}>
+                    {a.produtividade.toLocaleString("pt-BR")} pç/h · {a.itensComErro} item(ns)
+                    com erro · {a.unidadesEmErro} un · {a.naoContados.length} não contado(s)
+                    {a.relogioOk ? "" : " · relógio fora de data"}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => void exportarFichaV3(a, i + 1)}
+                  hitSlop={8}
+                  style={styles.v3Export}
+                >
+                  <Text style={styles.v3Nota}>{a.nota.toFixed(1)}</Text>
+                  <Ionicons name="download-outline" size={16} color="#1F3864" />
+                </Pressable>
+              </View>
+            ))}
+            <Text style={styles.prcPreview}>
+              Toque na nota para exportar a ficha individual em PDF. A linguagem do
+              documento segue a modalidade de contratação de cada um.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Importar dados dos conferentes</Text>
@@ -631,20 +1294,7 @@ export default function InventExpImportScreen() {
               <Ionicons name="attach" size={20} color="#2563EB" />
               <Text style={styles.btnAttachText}>Anexar CSV/Excel</Text>
             </Pressable>
-            <Pressable onPress={() => void handlePickPrcFiles()} style={[styles.btnAttach, styles.btnAttachGreen]}>
-              <Ionicons name="document-outline" size={20} color="#059669" />
-              <Text style={[styles.btnAttachText, styles.btnAttachTextGreen]}>.prc (Bloco)</Text>
-            </Pressable>
           </View>
-          {prcInfo && (
-            <Text style={styles.prcPreview}>
-              ✓{" "}
-              {prcInfo.count === 1
-                ? "1 arquivo"
-                : `${prcInfo.count} arquivos`}{" "}
-              · {prcInfo.totalLines.toLocaleString("pt-BR")} linhas
-            </Text>
-          )}
           <TextInput
             value={rawText}
             onChangeText={setRawText}
@@ -881,6 +1531,14 @@ export default function InventExpImportScreen() {
           </>
         )}
       </ScrollView>
+
+      <ModalidadeContratoModal
+        visivel={modalVisivel}
+        conferentes={paraMarcar}
+        salvando={salvandoModalidade}
+        onConfirmar={(l) => void confirmarModalidades(l)}
+        onCancelar={() => setModalVisivel(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -987,6 +1645,47 @@ const styles = StyleSheet.create({
   btnAttachTextGreen: {
     color: "#059669",
   },
+  btnSecundario: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#1F3864",
+    marginBottom: 10,
+  },
+  btnSecundarioTexto: { fontSize: 13, fontWeight: "600", color: "#1F3864" },
+  btnAttachDone: { borderColor: "#059669", backgroundColor: "#ECFDF5" },
+  cardAlerta: { borderColor: "#DC2626", borderWidth: 1.5 },
+  warnText: { fontSize: 12, color: "#B45309", marginTop: 4, lineHeight: 17 },
+  okText: { fontSize: 13, color: "#047857", fontWeight: "600", lineHeight: 18 },
+  erroText: { fontSize: 13, color: "#B91C1C", fontWeight: "700", lineHeight: 18 },
+  auditoriaArea: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 90,
+    fontSize: 12,
+    color: "#0F172A",
+    backgroundColor: "#F8FAFC",
+    marginTop: 6,
+  },
+  v3Row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  v3Pos: { width: 30, fontSize: 13, fontWeight: "700", color: "#64748B" },
+  v3Nome: { fontSize: 14, fontWeight: "600", color: "#0F172A" },
+  v3Meta: { fontSize: 11, color: "#64748B", marginTop: 2 },
+  v3Export: { alignItems: "center", gap: 2 },
+  v3Nota: { fontSize: 18, fontWeight: "800", color: "#1F3864", width: 54, textAlign: "right" },
   prcPreview: {
     fontSize: 12,
     color: "#059669",
