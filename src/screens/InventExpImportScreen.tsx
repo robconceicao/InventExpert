@@ -45,7 +45,7 @@ import {
 } from "../utils/catalogoLookup";
 import { shareCsvFile, sharePdfFromHtml, shareTextFile } from "../utils/export";
 import { generateInventExpIndividualReportHtml } from "../utils/inventExpReportHtml";
-import { readFileAsCsvText, readFileAsText } from "../utils/fileImport";
+import { ErroLeituraArquivo, readFileAsCsvText, readFileAsText } from "../utils/fileImport";
 import {
     generateInventExpGerencialReportText,
     generateInventExpIndividualReportText,
@@ -99,6 +99,25 @@ import {
   type AvaliacaoV3,
 } from "../services/AvaliacaoV3Service";
 
+
+/**
+ * O picker nunca filtra por MIME.
+ *
+ * Os arquivos do inventário (.xls do Crystal Reports, .prc do coletor,
+ * cadastro.txt, invent_DSP.old) chegam do Android como
+ * `application/octet-stream`: qualquer lista de `type` deixa esses arquivos
+ * cinza e impossíveis de selecionar. Quem valida o formato é o leitor, pelo
+ * conteúdo — ver `src/utils/fileFormat.ts`.
+ */
+const PICKER_QUALQUER_ARQUIVO = {
+  type: "*/*",
+  copyToCacheDirectory: true,
+} as const;
+
+/** Usa a mensagem específica do leitor quando existir; senão, a genérica. */
+function mensagemDeErro(erro: unknown, padrao: string): string {
+  return erro instanceof ErroLeituraArquivo ? erro.message : padrao;
+}
 
 const EXAMPLE_INVENTEXP_CSV = `NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;HORAS ESTIMADAS;ERRO;% ERRO
 AMANDA DE OLIVEIRA P...;395,33;752;0;18;1,9;13;1,73%
@@ -166,33 +185,25 @@ export default function InventExpImportScreen() {
 
   const handlePickFile = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "text/csv",
-          "text/plain",
-          "application/vnd.ms-excel",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ],
-        copyToCacheDirectory: true,
-      });
+      const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
       if (result.canceled) return;
       const file = result.assets[0];
       const text = await readFileAsCsvText(
         file.uri,
         file.mimeType ?? undefined,
+        file.name ?? undefined,
       );
       setRawText(text);
       await abrirMarcacaoModalidade(text);
     } catch (e) {
-      Alert.alert("Erro", "Não foi possível ler o arquivo. Tente CSV.");
+      Alert.alert("Erro", mensagemDeErro(e, "Não foi possível ler o arquivo."));
     }
   };
 
   const handlePickPrcFiles = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        copyToCacheDirectory: true,
+        ...PICKER_QUALQUER_ARQUIVO,
         multiple: true,
       });
       if (result.canceled) return;
@@ -200,7 +211,7 @@ export default function InventExpImportScreen() {
       const arquivos = result.assets;
       const conteudos: string[] = [];
       for (const arquivo of arquivos) {
-        conteudos.push(await readFileAsText(arquivo.uri));
+        conteudos.push(await readFileAsText(arquivo.uri, arquivo.name ?? undefined));
       }
 
       const r = parsePrcFiles(conteudos);
@@ -230,30 +241,32 @@ export default function InventExpImportScreen() {
         `✓ ${arquivos.length} arquivo(s) · ${r.contagens.length.toLocaleString("pt-BR")} bipadas` +
           (avisos.length ? `\n\n⚠ ${avisos.join("\n⚠ ")}` : ""),
       );
-    } catch {
-      Alert.alert("Erro", "Não foi possível ler os arquivos .prc.");
+    } catch (e) {
+      Alert.alert("Erro", mensagemDeErro(e, "Não foi possível ler os arquivos .prc."));
     }
   };
 
   const handlePickCadastro = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "text/plain", copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
       if (result.canceled) return;
-      setCadastroText(await readFileAsText(result.assets[0].uri));
+      const file = result.assets[0];
+      setCadastroText(await readFileAsText(file.uri, file.name ?? undefined));
       Alert.alert("Sucesso", "cadastro.txt carregado.");
-    } catch {
-      Alert.alert("Erro", "Falha ao ler cadastro.txt.");
+    } catch (e) {
+      Alert.alert("Erro", mensagemDeErro(e, "Falha ao ler cadastro.txt."));
     }
   };
 
   const handlePickInventDsp = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
       if (result.canceled) return;
-      setInventDspText(await readFileAsText(result.assets[0].uri));
+      const file = result.assets[0];
+      setInventDspText(await readFileAsText(file.uri, file.name ?? undefined));
       Alert.alert("Sucesso", "invent_DSP carregado.");
-    } catch {
-      Alert.alert("Erro", "Falha ao ler invent_DSP.");
+    } catch (e) {
+      Alert.alert("Erro", mensagemDeErro(e, "Falha ao ler invent_DSP."));
     }
   };
 

@@ -1,31 +1,150 @@
 import * as FileSystem from "expo-file-system/legacy";
-import * as XLSX from "xlsx";
+import { Platform } from "react-native";
+import type * as XLSX from "xlsx";
 
-/**
- * Lê arquivo CSV ou Excel e retorna texto no formato CSV para o parser.
- */
-export async function readFileAsCsvText(uri: string, mimeType?: string): Promise<string> {
-  const ext = (uri.split(".").pop() || "").toLowerCase();
-  const isExcel = /xlsx?|xls/.test(ext) || /spreadsheet|excel/.test(mimeType || "");
+import {
+  decodeBase64,
+  decodificarTexto,
+  descreverFormato,
+  extrairExtensao,
+  type FormatoArquivo,
+} from "./fileFormat";
+import {
+  abrirComoWorkbook,
+  arquivoParaTextoTabular,
+  ErroLeituraArquivo,
+  identificarArquivo,
+  type ArquivoLido,
+} from "./spreadsheetReader";
 
-  if (isExcel) {
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const workbook = XLSX.read(base64, { type: "base64" });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const csv = XLSX.utils.sheet_to_csv(firstSheet, { FS: ";" });
-    return csv;
-  }
+export { ErroLeituraArquivo } from "./spreadsheetReader";
 
-  const text = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  return text;
+function rotularArquivo(nome?: string, uri?: string): string {
+  if (nome) return nome;
+  const extensao = extrairExtensao(uri ?? "");
+  return extensao ? `arquivo .${extensao}` : "arquivo";
 }
 
-export async function readFileAsText(uri: string): Promise<string> {
+/** Extensões que prometem planilha — só para diagnóstico, nunca para decidir. */
+const EXTENSOES_DE_PLANILHA = ["xls", "xlsx", "xlsm", "xlsb", "ods"];
+
+/**
+ * Avisa no console quando a embalagem (extensão/MIME) não bate com o conteúdo.
+ *
+ * Não muda o resultado — o conteúdo sempre vence —, mas deixa rastro quando um
+ * `.xls` do Crystal Reports na verdade é HTML, ou quando o Android manda
+ * `octet-stream` para uma planilha legítima.
+ */
+function avisarDivergencia(
+  rotulo: string,
+  nomeOuUri: string,
+  mimeType: string | undefined,
+  formato: FormatoArquivo,
+): void {
+  const extensao = extrairExtensao(nomeOuUri);
+  const prometePlanilha =
+    EXTENSOES_DE_PLANILHA.includes(extensao) ||
+    /spreadsheet|excel/i.test(mimeType ?? "");
+  if (!prometePlanilha) return;
+
+  if (formato === "TEXTO") {
+    console.warn(
+      `[fileImport] "${rotulo}" tem cara de planilha (.${extensao || "?"} / ${mimeType ?? "sem MIME"}) mas o conteúdo é texto puro — lido como texto.`,
+    );
+  } else if (formato === "HTML" || formato === "XML") {
+    console.warn(
+      `[fileImport] "${rotulo}" é ${descreverFormato(formato)} com extensão .${extensao || "?"} — aberto pelo conteúdo.`,
+    );
+  }
+}
+
+/**
+ * Lê o arquivo inteiro em base64 — único caminho de leitura do app.
+ *
+ * Ler sempre em base64 (e não direto em UTF8) é o que permite decidir o formato
+ * pelo conteúdo: os mesmos bytes servem para farejar a assinatura, abrir no
+ * SheetJS ou decodificar como texto com o encoding certo.
+ */
+export async function lerArquivoBase64(uri: string): Promise<string> {
+  if (Platform.OS === "web") {
+    const resposta = await fetch(uri);
+    const blob = await resposta.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const leitor = new FileReader();
+      leitor.onloadend = () =>
+        resolve(String(leitor.result ?? "").split(",")[1] ?? "");
+      leitor.onerror = () =>
+        reject(leitor.error ?? new Error("Falha ao ler o arquivo no navegador."));
+      leitor.readAsDataURL(blob);
+    });
+  }
+
   return FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.UTF8,
+    encoding: FileSystem.EncodingType.Base64,
   });
+}
+
+/**
+ * Lê o arquivo e devolve bytes + formato reconhecido pelo conteúdo.
+ *
+ * Exposto para quem precisa decidir o caminho por conta própria — o
+ * `pickSheetAsMatrix()` usa isso para mandar texto ao parser de matriz e
+ * planilha ao SheetJS.
+ */
+export async function lerArquivoDetectado(uri: string): Promise<ArquivoLido> {
+  const base64 = await lerArquivoBase64(uri);
+  return identificarArquivo(base64, decodeBase64(base64));
+}
+
+const lerEDetectar = lerArquivoDetectado;
+
+/**
+ * Abre qualquer arquivo tabular (XLS, XLSX, HTML do Crystal Reports, CSV) como
+ * workbook do SheetJS, decidindo o formato pelo conteúdo.
+ */
+export async function readWorkbook(
+  uri: string,
+  nome?: string,
+): Promise<XLSX.WorkBook> {
+  const rotulo = rotularArquivo(nome, uri);
+  return abrirComoWorkbook(await lerEDetectar(uri), rotulo);
+}
+
+/**
+ * Lê arquivo tabular e devolve texto no formato que os parsers do app esperam.
+ *
+ * Planilha (XLS/XLSX/HTML/XML) → CSV com `;`. Texto (CSV/TXT) → conteúdo cru,
+ * já com o encoding resolvido.
+ *
+ * `mimeType` e `nome` servem só para mensagem e diagnóstico: o formato real vem
+ * sempre dos bytes, porque no Android o MIME chega como `octet-stream` e o nome
+ * no cache pode vir sem extensão.
+ */
+export async function readFileAsCsvText(
+  uri: string,
+  mimeType?: string,
+  nome?: string,
+): Promise<string> {
+  const rotulo = rotularArquivo(nome, uri);
+  const arquivo = await lerEDetectar(uri);
+  avisarDivergencia(rotulo, nome ?? uri, mimeType, arquivo.formato);
+  return arquivoParaTextoTabular(arquivo, rotulo);
+}
+
+/**
+ * Lê arquivo de texto (.prc, cadastro.txt, invent_DSP.old) com o encoding
+ * resolvido pelo conteúdo — esses arquivos são windows-1252, não UTF-8.
+ */
+export async function readFileAsText(uri: string, nome?: string): Promise<string> {
+  const rotulo = rotularArquivo(nome, uri);
+  const arquivo = await lerEDetectar(uri);
+
+  if (arquivo.formato === "XLSX" || arquivo.formato === "XLS") {
+    throw new ErroLeituraArquivo(
+      `"${rotulo}" é uma ${descreverFormato(arquivo.formato)}, não um arquivo de texto.`,
+      arquivo.formato,
+    );
+  }
+
+  return decodificarTexto(arquivo.bytes);
 }

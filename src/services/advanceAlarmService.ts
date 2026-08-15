@@ -350,3 +350,38 @@ export async function listarAlarmesAgendados(): Promise<AvancoMonitorado[]> {
 export function todosAvancosMonitorados(): AvancoMonitorado[] {
   return AVANCOS_MONITORADOS;
 }
+
+/**
+ * Agenda um aviso de TESTE para daqui a `segundos` no canal do alarme —
+ * mesma notificação, mesmo som. Serve para validar a voz com a tela
+ * bloqueada sem esperar o horário real. Retorna os rótulos dos avanços
+ * atualmente liberados (para exibir junto no alerta de confirmação).
+ */
+export async function agendarTesteDeAviso(
+  segundos = 120,
+): Promise<{ ok: boolean; agendados: string[] }> {
+  if (Platform.OS === "web") return { ok: false, agendados: [] };
+
+  const { status } = await Notifications.requestPermissionsAsync();
+  if (status !== "granted") return { ok: false, agendados: [] };
+
+  await garantirCanalDeAlarme();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: ALARM_TITLE,
+      subtitle: "TESTE do aviso",
+      body: ALARM_VOICE_MSG,
+      sound: somDaNotificacao(),
+      interruptionLevel: "timeSensitive",
+      data: { type: "advance_alarm_test" },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(segundos, 5),
+      channelId: ALARM_CHANNEL_ID,
+    } as Notifications.NotificationTriggerInput,
+  });
+
+  const liberados = await listarAlarmesAgendados();
+  return { ok: true, agendados: liberados.map((a) => a.label) };
+}
