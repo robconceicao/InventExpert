@@ -298,20 +298,27 @@ que todos os testes passam.
 ## Build e Release
 
 ```bash
-# Type check
-npx tsc --noEmit
+# Type check + testes (antes de qualquer build)
+npx tsc --noEmit && npm test
 
-# Build APK release (EAS)
-eas build --platform android --profile production
+# APK de release, assinado com a credencial de produção
+npx eas-cli build --platform android --profile production
 
-# Build local (se ejetado)
-cd android && ./gradlew assembleRelease
-
-# APK gerado em:
-# android/app/build/outputs/apk/release/app-release.apk
+# APK de teste interno (mesmo binário, credencial de preview)
+npx eas-cli build --platform android --profile preview
 ```
 
-Sempre incrementar `versionCode` no `app.json` antes de gerar release.
+Os dois perfis geram **APK** — `buildType: "apk"` está declarado em cada um
+no `eas.json`. Sem essa chave o EAS entrega **AAB**, que não instala direto
+no aparelho; foi o que já causou confusão aqui.
+
+Não existe pasta `android/` no repositório: o projeto é managed workflow.
+Build local só depois de `npx expo prebuild -p android`, e aí o APK sai em
+`android/app/build/outputs/apk/release/app-release.apk`.
+
+**Sempre incrementar `versionCode` no `app.json` antes de gerar release** —
+`eas.json` usa `appVersionSource: "local"`, então o EAS não incrementa
+sozinho e um build com `versionCode` repetido é recusado na publicação.
 
 ---
 
