@@ -62,6 +62,28 @@ function somDaNotificacao(): string {
   return SOM_AVISO ?? "default";
 }
 
+/**
+ * ID do canal Android — carrega o nome do som de propósito.
+ *
+ * **Canal do Android é imutável depois de criado.** Chamar
+ * `setNotificationChannelAsync` de novo com o mesmo ID não troca o som: o
+ * sistema mantém o que valia na criação e não devolve erro. Foi o que
+ * aconteceu aqui — o canal `alarms` nasceu antes da voz gravada existir, então
+ * o aparelho continuou tocando o som padrão mesmo com o código correto.
+ *
+ * Amarrar o ID ao nome do som resolve de vez: trocar o arquivo passa a criar
+ * um canal novo automaticamente, sem depender de ninguém lembrar de subir uma
+ * versão nem de o usuário reinstalar o app. Os canais antigos são removidos em
+ * `garantirCanalDeAlarme()`.
+ */
+export const ALARM_CHANNEL_ID = `alarms_${(SOM_AVISO ?? "default")
+  .replace(/\.[^.]+$/, "")
+  .toLowerCase()
+  .replace(/[^a-z0-9_]/g, "_")}`;
+
+/** Prefixo usado para achar canais de versões anteriores e removê-los. */
+const ALARM_CHANNEL_PREFIX = "alarms";
+
 /** ReportA persistido pela tela — fonte do preenchimento dos avanços. */
 const REPORT_A_KEY = "inventexpert:reportA";
 const FILLING_KEY = "inventexpert:alarm:fillingReports";
@@ -141,10 +163,14 @@ export async function cancelAdvanceAlarms(): Promise<void> {
   console.log("[advanceAlarm] Alarmes cancelados.");
 }
 
-/** Registra o canal Android do alarme (importância máxima + tela de bloqueio). */
+/**
+ * Registra o canal Android do alarme (importância máxima + tela de bloqueio)
+ * e remove canais de som antigo, que o sistema jamais atualizaria.
+ */
 export async function garantirCanalDeAlarme(): Promise<void> {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync("alarms", {
+
+  await Notifications.setNotificationChannelAsync(ALARM_CHANNEL_ID, {
     name: "Alarme de Avanços",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
@@ -155,6 +181,52 @@ export async function garantirCanalDeAlarme(): Promise<void> {
     enableVibrate: true,
     showBadge: true,
   });
+
+  // Canais de instalações anteriores ficam listados nas configurações do
+  // aparelho e confundem quem for conferir o som. Só o atual sobrevive.
+  try {
+    const canais = await Notifications.getNotificationChannelsAsync();
+    for (const c of canais) {
+      if (c.id.startsWith(ALARM_CHANNEL_PREFIX) && c.id !== ALARM_CHANNEL_ID) {
+        await Notifications.deleteNotificationChannelAsync(c.id);
+        console.log(`[advanceAlarm] Canal antigo removido: ${c.id}`);
+      }
+    }
+  } catch (err) {
+    console.warn("[advanceAlarm] Erro ao limpar canais antigos:", err);
+  }
+}
+
+/**
+ * Devolve o que o Android realmente guardou no canal — não o que o código pediu.
+ *
+ * Serve para conferir no aparelho se a voz gravada entrou mesmo: se `som` vier
+ * nulo ou com o som padrão, o canal está velho ou o arquivo não foi para
+ * `res/raw` no build.
+ */
+export async function diagnosticarCanalDeAlarme(): Promise<{
+  id: string;
+  existe: boolean;
+  som: string | null;
+  importancia: number | null;
+  somEsperado: string;
+} | null> {
+  if (Platform.OS !== "android") return null;
+  try {
+    const canal = await Notifications.getNotificationChannelAsync(ALARM_CHANNEL_ID);
+    const diag = {
+      id: ALARM_CHANNEL_ID,
+      existe: canal !== null,
+      som: canal?.sound ?? null,
+      importancia: canal?.importance ?? null,
+      somEsperado: somDaNotificacao(),
+    };
+    console.log("[advanceAlarm] Canal:", JSON.stringify(diag));
+    return diag;
+  } catch (err) {
+    console.warn("[advanceAlarm] Erro ao ler o canal:", err);
+    return null;
+  }
 }
 
 /**
@@ -201,7 +273,7 @@ export async function scheduleAdvanceAlarms(
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour,
           minute,
-          channelId: "alarms",
+          channelId: ALARM_CHANNEL_ID,
         } as Notifications.NotificationTriggerInput,
       });
     } catch (err) {

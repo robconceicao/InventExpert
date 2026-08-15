@@ -32,9 +32,13 @@ export default function AttendanceSummary() {
     try {
       setLoading(true);
       // Agora o TypeScript sabe que o supabase existe aqui
+      // attendance_stats deriva de field_events (kind='attendance'), que é onde
+      // a fila local grava a presença. A view é security_invoker, então a policy
+      // fe_select_own já limita ao próprio usuário — não precisa filtrar aqui.
       const { data, error } = await supabase
         .from("attendance_stats")
-        .select("*");
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       if (data) setReports(data);

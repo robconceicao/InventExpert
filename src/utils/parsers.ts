@@ -597,6 +597,9 @@ export const parseInventoryCheckersCsv = (
     produtividade: -1,
     erro: -1,
     matricula: -1,
+    horas: -1,
+    valorC1: -1,
+    valorAjuste: -1,
   };
 
   // Scan the first 30 lines to find the header row
@@ -621,6 +624,9 @@ export const parseInventoryCheckersCsv = (
     // Erro: erro absoluto
     const cErro = matchCol([/^erro/i, /^erros/i, /^qtde.*erro/i, /divergencia/i], /%/);
     const cPctErro = matchCol([/%/i, /taxa.*erro/i]);
+    const cHoras = matchCol([/^horas?$/i, /^horas\b/i]);
+    const cValorC1 = matchCol([/vlr.*c1/i, /valor.*c1/i]);
+    const cValorAjuste = matchCol([/vlr.*ajst/i, /vlr.*ajuste/i, /valor.*ajust/i]);
 
     // Diagnóstico flexível: tenta encontrar pelo menos Nome e Quantidade
     if (cNome >= 0 && cQtde >= 0) {
@@ -631,6 +637,9 @@ export const parseInventoryCheckersCsv = (
         produtividade: cProdutividade >= 0 && cProdutividade !== cQtde ? cProdutividade : -1,
         erro: cErro >= 0 ? cErro : cPctErro,
         matricula: cMatricula,
+        horas: cHoras,
+        valorC1: cValorC1,
+        valorAjuste: cValorAjuste,
       };
 
       headerRowIndex = r;
@@ -666,6 +675,12 @@ export const parseInventoryCheckersCsv = (
           ? nonEmpties[1]
           : undefined;
 
+      // Colunas do RProInv_Produtividade que o motor v3 consome:
+      // [6] Horas · [10] Vlr (C1) · [11] Vlr (AJST)
+      const horas = nonEmpties.length > 6 ? parseNumberBR(nonEmpties[6]) : 0;
+      const valorC1 = nonEmpties.length > 10 ? parseNumberBR(nonEmpties[10]) : 0;
+      const valorAjuste = nonEmpties.length > 11 ? parseNumberBR(nonEmpties[11]) : 0;
+
       result.push({
         nome,
         matricula,
@@ -673,6 +688,9 @@ export const parseInventoryCheckersCsv = (
         qtde1a1: Math.max(0, qtde1a1),
         produtividade: Math.max(0, produtividade),
         erro: Math.max(0, erro),
+        horas: Math.max(0, horas),
+        valorC1: Math.max(0, valorC1),
+        valorAjuste: Math.max(0, valorAjuste),
       });
       continue;
     }
@@ -714,6 +732,9 @@ export const parseInventoryCheckersCsv = (
       ? matriculaRaw.replace(/\D/g, "") || matriculaRaw
       : undefined;
 
+    const lerCol = (idx: number) =>
+      idx >= 0 ? Math.max(0, parseNumberBR(cells[idx] ?? "")) : 0;
+
     result.push({
       nome,
       matricula,
@@ -721,6 +742,9 @@ export const parseInventoryCheckersCsv = (
       qtde1a1: Math.min(qtde1a1, qtde),
       produtividade,
       erro: Math.min(erro, qtde),
+      horas: lerCol(col.horas),
+      valorC1: lerCol(col.valorC1),
+      valorAjuste: lerCol(col.valorAjuste),
     });
   }
 

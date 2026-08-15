@@ -231,7 +231,13 @@ export function generateInventExpIndividualReportText(
   }
 
   r += `Score Final: ${ev.scoreFinal} / 100 — ${ev.nivel}\n`;
-  r += `Posição no ranking: ${rank}º de ${totalConferentes}\n\n`;
+  // O prestador de serviço não é comparado com a equipe: posição em ranking
+  // trata o resultado como desempenho dentro de um time, e não como qualidade
+  // do serviço entregue.
+  if (!free) {
+    r += `Posição no ranking: ${rank}º de ${totalConferentes}\n`;
+  }
+  r += `\n`;
   r += `---\n\n`;
 
   const finalViolacoes: ViolacaoBloco[] =
@@ -433,8 +439,10 @@ export function generateInventExpIndividualReportText(
     r += `\n---\n\n`;
   }
 
-  // DIRECIONAMENTO balanceado
-  r += `## 📌 DIRECIONAMENTO\n\n`;
+  // Para quem tem vínculo, o bloco é orientação de trabalho. Para o prestador,
+  // é registro do que foi observado: instruir como executar o serviço é um dos
+  // indícios clássicos de subordinação.
+  r += free ? `## 📌 CONSTATAÇÕES\n\n` : `## 📌 DIRECIONAMENTO\n\n`;
   r += `**✅ O que você fez bem — continue assim:**\n`;
   const positivos: string[] = [];
   if (errosExecucao === 0) positivos.push("Zero erros de execução registrados.");
@@ -477,26 +485,42 @@ export function generateInventExpIndividualReportText(
       );
     } else {
       melhorias.push(
-        `Seu uso de bloco em ${area} foi de ${real.toFixed(1)}%, acima do limite de ${lim}%. Isso impacta Qualidade e Aderência.`,
+        free
+          ? `Uso de bloco em ${area} de ${real.toFixed(1)}%, acima do limite de ${lim}% previsto para o serviço.`
+          : `Seu uso de bloco em ${area} foi de ${real.toFixed(1)}%, acima do limite de ${lim}%. Isso impacta Qualidade e Aderência.`,
       );
     }
   }
 
   if (pulados > 0) {
     melhorias.push(
-      `${pulados} produto(s) não contado(s). Isso gera divergência no estoque da loja.`,
+      free
+        ? `${pulados} produto(s) sem contagem, o que gerou divergência no estoque da loja.`
+        : `${pulados} produto(s) não contado(s). Isso gera divergência no estoque da loja.`,
     );
   }
   if (duplicados > 0) {
-    melhorias.push(`${duplicados} contagem(ns) duplicada(s) a evitar no próximo inventário.`);
+    melhorias.push(
+      free
+        ? `${duplicados} contagem(ns) registrada(s) em duplicidade.`
+        : `${duplicados} contagem(ns) duplicada(s) a evitar no próximo inventário.`,
+    );
   }
   if (errosExecucao > 0) {
-    melhorias.push(`${errosExecucao} erro(s) de quantidade — revisar bipagem unitária.`);
+    melhorias.push(
+      free
+        ? `${errosExecucao} divergência(s) de quantidade em contagem unitária.`
+        : `${errosExecucao} erro(s) de quantidade — revisar bipagem unitária.`,
+    );
   }
 
   if (melhorias.length === 0) {
     if (ev.nivel === "EXCELENTE" || ev.nivel === "BOM") {
-      melhorias.push("Manter o padrão atual de qualidade e ritmo.");
+      melhorias.push(
+        free
+          ? "Serviço entregue dentro do padrão de qualidade esperado."
+          : "Manter o padrão atual de qualidade e ritmo.",
+      );
     } else {
       melhorias.push(
         free

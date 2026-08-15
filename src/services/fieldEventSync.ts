@@ -19,6 +19,14 @@ export type FieldEventKind =
   | "reportJ"
   | "attendance";
 
+/**
+ * Fonte de verdade dos tipos aceitos na fila de sincronização.
+ *
+ * O banco replica esta lista no CHECK `chk_field_events_kind`. Ao acrescentar
+ * uma tela de relatório nova, estender os dois — senão o upsert falha com
+ * violação de constraint, e o relatório some sem erro visível para o usuário.
+ * Ver `supabase/migration_attendance_stats_field_events.sql`.
+ */
 export const FIELD_EVENT_KINDS: FieldEventKind[] = [
   "reportA",
   "reportB",

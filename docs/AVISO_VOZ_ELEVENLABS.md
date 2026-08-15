@@ -116,7 +116,8 @@ export const SOM_AVISO: string | null = "aviso_avanco.mp3";
 ```
 
 Enquanto `SOM_AVISO` for `null`, o app usa o som padrão do sistema e nada
-quebra — por isso o valor já vem `null` no repositório.
+quebra. Com o arquivo instalado, o valor deve ser o nome do MP3 (hoje
+`"aviso_avanco.mp3"`).
 
 **4. Gere um build novo.** O som é asset nativo (vai para `res/raw` no
 Android): não basta recarregar o JS.
@@ -140,10 +141,31 @@ eas build --platform android --profile production
 
 Se aparecer a notificação mas o som for o padrão do sistema:
 
-- o canal `alarms` do Android guarda o som de quando foi criado. Desinstale e
-  reinstale o app (ou limpe os dados) para o canal ser recriado com o novo som;
+- **confira o canal pelo log.** Ao abrir o Report A o app registra o estado real
+  do canal: `[advanceAlarm] Canal: {"id":"alarms_aviso_avanco","existe":true,
+  "som":"aviso_avanco",...}`. É o que o Android guardou, não o que o código
+  pediu. Se `som` vier `null` ou `default`, o arquivo não chegou ao `res/raw` —
+  gere o build de novo;
 - confirme que o arquivo está em `res/raw` no build (`aviso_avanco.mp3`);
-- confirme que o aparelho não está em Não Perturbe sem exceção para o app.
+- confirme que o aparelho não está em Não Perturbe sem exceção para o app;
+- confirme que o usuário não desligou o som do canal em
+  *Configurações → Apps → InventExpert → Notificações → Alarme de Avanços*. Essa
+  escolha é do usuário e o app não tem como sobrescrever.
+
+### Por que o canal é o suspeito número um
+
+**Canal de notificação do Android é imutável.** Depois de criado, chamar
+`setNotificationChannelAsync` com o mesmo ID **não troca o som** — o sistema
+mantém o que valia na criação e não devolve erro nenhum. Foi exatamente o que
+aconteceu neste projeto: o canal `alarms` nasceu no commit `b6d748b`, antes de a
+voz gravada existir (`ed48c44`), então quem já tinha o app instalado continuou
+ouvindo o som padrão com o código correto na frente.
+
+A correção não depende mais de reinstalar: o ID do canal carrega o nome do som
+(`alarms_aviso_avanco`, em `ALARM_CHANNEL_ID`). Trocar o arquivo de áudio passa a
+criar um canal novo sozinho, e `garantirCanalDeAlarme()` apaga os anteriores.
+**Ao trocar o som, mude o nome do arquivo** — reaproveitar `aviso_avanco.mp3`
+mantém o mesmo ID e reabre o problema.
 
 ---
 

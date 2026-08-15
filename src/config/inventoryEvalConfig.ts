@@ -32,6 +32,43 @@ export const PENALIDADE_BLOCO_AREA_CRITICA = 20; // limite 0% / área crítica
 export const PENALIDADE_BLOCO_EXCESSO_ALTO = 10; // excesso > 2× o limite
 export const PENALIDADE_BLOCO_EXCESSO_LEVE = 5; // excesso até 2× o limite
 
+/**
+ * Pesos e penalidades do modelo v3 (avaliação com áreas e não contados).
+ *
+ * Calibrado no inventário DPSP L2601 (06/08/2026, 15 conferentes, 53.628 peças,
+ * 38.588 bipadas, 56 divergências, 28 produtos não contados).
+ *
+ * Diferença para o modelo v2.1: a Qualidade deixa de ser o único eixo de erro.
+ * O valor financeiro do ajuste ganha peso próprio, e a Cobertura passa a medir
+ * o que ficou de fora da contagem — antes invisível na nota.
+ */
+export const AVALIACAO_V3 = {
+  pesos: {
+    /** Acuracidade em unidades: 1 − unidades em erro ÷ peças contadas. */
+    acuracidade: 0.35,
+    /** peças/h ÷ referência da equipe, limitado a 100. */
+    produtividade: 0.25,
+    /** 100 − (Vlr AJST ÷ Vlr C1 × 100). */
+    valor: 0.25,
+    /** 100 − fatia do valor perdida em não contados de confiança ALTA. */
+    cobertura: 0.15,
+  },
+  /**
+   * Referência de produtividade. A mediana da equipe é menos sensível aos
+   * extremos que a média e que a meta fixa do perfil, que varia com o layout
+   * da loja e com o tipo de mercadoria.
+   */
+  referenciaProdutividade: 'MEDIANA_EQUIPE' as 'MEDIANA_EQUIPE' | 'META_PERFIL',
+  /** Pontos descontados por divergência em produto controlado. */
+  penalidadeControlado: 5,
+  /** Pontos descontados por não contado atribuído com confiança ALTA. */
+  penalidadeNaoContadoAlta: 2,
+  /** Seções que não são área física — auditoria dirigida no padrão DPSP. */
+  secoesAuditoria: ['9999'],
+  /** Intervalo sem bipada, em minutos, a partir do qual conta como ociosidade. */
+  limiteOciosidadeMin: 15,
+} as const;
+
 export const FAIXAS_CLASSIFICACAO = {
   EXCELENTE: 90,
   BOM: 80,

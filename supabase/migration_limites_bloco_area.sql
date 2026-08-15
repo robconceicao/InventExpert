@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS limites_bloco_area (
   id              SERIAL PRIMARY KEY,
   tipo_operacao   VARCHAR(30)   NOT NULL,
   nome_area       VARCHAR(50)   NOT NULL,
-  limite_pct      NUMERIC(5,2)  NOT NULL,
+  -- NUMERIC(7,2), não (5,2): o sentinela 9999 de "sem limite definido" não cabe
+  -- em NUMERIC(5,2), e o INSERT abaixo falhava com "numeric field overflow".
+  limite_pct      NUMERIC(7,2)  NOT NULL,
   area_critica    BOOLEAN       NOT NULL DEFAULT FALSE,
   UNIQUE (tipo_operacao, nome_area)
 );

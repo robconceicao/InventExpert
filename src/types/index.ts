@@ -458,6 +458,14 @@ export interface InventoryCheckerInput {
   /** LIDER / LÍDER — excluído da avaliação */
   role?: string;
 
+  // --- colunas financeiras e de tempo do RProInv_Produtividade (motor v3) ---
+  /** Horas entre a 1ª e a última coleta, conforme o relatório. */
+  horas?: number;
+  /** Vlr (C1): valor da 1ª contagem. */
+  valorC1?: number;
+  /** Vlr (AJST): valor ajustado pelas divergências. */
+  valorAjuste?: number;
+
   // --- aliases / campos derivados (v2) ---
   totalPecas?: number;
   ritmoMedio?: number;
@@ -767,7 +775,7 @@ export class EscalaInsuficienteError extends Error {
  */
 export interface ContagemDetalhada {
   matricula: string;
-  /** Código numérico 6 dígitos do .prc */
+  /** Código da seção, 4 dígitos (últimos 4 do endereço PInnnnnn). */
   area_codigo: string;
   /** Resolvido via secao_lookup + normalizarNomeArea ('' até resolver) */
   area_nome: string;
@@ -780,9 +788,19 @@ export interface ContagemDetalhada {
   /** Classificação legal: 'A2', 'C1', '-B2'... ou '' */
   produto_classe: string;
   quantidade: number;
-  /** true quando flag = 'X' no .prc */
+  /**
+   * true quando a bipada registrou mais de uma unidade.
+   * Conferido contra RELATORIOS/BLOCO.xls: cobre 99,7% do que o sistema
+   * classifica como bloco. A flag da posição 43 do .prc NÃO indica bloco.
+   */
   is_bloco: boolean;
   data_hora: Date;
+  /** Campo de endereço bruto do .prc ('0000000PI002312'). */
+  endereco?: string;
+  /** Endereço com letra ou dígito extra — digitação manual no coletor. */
+  endereco_fora_padrao?: boolean;
+  /** Flag da posição 43 (' ', 'P', 'X'). Preservada para diagnóstico. */
+  flag_origem?: string;
   /** Nome do conferente (quando enriquecido) */
   nome?: string;
   /** @deprecated preferir produto_codigo / produto_ean */

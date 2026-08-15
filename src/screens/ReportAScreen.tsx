@@ -26,7 +26,9 @@ import {
     avisoLiberado,
     buscarAvancoPorLabel,
     canTriggerAdvanceAlarm,
+    diagnosticarCanalDeAlarme,
     evaluateAdvancesAndMaybeStop,
+    garantirCanalDeAlarme,
     isNearWarningTime,
     isWarningTime,
     setReportFilling,
@@ -188,6 +190,13 @@ export default function ReportAScreen() {
       if (stopped) stopAlarm();
     });
   }, [report, stopAlarm]);
+
+  // ── Canal de notificação: garante na montagem, não só ao agendar.
+  //    O canal do Android é imutável — o que vale é o estado que o
+  //    diagnóstico devolve, não o que o código pediu. Ver docs/AVISO_VOZ_ELEVENLABS.md.
+  useEffect(() => {
+    void garantirCanalDeAlarme().then(() => diagnosticarCanalDeAlarme());
+  }, []);
 
   // ── Reagenda os alarmes do SO quando o preenchimento dos avanços muda:
   //    é o que libera o aviso do próximo avanço assim que o anterior é lançado.
