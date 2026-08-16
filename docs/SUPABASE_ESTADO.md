@@ -159,6 +159,67 @@ contra o HaveIBeenPwned no cadastro.
 
 ---
 
+## Arquivos da pasta `supabase/` que NÃO devem ser aplicados
+
+Três arquivos não têm migration correspondente em
+`supabase_migrations.schema_migrations`. O nome sugere pendência, mas o efeito
+dos três já está no banco — foram absorvidos pelo `harden`/`cleanup`.
+Conferido em 15/08/2026:
+
+| Arquivo | Por que está superado | Como conferir |
+|---|---|---|
+| `fix_function_search_path.sql` | todas as funções `SECURITY DEFINER` já têm `search_path` fixo | consulta abaixo: nenhuma linha com "SEM search_path" |
+| `fix_security_definer_views.sql` | nenhuma view aparece no Security Advisor como `security_definer_view` | `get_advisors(type: security)` |
+| `migration_rls_authenticated_only.sql` | as policies `USING (true) TO public` do `schema_v2` nunca chegaram a existir nas tabelas core, e o acesso de `anon` foi revogado nas migrations 11 e 12 | consulta de policies abaixo |
+
+> As únicas policies com `USING (true)` que existem hoje estão em
+> `limites_bloco_area` e `secao_lookup`, e são `TO authenticated` — tabelas de
+> referência, sem dado de cliente. A proibição do `CLAUDE.md` vale para as
+> tabelas core (clientes, colaboradores, produtividade, inventarios, escala).
+
+Aplicar qualquer um dos três agora é, na melhor hipótese, ruído; no caso do
+`rls_authenticated_only`, seria recriar policies que o `CLAUDE.md` proíbe.
+
+**Não apagar os arquivos** — eles são o registro de como cada alerta do
+Security Advisor foi tratado.
+
+---
+
+## `secao_lookup` está vazia — o que isso afeta
+
+A tabela tem 0 linhas (o comentário dela diz "popular por evento a partir do
+PROD_SEÇÃO"). Os dois motores reagem de formas diferentes:
+
+**v3 não usa a tabela.** `construirMapaAreas()` reconstrói Seção → Área a partir
+do `PROD_SEÇÃO` + `.prc`, sem tocar no banco. Imune.
+
+**v2.1 degradava em silêncio.** `handleProcess()` chama `getSecaoLookup()`,
+recebe lista vazia, e `resolverAreasNasContagens()` cai no último fallback da
+cadeia — o `area_codigo`. O `area_nome` da contagem vira o **código da seção**
+(`"0217"`), não uma string vazia. Em `enriquecerSecoesComBloco()` o filtro
+compara esse código com o nome da área do PROD_SEÇÃO (`"MEDICAMENTOS"`), nunca
+casa, `daArea` fica vazio, e o `bloco_pct` **cai no valor que veio da planilha**
+(`s.bloco_pct ?? s.pctBloco ?? 0`) em vez de ser calculado das bipadas.
+
+Consequência prática: se o `PROD_SEÇÃO` trouxer a coluna de bloco, a violação
+continua sendo detectada; se não trouxer, `bloco_pct` vira 0 e **a violação
+deixa de ser detectada** — Qualidade pode chegar a 100 com bloco em área
+crítica, que é justamente a regra absoluta do `CLAUDE.md`.
+
+Não dava erro em lugar nenhum.
+
+**Corrigido:** o caminho v2.1 passou a sobrepor ao lookup o `MapaAreas` que o v3
+constrói do PROD_SEÇÃO + `.prc` — dispensa o banco e reaproveita um mapeamento
+conferido em 68 das 72 combinações do DPSP L2601. O mapa do evento vence o
+lookup global; o lookup continua valendo para seções que o PROD_SEÇÃO não cobre.
+Regressão fixada em `src/utils/__tests__/blocoPorAreaSemSecaoLookup.test.ts`.
+
+Popular a `secao_lookup` por evento — o que o comentário da tabela pede —
+continua sendo útil para quem roda a avaliação **sem** o PROD_SEÇÃO, único caso
+em que o app ainda depende dela.
+
+---
+
 ## Verificações rápidas
 
 ```sql
@@ -175,4 +236,22 @@ SELECT user_id, role FROM public.app_profiles;
 
 -- Seed de limites de bloco (esperado: 37)
 SELECT count(*) FROM public.limites_bloco_area;
+
+-- search_path das funções SECURITY DEFINER (nenhuma deve sair "SEM search_path")
+SELECT p.proname,
+       coalesce(array_to_string(p.proconfig, ','), 'SEM search_path') AS config
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.prosecdef ORDER BY 1;
+
+-- Policies permissivas nas tabelas CORE (esperado: nenhuma linha).
+-- As duas tabelas de lookup ficam de fora de propósito: elas têm
+-- USING (true) TO authenticated, que é o desenho — são tabelas de referência,
+-- não guardam dado de cliente.
+SELECT tablename, policyname, roles::text, qual::text
+FROM pg_policies
+WHERE schemaname = 'public' AND qual = 'true'
+  AND tablename NOT IN ('limites_bloco_area', 'secao_lookup');
+
+-- secao_lookup populada? (0 = motor v2.1 não localiza bloco por área)
+SELECT count(*) FROM public.secao_lookup;
 ```
