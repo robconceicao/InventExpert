@@ -168,19 +168,23 @@ recurso de **plano Pro**. Tentado em 15/08/2026 em
 O advisor confirma que nada foi gravado. Não insista — e não deixe o toggle
 verde sem salvar, que engana quem abrir a tela depois.
 
-### Mitigação recomendada no plano Free — pendente
+### Mitigação aplicada no plano Free — 16/08/2026
 
 Três ajustes da mesma tela gravam no Free e cobrem a maior fatia do risco
-prático (senha fraca ou óbvia). **Ainda não aplicados** — conferir os valores
-atuais no painel antes de marcar como resolvido:
+prático (senha fraca ou óbvia):
 
-| Campo | Valor em 15/08/2026 | Recomendado |
+| Campo | Antes | Aplicado |
 |---|---|---|
 | Minimum password length | 6 | 8 |
 | Password requirements | nenhum | letras (maiúsculas e minúsculas) + dígitos |
 | Require current password when updating | desligado | ligado |
 
-*Secure password change* já está ligado.
+*Secure password change* já estava ligado.
+
+> Esses valores vivem na configuração do serviço de Auth, não no banco: não há
+> consulta SQL nem advisor que os mostre. A fonte de verdade é o painel, em
+> *Authentication → Sign In / Providers → Email*. Confira lá antes de assumir
+> que continuam valendo.
 
 Nenhum dos três invalida senha existente: valem para cadastro novo e troca de
 senha. Quem já tem conta com senha de 6 caracteres continua entrando.
