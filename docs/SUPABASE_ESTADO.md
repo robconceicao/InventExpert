@@ -138,6 +138,9 @@ O usuário não consegue se auto-promover — a policy `ap_update_own` exige que
 
 ## Segurança: de 40 avisos para 26
 
+> Conferido de novo em 15/08/2026: seguem 26 avisos, todos `WARN`, nenhum
+> `ERROR`.
+
 **Fechados:**
 
 - 15 objetos expostos ao `anon` no schema GraphQL
@@ -153,9 +156,38 @@ O usuário não consegue se auto-promover — a policy `ap_update_own` exige que
   `listar_escala` e `definir_modalidade_colaborador`. São RPCs que o app chama, e
   todas verificam `auth.uid()` internamente.
 
-**Uma pendência real, que não é SQL:** *Leaked Password Protection* está
-desligado. Liga no painel em **Authentication → Policies**; passa a checar senhas
-contra o HaveIBeenPwned no cadastro.
+**O 26º aviso não é acionável neste plano.** *Leaked Password Protection* está
+desligado e **assim vai continuar**: a checagem contra o HaveIBeenPwned é
+recurso de **plano Pro**. Tentado em 15/08/2026 em
+*Authentication → Sign In / Providers → Email*; o toggle aceita o clique, mas o
+`Save` devolve:
+
+> Failed to update auth configuration: Configuring leaked password protection
+> via HaveIBeenPwned.org is available on Pro Plans and up.
+
+O advisor confirma que nada foi gravado. Não insista — e não deixe o toggle
+verde sem salvar, que engana quem abrir a tela depois.
+
+### Mitigação recomendada no plano Free — pendente
+
+Três ajustes da mesma tela gravam no Free e cobrem a maior fatia do risco
+prático (senha fraca ou óbvia). **Ainda não aplicados** — conferir os valores
+atuais no painel antes de marcar como resolvido:
+
+| Campo | Valor em 15/08/2026 | Recomendado |
+|---|---|---|
+| Minimum password length | 6 | 8 |
+| Password requirements | nenhum | letras (maiúsculas e minúsculas) + dígitos |
+| Require current password when updating | desligado | ligado |
+
+*Secure password change* já está ligado.
+
+Nenhum dos três invalida senha existente: valem para cadastro novo e troca de
+senha. Quem já tem conta com senha de 6 caracteres continua entrando.
+
+Subir para Pro só por causa deste item não se justifica — é `WARN`, não `ERROR`.
+Se o plano mudar um dia por outro motivo (backup diário, retenção de log), aí
+sim vale ligar a proteção e fechar o aviso.
 
 ---
 
