@@ -368,7 +368,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + leitura por conteúdo (2026-08):** **322 testes / 24 suites** ·
+**Baseline v3 + leitura por conteúdo (2026-08):** **327 testes / 25 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -390,6 +390,7 @@ src/utils/__tests__/relatorioOutput.test.ts                ← Everaldo / Elen /
 src/utils/__tests__/parseInventoryCheckersCsv.test.ts
 src/utils/__tests__/fileFormat.test.ts                     ← magic bytes, extensão, UTF-8 vs cp1252, MHTML
 src/utils/__tests__/spreadsheetReader.test.ts              ← XLS/XLSX/HTML do Crystal Reports → CSV `;`
+src/utils/__tests__/blocoPorAreaSemSecaoLookup.test.ts      ← bloco% por área com secao_lookup vazia
 src/services/__tests__/AuditoriaAtribuicaoService.test.ts
 src/services/__tests__/AuditoriaReconciliacaoService.test.ts
 ```
@@ -435,6 +436,7 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Limites em Supabase + fallback local = seed migration | Offline e remoto alinhados; FRENTE DE CAIXA 90% |
 | Ausência de registro = warn + sem penalidade (nunca default 20%) | Não punir área desconhecida silenciosamente |
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
+| Mapa Seção→Área do evento por cima do `secao_lookup` | A tabela é opcional e vive vazia; sem o mapa do PROD_SEÇÃO o bloco% por área caía no valor da planilha e a violação sumia — ver `docs/SUPABASE_ESTADO.md` |
 | "Perfil Operacional" removido do relatório | Baseado em histórico: incoerente com classificação do evento atual |
 | Alerta formal se crítica OU limite ≤ 5% | Visibilidade para OTC e áreas ANVISA |
 | Aviso de avanço preso ao preenchimento do avanço anterior | O anterior é a prova de que a operação chegou ali; 22h00 é inicial (0%) e nunca avisa |
