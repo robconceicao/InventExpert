@@ -76,7 +76,15 @@ export function abrirComoWorkbook(arquivo: ArquivoLido, rotulo: string): XLSX.Wo
     switch (arquivo.formato) {
       case "XLSX":
       case "XLS":
-        return XLSX.read(arquivo.base64, { type: "base64" });
+        // Fórmula, estilo e HTML de célula não são usados por nenhum parser do
+        // app e multiplicam a memória num relatório de milhares de linhas —
+        // que é justamente onde a leitura travava no aparelho.
+        return XLSX.read(arquivo.base64, {
+          type: "base64",
+          cellFormula: false,
+          cellHTML: false,
+          cellStyles: false,
+        });
 
       case "HTML":
       case "XML": {

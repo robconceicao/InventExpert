@@ -209,6 +209,31 @@ export default function InventExpImportScreen() {
   const [publishing, setPublishing] = useState(false);
   /** Trava o botão enquanto as fichas da equipe são renderizadas. */
   const [gerandoFichas, setGerandoFichas] = useState(false);
+  /**
+   * Rótulo do arquivo sendo lido, ou null.
+   *
+   * Um ACURACIDADE de 6 MB leva vários segundos entre escolher o arquivo e o
+   * botão ficar verde. Sem sinal na tela, a leitura em andamento é
+   * indistinguível de "não aconteceu nada" — foi assim que uma leitura lenta
+   * passou por arquivo não anexado.
+   */
+  const [lendoArquivo, setLendoArquivo] = useState<string | null>(null);
+
+  /** Envolve um anexo com o aviso de "lendo" e um erro sempre visível. */
+  const comLeitura = async (rotulo: string, fn: () => Promise<void>) => {
+    if (lendoArquivo) {
+      Alert.alert("Aguarde", `Ainda lendo ${lendoArquivo}.`);
+      return;
+    }
+    setLendoArquivo(rotulo);
+    try {
+      await fn();
+    } catch (e: any) {
+      Alert.alert("Erro", `Falha ao ler ${rotulo}: ${e?.message ?? e}`);
+    } finally {
+      setLendoArquivo(null);
+    }
+  };
 
   const handlePickFile = async () => {
     try {
@@ -301,7 +326,8 @@ export default function InventExpImportScreen() {
    * Um único arquivo alimenta os dois motores: as linhas viram `ProdSecaoRow`
    * para o mapa de áreas do v3 e `SectionAccuracyRecord` para o motor v2.1.
    */
-  const handlePickProducaoSecao = async () => {
+  const handlePickProducaoSecao = async () =>
+    comLeitura("PROD_SEÇÃO", async () => {
     try {
       const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
       if (cancelado) return;
@@ -329,9 +355,10 @@ export default function InventExpImportScreen() {
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler PROD_SEÇÃO: " + (e?.message ?? ""));
     }
-  };
+  });
 
-  const handlePickAcuracidade = async () => {
+  const handlePickAcuracidade = async () =>
+    comLeitura("ACURACIDADE", async () => {
     try {
       const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
       if (cancelado) return;
@@ -357,9 +384,10 @@ export default function InventExpImportScreen() {
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler ACURACIDADE: " + (e?.message ?? ""));
     }
-  };
+  });
 
-  const handlePickNaoContados = async () => {
+  const handlePickNaoContados = async () =>
+    comLeitura("NÃO CONTADOS", async () => {
     try {
       const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
       if (cancelado) return;
@@ -374,9 +402,10 @@ export default function InventExpImportScreen() {
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler NAO CONTADOS: " + (e?.message ?? ""));
     }
-  };
+  });
 
-  const handlePickDobro = async () => {
+  const handlePickDobro = async () =>
+    comLeitura("DOBRO", async () => {
     try {
       const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
       if (cancelado) return;
@@ -391,9 +420,10 @@ export default function InventExpImportScreen() {
     } catch {
       Alert.alert("Erro", "Falha ao ler DOBRO.");
     }
-  };
+  });
 
-  const handlePickBloco = async () => {
+  const handlePickBloco = async () =>
+    comLeitura("BLOCO", async () => {
     try {
       const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
       if (cancelado) return;
@@ -411,9 +441,10 @@ export default function InventExpImportScreen() {
     } catch {
       Alert.alert("Erro", "Falha ao ler BLOCO.");
     }
-  };
+  });
 
-  const handlePickControlados = async () => {
+  const handlePickControlados = async () =>
+    comLeitura("CONTROLADOS", async () => {
     try {
       const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
       if (cancelado) return;
@@ -428,7 +459,7 @@ export default function InventExpImportScreen() {
     } catch {
       Alert.alert("Erro", "Falha ao ler CONTROLADOS.");
     }
-  };
+  });
 
   /** Arquivo de saldo/auditoria do CadProd — traz o custo unitário. */
   const handlePickSaldoAuditoria = async () => {
@@ -1292,9 +1323,19 @@ export default function InventExpImportScreen() {
               <Ionicons name="grid-outline" size={20} color={prodSecaoRows.length ? "#059669" : "#2563EB"} />
               <Text style={[styles.btnAttachText, prodSecaoRows.length > 0 && styles.btnAttachTextGreen]}>PROD_SEÇÃO</Text>
             </Pressable>
-            <Pressable style={[styles.btnAttach, acuracidade.length > 0 && styles.btnAttachDone]} onPress={handlePickAcuracidade}>
+            <Pressable
+              style={[
+                styles.btnAttach,
+                acuracidade.length > 0 && styles.btnAttachDone,
+                lendoArquivo === "ACURACIDADE" && styles.btnDisabled,
+              ]}
+              onPress={handlePickAcuracidade}
+              disabled={lendoArquivo !== null}
+            >
               <Ionicons name="analytics-outline" size={20} color={acuracidade.length ? "#059669" : "#2563EB"} />
-              <Text style={[styles.btnAttachText, acuracidade.length > 0 && styles.btnAttachTextGreen]}>ACURACIDADE</Text>
+              <Text style={[styles.btnAttachText, acuracidade.length > 0 && styles.btnAttachTextGreen]}>
+                {lendoArquivo === "ACURACIDADE" ? "Lendo…" : "ACURACIDADE"}
+              </Text>
             </Pressable>
             <Pressable style={[styles.btnAttach, prcInfo && styles.btnAttachDone]} onPress={handlePickPrcFiles}>
               <Ionicons name="documents-outline" size={20} color={prcInfo ? "#059669" : "#2563EB"} />
