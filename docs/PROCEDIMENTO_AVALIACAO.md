@@ -2,16 +2,18 @@
 
 | | |
 |--|--|
-| Revisão | 3.1 |
-| Substitui | 3.0 (07/08/2026) |
+| Revisão | 3.2 |
+| Substitui | 3.1 (16/08/2026) |
 | Aplicação | Inventários de farmácia, supermercado, hipermercado e atacado |
 | Sistema | InventExpert — módulo Avaliação (motor v3) |
 | Calibração | DPSP / Drogaria São Paulo, loja L2601, capa 2915, 06/08/2026 |
 | Destinatários | Líderes de inventário, coordenação e RH |
 
-> A revisão 3.1 não muda o método de cálculo. Ela define a **emissão e a
-> entrega** dos documentos: ficha individual por conferente, planilha
-> consolidada do líder e envio por WhatsApp — ver [§7](#7-documentos-gerados-e-como-emitir).
+> A revisão 3.1 definiu a **emissão e a entrega** dos documentos — ver
+> [§7](#7-documentos-gerados-e-como-emitir).
+>
+> A revisão 3.2 **muda quem é penalizado pelo produto não contado**. Só a falha
+> de contagem comprovada pesa na nota — ver [§3.3](#33-produto-não-contado--responsável).
 
 ---
 
@@ -101,12 +103,41 @@ Nunca se atribui por proximidade ou suposição.
 
 ### 3.3 Produto não contado → responsável
 
-Os relatórios de não contados não trazem seção. A saída é geográfica: um
-produto fica na prateleira ao lado dos semelhantes.
+**Dois arquivos, dois significados — e só um penaliza.**
+
+| Arquivo | O que é | Penaliza |
+|---|---|---|
+| Auditoria dirigida (seção 9999) | Não foi bipado na contagem e o cliente **encontrou** depois. O produto estava na prateleira | **Sim** |
+| NÃO CONTADOS | Permaneceu perdido mesmo após a auditoria | **Não** |
+
+A razão é a prova. O item recuperado estava lá e alguém passou sem bipar — a
+falha de contagem é **certa**. O que permaneceu não encontrado pode ser erro de
+saldo do cliente, furto ou avaria não baixada; não há como afirmar que alguém
+passou por ele, e ninguém deve ser penalizado por isso.
+
+O não contado que permaneceu perdido **continua no relatório**, com área
+provável e responsável, porque dirige recontagem e mede a cobertura do
+inventário. Só não entra na nota.
+
+> **Os dois arquivos são complementares, não sequenciais.** Conferido no L2601:
+> nenhum dos 10 itens da auditoria dirigida aparece entre os 18 do NÃO
+> CONTADOS. O relatório é exportado depois e lista apenas o residual. Anexar só
+> um dos dois subestima o universo.
+
+> **O NÃO CONTADOS vem filtrado por valor** ("Acima de R$ 100,00" no L2601).
+> Existe uma cauda abaixo do corte que não está em nenhum dos dois arquivos —
+> registrar como ressalva sempre que citar cobertura total.
+
+**A matrícula da folha de auditoria não atribui responsabilidade.** O arquivo
+traz `Matrícula Conferente` preenchida, mas é quem **registrou** a auditoria: no
+L2601, os 10 itens saíram com a mesma pessoa, SEQ consecutivo, seção 9999. Usar
+essa coluna penalizaria justamente quem executou a auditoria.
+
+Localizado o responsável, o nível de confiança define se pesa:
 
 | Nível | Critério | Pesa na nota |
 |---|---|---|
-| ALTA | Troca de código comprovada, ou marca com 3+ itens contados e um conferente concentrando ≥70% | Sim |
+| ALTA | Troca de código comprovada, ou marca com 3+ itens contados e um conferente concentrando ≥70% | Sim, **se recuperado** |
 | MÉDIA | Marca localizada, poucos itens de referência ou responsável dividido | Não — dirige recontagem |
 | BAIXA | Só a família aponta a área | Não — informativo |
 | Sem base | Nenhum item da marca ou família contado | Não — fica com a equipe |
@@ -122,10 +153,11 @@ produto fica na prateleira ao lado dos semelhantes.
 | Acuracidade | 35% | (1 − unidades em erro ÷ peças contadas) × 100 |
 | Produtividade | 25% | peças/h ÷ mediana da equipe × 100, limitado a 100 |
 | Valor | 25% | 100 − (valor ajustado ÷ valor contado × 100) |
-| Cobertura | 15% | 100 − fatia do valor perdida em não contados de confiança ALTA |
+| Cobertura | 15% | 100 − fatia do valor em falhas de contagem comprovadas (recuperados na auditoria, confiança ALTA) |
 
-**Penalidades:** −5 por divergência em controlado · −2 por não contado
-atribuído com confiança ALTA (−1 quando recuperado na auditoria dirigida).
+**Penalidades:** −5 por divergência em controlado · −2 por **falha de contagem
+comprovada** (item recuperado na auditoria dirigida, atribuído com confiança
+ALTA). Produto que permaneceu não encontrado não gera penalidade.
 
 | Faixa | Nota | Encaminhamento |
 |---|---|---|
@@ -190,6 +222,8 @@ seção. A cobertura mede produto que ficou de fora, não prateleira vazia.
 
 - Atribuir divergência sem correspondência no arquivo bruto.
 - Deixar não contado MÉDIA ou BAIXA pesar na nota.
+- Penalizar alguém por produto que permaneceu não encontrado.
+- Usar a matrícula da folha de auditoria dirigida para atribuir responsabilidade.
 - Publicar sem a conferência da §5.1.
 - Medir horas da primeira à última bipada quando houver mais de uma data.
 - Somar auditoria dirigida à produtividade de contagem.

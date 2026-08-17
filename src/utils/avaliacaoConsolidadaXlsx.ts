@@ -117,7 +117,7 @@ function abaResumo(
       ["Divergências atribuídas", d.divergencias, "Par SEÇÃO+EAN"],
       ["Divergências órfãs", d.orfas, "Sem bipada correspondente — não atribuídas"],
       ["Divergências compartilhadas", d.compartilhadas, "Mais de um conferente no par"],
-      ["Produtos não contados", d.naoContados, `${d.naoContadosAlta} com confiança ALTA`],
+      ["Produtos não contados", d.naoContados, `${d.naoContadosAlta} com falha de contagem comprovada (recuperados na auditoria)`],
       ["Itens em dobro", d.dobro, "DOBRO.xls — indicador de método"],
       [
         "Reconciliação com Erro (Qtde)",
@@ -130,7 +130,7 @@ function abaResumo(
   linhas.push(
     [],
     ["Nota = 0,35×Acuracidade + 0,25×Produtividade + 0,25×Valor + 0,15×Cobertura − penalidades"],
-    ["Penalidades: −5 por divergência em controlado · −2 por não contado de confiança ALTA (−1 se recuperado)"],
+    ["Penalidades: −5 por divergência em controlado · −2 por falha de contagem comprovada (item recuperado na auditoria dirigida, confiança ALTA)"],
   );
 
   return linhas;
@@ -211,7 +211,7 @@ function abaPorConferente(avaliacoes: AvaliacaoV3[]): Linha[] {
       "Valor contado (R$)",
       "Valor ajustado (R$)",
       "% erro valor",
-      "Não contados ALTA",
+      "Falhas de contagem comprovadas",
       "Divergências controlados",
       "Itens em dobro",
       "Nota",
@@ -310,7 +310,7 @@ function abaNaoContados(avaliacoes: AvaliacaoV3[]): Linha[] {
       "Os relatórios de não contados não trazem seção. A área provável vem do local onde produtos da mesma marca (ou família) foram contados.",
     ],
     [
-      "ALTA pesa na nota · MÉDIA e BAIXA dirigem recontagem e não penalizam ninguém.",
+      "Penaliza apenas o item RECUPERADO na auditoria dirigida com confiança ALTA — falha de contagem provada. O que permaneceu não encontrado fica registrado sem dono.",
     ],
     [],
     [
@@ -429,9 +429,9 @@ function abaRessalvas(
         "Par SEÇÃO+EAN bipado por mais de um conferente",
       ],
       [
-        "Não contados sem confiança ALTA",
+        "Não contados que não penalizam",
         Math.max(0, d.naoContados - d.naoContadosAlta),
-        "Dirigem recontagem; não pesam na nota",
+        "Permaneceram não encontrados, ou sem confiança ALTA — dirigem recontagem",
       ],
     );
 
@@ -496,7 +496,7 @@ function abaMetodologia(ctx: ContextoConsolidado): Linha[] {
     ["Acuracidade — 35%", "(1 − unidades em erro ÷ peças contadas) × 100"],
     ["Produtividade — 25%", "peças/h ÷ mediana da equipe × 100, limitado a 100"],
     ["Valor — 25%", "100 − (valor ajustado ÷ valor contado × 100)"],
-    ["Cobertura — 15%", "100 − fatia do valor perdida em não contados de confiança ALTA"],
+    ["Cobertura — 15%", "100 − fatia do valor em falhas de contagem comprovadas (recuperados na auditoria, ALTA)"],
     ["", ""],
     ["DECISÕES DE MÉTODO", ""],
     ["Mediana, não média", "Um conferente muito rápido desloca a média e faz o resto parecer lento"],
@@ -509,7 +509,8 @@ function abaMetodologia(ctx: ContextoConsolidado): Linha[] {
     ["", ""],
     ["LIMITES", ""],
     ["Não atribuível", "Divergência sem bipada correspondente fica órfã — nunca se atribui por proximidade"],
-    ["Não contado", "Só pesa na nota com confiança ALTA; MÉDIA e BAIXA dirigem recontagem"],
+    ["Não contado", "Só pesa quando foi RECUPERADO na auditoria dirigida e atribuído com ALTA: é a única situação em que a falha de contagem está provada"],
+    ["Não encontrado", "Permaneceu perdido: pode ser erro de saldo do cliente. Fica no relatório, sem dono e sem penalidade"],
     ["Sem dado", "Métrica sem fonte aparece como 'sem dado' — nunca estimada"],
     ["", ""],
     ["EMISSÃO", ""],

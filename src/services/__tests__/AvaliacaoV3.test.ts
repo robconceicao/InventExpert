@@ -245,8 +245,8 @@ describe('NaoContadoService', () => {
     expect(r.matricula).toBe(AMARILDO);
     expect(r.area).toBe('RUA 4 FUNDO');
     expect(r.base).toContain('troca de código');
-    // recuperado na auditoria pesa metade
-    expect(r.peso).toBe(0.5);
+    // recuperado na auditoria: falha de contagem provada, pesa cheio
+    expect(r.peso).toBe(1);
   });
 
   it('atribui por marca com alta confiança quando um conferente concentra as seções', () => {
@@ -281,7 +281,9 @@ describe('NaoContadoService', () => {
 
     expect(r.nivel).toBe('ALTA');
     expect(r.matricula).toBe(BIANKA);
-    expect(r.peso).toBe(1);
+    // atribuído com confiança ALTA, mas permaneceu não encontrado: sem
+    // prova de que estava na prateleira, ninguém é penalizado
+    expect(r.peso).toBe(0);
   });
 
   it('declara não atribuível quando não há marca nem família contada', () => {
@@ -449,5 +451,70 @@ describe('DOBRO e BLOCO', () => {
     const { contagens } = cenario();
     const linha = { secao: '2301', cpf: AMARILDO, ean: '007896000002301' };
     expect(conferirBloco([linha, linha, linha], contagens).totalRelatorio).toBe(1);
+  });
+});
+
+describe('não contado: só a falha comprovada penaliza', () => {
+  /**
+   * Regra de 08/2026: produto que permaneceu não encontrado pode ser erro de
+   * saldo do cliente — não há prova de que alguém passou por ele. Já o item
+   * recuperado na auditoria dirigida estava na prateleira e ninguém bipou.
+   */
+  function itens(situacao: 'RECUPERADO' | 'NAO_ENCONTRADO') {
+    const { contagens, prodSecao } = cenario();
+    const mapa = construirMapaAreas(prodSecao, contagens);
+    // Três itens da marca contados nas seções da Bianka: base para ALTA.
+    const acuracidade: AcuracidadeRow[] = ['0047', '0047', '0048'].map((secao, i) => ({
+      secao,
+      ean: `00400580000004${i}`,
+      descricao: 'EUCERIN ANT PIG N 50ML',
+      qtdC1: 1,
+      qtdA1: 0,
+      qtdA2: 0,
+      qtdA3: 0,
+      qtdFinal: 1,
+      ajuste: 0,
+    }));
+
+    return atribuirNaoContados(
+      [
+        {
+          descricao: 'EUCERIN ANT PIG N 50ML',
+          eans: ['004005805477121'],
+          situacao,
+          valor: 156.99,
+          quantidade: situacao === 'RECUPERADO' ? 1 : undefined,
+        },
+      ],
+      acuracidade,
+      contagens,
+      mapa,
+      [],
+    );
+  }
+
+  it('recuperado na auditoria pesa cheio', () => {
+    const [r] = itens('RECUPERADO');
+    expect(r.peso).toBe(1);
+  });
+
+  it('não encontrado não penaliza, mesmo com confiança ALTA', () => {
+    const [r] = itens('NAO_ENCONTRADO');
+    expect(r.peso).toBe(0);
+  });
+
+  it('o não encontrado continua atribuído e visível no relatório', () => {
+    const [r] = itens('NAO_ENCONTRADO');
+    expect(r.area).toBeTruthy();
+    expect(r.base).toBeTruthy();
+  });
+
+  it('cobertura só desconta a falha comprovada', () => {
+    const [recuperado] = itens('RECUPERADO');
+    const [perdido] = itens('NAO_ENCONTRADO');
+    const mat = recuperado.matricula!;
+
+    expect(calcularCobertura([recuperado], mat, 10000)).toBeLessThan(100);
+    expect(calcularCobertura([perdido], mat, 10000)).toBe(100);
   });
 });

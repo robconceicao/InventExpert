@@ -370,7 +370,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis (2026-08):** **349 testes / 26 suites** ·
+**Baseline v3 + entregáveis (2026-08):** **353 testes / 26 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -450,6 +450,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Seção = últimos 4 dígitos do endereço `PInnnnnn` | Os 6 dígitos não batem com `secao_lookup` nem com `limites_bloco_area` |
 | Área física derivada de PROD_SEÇÃO + recorte de blocos | Não existe tabela Seção→Área; o recorte fechou 68 de 72 combinações no L2601 |
 | Divergência atribuída por SEÇÃO+EAN contra o `.prc` | Único par que liga o ACURACIDADE ao CPF de quem contou; 56 de 56 com dono único |
+| Só o não contado RECUPERADO na auditoria penaliza | O item estava na prateleira e ninguém bipou: falha provada. O que permaneceu perdido pode ser erro de saldo do cliente — fica no relatório, sem dono e sem penalidade |
+| Matrícula da folha de auditoria dirigida não atribui culpa | É quem registrou a auditoria (líder/auditor), não quem deixou de bipar — no L2601, os 10 itens com a mesma pessoa na seção 9999 |
 | Não contado só pesa na nota com confiança ALTA | MÉDIA e BAIXA não sustentam conversa de avaliação; servem para dirigir recontagem |
 | Auditoria dirigida (seção 9999) fora da produtividade | Quem executa a auditoria era penalizado no ranking por trabalho que não é contagem |
 | Mediana da equipe como referência de produtividade | Menos sensível a extremos que a média e que a meta fixa do perfil |
@@ -497,6 +499,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não guardar a seção com 6 dígitos — são sempre os últimos 4
 - ❌ Não medir horas trabalhadas da primeira à última bipada quando houver mais de uma data
 - ❌ Não atribuir não contado a um conferente sem declarar o nível de confiança
+- ❌ Não penalizar ninguém por produto que permaneceu não encontrado — só o recuperado na auditoria
+- ❌ Não usar a matrícula da folha de auditoria dirigida para atribuir responsabilidade
 - ❌ Não publicar avaliação sem rodar `conferirReconciliacao()` contra Erro (Qtde)
 - ❌ Não entregar a planilha consolidada ao conferente — ela traz o ranking da equipe
 - ❌ Não usar BOM em download binário na web (corrompe XLSX e PDF)

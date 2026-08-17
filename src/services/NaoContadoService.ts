@@ -166,7 +166,11 @@ export function atribuirNaoContados(
   const saida: NaoContadoAtribuido[] = [];
 
   for (const item of itens) {
-    const pesoBase = item.situacao === 'RECUPERADO' ? 0.5 : 1;
+    // Só a falha COMPROVADA pesa. Item recuperado na auditoria dirigida estava
+    // na prateleira e ninguém bipou: a falha de contagem é certa. Item que
+    // permaneceu perdido pode ser erro de estoque do cliente — não há como
+    // provar que alguém passou por ele, e ninguém é penalizado por isso.
+    const pesoBase = item.situacao === 'RECUPERADO' ? 1 : 0;
 
     // 1) troca de EAN comprovada
     const troca = detectarTrocaEan(item, divergencias);
@@ -250,8 +254,13 @@ export function atribuirNaoContados(
 
 /**
  * Cobertura de um conferente: 100 menos a fatia do valor contado que ficou de
- * fora por não contados de confiança ALTA. Recuperado na auditoria entra com
- * metade do peso — a falha de contagem foi a mesma, o prejuízo não.
+ * fora por **falha de contagem comprovada** — item recuperado na auditoria
+ * dirigida, com confiança ALTA.
+ *
+ * Produto que permaneceu não encontrado não entra: não há prova de que estava
+ * na prateleira, e o mais provável é erro de saldo do cliente. Ele continua no
+ * relatório como informação de cobertura do inventário, sem dono e sem
+ * penalidade.
  */
 export function calcularCobertura(
   naoContados: NaoContadoAtribuido[],

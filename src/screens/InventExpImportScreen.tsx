@@ -671,7 +671,7 @@ export default function InventExpImportScreen() {
       reconciliacaoOk: falhas.length === 0,
       falhasReconciliacao: falhas,
       naoContados: naoContados.length,
-      naoContadosAlta: naoContados.filter((n) => n.nivel === "ALTA").length,
+      naoContadosAlta: naoContados.filter((n) => n.nivel === "ALTA" && n.peso > 0).length,
       dobro: dobroRows.length,
       bloco: blocoRows.length > 0 ? conferirBloco(blocoRows, contagens) : null,
     });
@@ -1540,7 +1540,7 @@ export default function InventExpImportScreen() {
               {diagV3.compartilhadas > 0 ? ` · ${diagV3.compartilhadas} compartilhada(s)` : ""}
             </Text>
             <Text style={styles.prcPreview}>
-              Não contados: {diagV3.naoContados} · {diagV3.naoContadosAlta} com confiança
+              Não contados: {diagV3.naoContados} · {diagV3.naoContadosAlta} com falha comprovada · confiança
               ALTA (os únicos que pesam na nota)
             </Text>
             {diagV3.dobro > 0 && (
