@@ -303,9 +303,13 @@ export default function InventExpImportScreen() {
    */
   const handlePickProducaoSecao = async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
 
       const linhas = parseProdSecaoMatrix(matriz);
       if (linhas.length === 0) {
@@ -329,15 +333,26 @@ export default function InventExpImportScreen() {
 
   const handlePickAcuracidade = async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const linhas = parseAcuracidadeMatrix(matriz);
       setAcuracidade(linhas);
       const div = linhas.filter((l) => l.ajuste !== 0).length;
+      if (linhas.length === 0) {
+        Alert.alert(
+          "ACURACIDADE sem linhas",
+          `O cabeçalho foi encontrado em "${nome ?? "arquivo"}", mas nenhuma linha tinha SEÇÃO e EAN preenchidos.`,
+        );
+        return;
+      }
       Alert.alert(
         "ACURACIDADE carregado",
-        `${linhas.length.toLocaleString("pt-BR")} itens · ${div} com divergência`,
+        `${nome ?? "Arquivo"}\n${linhas.length.toLocaleString("pt-BR")} itens · ${div} com divergência`,
       );
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler ACURACIDADE: " + (e?.message ?? ""));
@@ -346,9 +361,13 @@ export default function InventExpImportScreen() {
 
   const handlePickNaoContados = async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const itens = parseNaoContadosMatrix(matriz);
       setNaoContadosArq(itens);
       Alert.alert("NÃO CONTADOS carregado", `${itens.length} produto(s) sem coleta`);
@@ -359,9 +378,13 @@ export default function InventExpImportScreen() {
 
   const handlePickDobro = async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const linhas = parseDobroMatrix(matriz);
       setDobroRows(linhas);
       Alert.alert("DOBRO carregado", `${linhas.length} bipada(s) em duplicidade`);
@@ -372,9 +395,13 @@ export default function InventExpImportScreen() {
 
   const handlePickBloco = async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const linhas = parseBlocoMatrix(matriz);
       setBlocoRows(linhas);
       Alert.alert(
@@ -388,9 +415,13 @@ export default function InventExpImportScreen() {
 
   const handlePickControlados = async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const eans = parseControladosMatrix(matriz);
       setControlados(eans);
       Alert.alert("CONTROLADOS carregado", `${eans.size} código(s) de barras`);

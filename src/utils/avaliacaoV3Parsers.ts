@@ -39,12 +39,37 @@ export function parseNumeroBr(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Localiza a linha de cabeçalho pelos rótulos e devolve o índice de cada coluna. */
+/**
+ * Primeiras linhas com cara de cabeçalho, para a mensagem de erro.
+ *
+ * Sem isso, "cabeçalho não encontrado" não diz o que o arquivo realmente tem —
+ * e quem está em campo não consegue reportar nada além de "não funcionou".
+ */
+function amostrarLinhas(matriz: any[][], quantas = 5): string {
+  const candidatas = matriz
+    .slice(0, 200)
+    .filter((l) => Array.isArray(l) && l.filter((c) => norm(c)).length >= 3)
+    .slice(0, quantas)
+    .map((l, i) => `${i + 1}) ${l.filter((c) => norm(c)).slice(0, 8).map(norm).join(' | ')}`);
+
+  if (candidatas.length === 0) {
+    return `A planilha tem ${matriz.length} linha(s), nenhuma com 3 ou mais colunas preenchidas.`;
+  }
+  return `Linhas encontradas no arquivo:\n${candidatas.join('\n')}`;
+}
+
+/**
+ * Localiza a linha de cabeçalho pelos rótulos e devolve o índice de cada coluna.
+ *
+ * O limite existe para não varrer a planilha inteira atrás de um cabeçalho que
+ * não existe. 60 linhas era pouco: o Crystal empilha título, filtros e linhas
+ * em branco antes do cabeçalho, e `blankrows: true` faz cada uma delas contar.
+ */
 function localizarCabecalho(
   matriz: any[][],
   obrigatorios: string[],
   colunas: Record<string, string[]>,
-  limite = 60,
+  limite = 200,
 ): { linha: number; idx: Record<string, number> } | null {
   for (let i = 0; i < Math.min(matriz.length, limite); i++) {
     const linha = matriz[i];
@@ -167,7 +192,10 @@ export function parseAcuracidadeMatrix(matriz: any[][]): AcuracidadeRow[] {
     },
   );
   if (!cab) {
-    throw new Error('Cabeçalho não encontrado no ACURACIDADE (esperado "SECAO" e "C1").');
+    throw new Error(
+      'Cabeçalho não encontrado no ACURACIDADE (esperado "SECAO" e "C1").\n\n' +
+        amostrarLinhas(matriz),
+    );
   }
 
   const { idx } = cab;

@@ -93,7 +93,7 @@ export async function lerArquivoBase64(uri: string): Promise<string> {
  */
 export async function lerArquivoDetectado(uri: string): Promise<ArquivoLido> {
   const base64 = await lerArquivoBase64(uri);
-  return identificarArquivo(base64, decodeBase64(base64));
+  return identificarArquivo(base64, (limite) => decodeBase64(base64, limite));
 }
 
 const lerEDetectar = lerArquivoDetectado;
@@ -146,5 +146,5 @@ export async function readFileAsText(uri: string, nome?: string): Promise<string
     );
   }
 
-  return decodificarTexto(arquivo.bytes);
+  return decodificarTexto(arquivo.bytes());
 }

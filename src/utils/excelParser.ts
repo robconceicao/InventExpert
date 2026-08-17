@@ -75,11 +75,17 @@ export async function pickAndParseExcel<T = any>(): Promise<{ dados: T[]; erro?:
  * relatório sai ora como .xls binário, ora como tabela HTML com extensão .xls,
  * e o Android costuma entregar o arquivo sem extensão no cache do picker.
  */
-export async function pickSheetAsMatrix(): Promise<{ matriz: any[][]; nome?: string; erro?: string }> {
+export async function pickSheetAsMatrix(): Promise<{
+  matriz: any[][];
+  nome?: string;
+  erro?: string;
+  /** true quando o usuário fechou o seletor — a tela deve ficar calada. */
+  cancelado?: boolean;
+}> {
   let nomeArquivo = 'arquivo';
   try {
     const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
-    if (result.canceled || !result.assets?.length) return { matriz: [] };
+    if (result.canceled || !result.assets?.length) return { matriz: [], cancelado: true };
 
     const { uri, name } = result.assets[0];
     if (name) nomeArquivo = name;
@@ -89,12 +95,15 @@ export async function pickSheetAsMatrix(): Promise<{ matriz: any[][]; nome?: str
     // CSV/TXT/TSV: o parser próprio detecta o separador e preserva o texto em
     // pt-BR, sem o SheetJS tentar adivinhar o tipo de cada célula.
     if (arquivo.formato === 'TEXTO') {
-      return { matriz: csvParaMatriz(decodificarTexto(arquivo.bytes)), nome: name };
+      const matriz = csvParaMatriz(decodificarTexto(arquivo.bytes()));
+      return matriz.length > 0
+        ? { matriz, nome: name }
+        : { matriz: [], nome: name, erro: `"${nomeArquivo}" está vazio.` };
     }
 
     const wb = abrirComoWorkbook(arquivo, nomeArquivo);
     if (wb.SheetNames.length === 0) {
-      return { matriz: [], erro: `"${nomeArquivo}" não tem nenhuma aba.` };
+      return { matriz: [], nome: name, erro: `"${nomeArquivo}" não tem nenhuma aba.` };
     }
     const matriz = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[wb.SheetNames[0]], {
       header: 1,
@@ -102,6 +111,13 @@ export async function pickSheetAsMatrix(): Promise<{ matriz: any[][]; nome?: str
       raw: true,
       blankrows: true,
     });
+    if (matriz.length === 0) {
+      return {
+        matriz: [],
+        nome: name,
+        erro: `A aba "${wb.SheetNames[0]}" de "${nomeArquivo}" não tem nenhuma linha.`,
+      };
+    }
     return { matriz, nome: name };
   } catch (error) {
     console.error('[ExcelParser] Falha ao ler matriz:', error);
