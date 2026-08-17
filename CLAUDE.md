@@ -79,6 +79,8 @@ src/
 ```
 src/utils/avaliacaoV3Parsers.ts   ← PROD_SEÇÃO, ACURACIDADE, NAO CONTADOS, DOBRO,
                                     BLOCO, auditoria dirigida, custo/família, CONTROLADOS
+src/utils/inventExpReportV3.ts    ← ficha individual (texto + HTML/PDF)
+src/utils/avaliacaoConsolidadaXlsx.ts ← planilha do líder (8 abas)
 src/utils/excelParser.ts          ← pickSheetAsMatrix() lê .xls/.xlsx/.csv como matriz
 src/utils/fileFormat.ts           ← decide o formato pelos magic bytes, não pela extensão
 ```
@@ -368,7 +370,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + leitura por conteúdo (2026-08):** **327 testes / 25 suites** ·
+**Baseline v3 + entregáveis (2026-08):** **344 testes / 26 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -391,6 +393,7 @@ src/utils/__tests__/parseInventoryCheckersCsv.test.ts
 src/utils/__tests__/fileFormat.test.ts                     ← magic bytes, extensão, UTF-8 vs cp1252, MHTML
 src/utils/__tests__/spreadsheetReader.test.ts              ← XLS/XLSX/HTML do Crystal Reports → CSV `;`
 src/utils/__tests__/blocoPorAreaSemSecaoLookup.test.ts      ← bloco% por área com secao_lookup vazia
+src/utils/__tests__/avaliacaoConsolidadaXlsx.test.ts        ← as 8 abas da planilha do líder
 src/services/__tests__/AuditoriaAtribuicaoService.test.ts
 src/services/__tests__/AuditoriaReconciliacaoService.test.ts
 ```
@@ -456,6 +459,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Match de EAN com sufixo de 8+ dígitos | Regra herdada do módulo Auditoria; cobre prefixo do arquivo final e EAN-13 vs EAN-14 |
 | Identidade resolvida por agentes.txt/CadFun | O coletor grava CPF, o relatório grava matrícula, o ProInv usa código de 6 dígitos |
 | Modalidade nula bloqueia a avaliação | Default 'CLT' fazia prestador receber relatório com termos de vínculo; o bloqueio é a única garantia contra esquecimento |
+| Ficha individual e consolidado do líder são documentos distintos | A ficha é lida junto com o conferente; a planilha expõe o ranking inteiro — ver `docs/PROCEDIMENTO_AVALIACAO.md` |
+| Lote de fichas via Storage Access Framework no Android | Escolher a pasta uma vez é o único caminho em que "baixar a ficha de cada conferente" não vira uma janela de compartilhamento por pessoa |
 | Modalidade no Supabase, não só local | O mesmo conferente não pode sair como CLT numa loja e prestador em outra |
 | FREE sem ranking e sem instrução de trabalho | Comparar com a equipe e orientar como executar são indícios de subordinação |
 | Auditoria e Avaliação seguem com serviços separados | Respondem perguntas diferentes: contestar total cobrado vs. calcular nota |
@@ -492,6 +497,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não medir horas trabalhadas da primeira à última bipada quando houver mais de uma data
 - ❌ Não atribuir não contado a um conferente sem declarar o nível de confiança
 - ❌ Não publicar avaliação sem rodar `conferirReconciliacao()` contra Erro (Qtde)
+- ❌ Não entregar a planilha consolidada ao conferente — ela traz o ranking da equipe
+- ❌ Não usar BOM em download binário na web (corrompe XLSX e PDF)
 - ❌ Não ler planilha do Crystal com `sheet_to_json` em modo objeto — usar `pickSheetAsMatrix()`
 - ❌ Não confiar em índice fixo de coluna no NAO CONTADOS (cabeçalho e dados desalinham)
 - ❌ Não exigir `PI` numa posição fixa do `.prc` — o endereço digitado à mão desloca o campo
