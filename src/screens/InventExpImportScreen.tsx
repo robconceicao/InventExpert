@@ -43,7 +43,19 @@ import {
     buildInventDspIndex,
     resolverProduto,
 } from "../utils/catalogoLookup";
-import { shareCsvFile, sharePdfFromHtml, shareTextFile } from "../utils/export";
+import {
+    type ArquivoGerado,
+    renderizarPdfBase64,
+    salvarArquivosEmLote,
+    shareCsvFile,
+    sharePdfFromHtml,
+    shareTextFile,
+    shareXlsxWorkbook,
+} from "../utils/export";
+import {
+    montarWorkbookConsolidado,
+    nomeArquivoConsolidado,
+} from "../utils/avaliacaoConsolidadaXlsx";
 import { generateInventExpIndividualReportHtml } from "../utils/inventExpReportHtml";
 import { ErroLeituraArquivo, readFileAsCsvText, readFileAsText } from "../utils/fileImport";
 import {
@@ -79,7 +91,7 @@ import {
     type MapaAreas,
     type ProdSecaoRow,
 } from "../services/AreaMappingService";
-import { gerarRelatorioV3Html } from "../utils/inventExpReportV3";
+import { gerarRelatorioV3Html, gerarRelatorioV3Texto } from "../utils/inventExpReportV3";
 import ModalidadeContratoModal, {
   type ConferenteParaMarcar,
 } from "../components/ModalidadeContratoModal";
@@ -117,6 +129,14 @@ const PICKER_QUALQUER_ARQUIVO = {
   type: "*/*",
   copyToCacheDirectory: true,
 } as const;
+
+/** Base64 de texto UTF-8 — `btoa()` cru estoura com acento. */
+function btoaUtf8(texto: string): string {
+  const bytes = new TextEncoder().encode(texto);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
 
 /** Usa a mensagem específica do leitor quando existir; senão, a genérica. */
 function mensagemDeErro(erro: unknown, padrao: string): string {
@@ -186,6 +206,8 @@ export default function InventExpImportScreen() {
   );
   const [publishRef, setPublishRef] = useState("");
   const [publishing, setPublishing] = useState(false);
+  /** Trava o botão enquanto as fichas da equipe são renderizadas. */
+  const [gerandoFichas, setGerandoFichas] = useState(false);
 
   const handlePickFile = async () => {
     try {
@@ -905,25 +927,151 @@ export default function InventExpImportScreen() {
    * Ficha individual do v3, com áreas, erro localizado e não contados.
    * A linguagem sai adequada ao vínculo — o gerador lê `avaliacao.modalidade`.
    */
-  const exportarFichaV3 = async (a: AvaliacaoV3, posicao: number) => {
-    const html = gerarRelatorioV3Html(a, {
-      operacao: operationType,
-      dataInventario: new Date().toLocaleDateString("pt-BR"),
-      posicao,
-      totalConferentes: avaliacoesV3.length,
-      medianaEquipe,
-    });
+  /** Referência do inventário usada nos nomes de arquivo e nos cabeçalhos. */
+  const lojaRef = publishRef.trim() || "inventario";
+
+  const contextoFichaV3 = (posicao: number) => ({
+    operacao: operationType,
+    dataInventario: new Date().toLocaleDateString("pt-BR"),
+    loja: publishRef.trim() || undefined,
+    posicao,
+    totalConferentes: avaliacoesV3.length,
+    medianaEquipe,
+  });
+
+  /** `Avaliacao_<Matricula>_<Nome>.pdf`, como no padrão do relatório-modelo. */
+  const nomeArquivoFicha = (a: AvaliacaoV3) => {
     const nome = (a.nome || "conferente")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
       .replace(/[^\w\s-]/g, "")
+      .trim()
       .replace(/\s+/g, "_")
       .slice(0, 40);
+    return `Avaliacao_${a.matricula || "sem_matricula"}_${nome}.pdf`;
+  };
+
+  const exportarFichaV3 = async (a: AvaliacaoV3, posicao: number) => {
+    const html = gerarRelatorioV3Html(a, contextoFichaV3(posicao));
     await sharePdfFromHtml(
-      `ficha_${nome}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      nomeArquivoFicha(a),
       html,
       a.modalidade === "FREE"
         ? "Exportar ficha — prestador de serviço"
         : "Exportar ficha de avaliação",
     );
+  };
+
+  /** Mesma ficha, em texto, pelo WhatsApp — a linguagem já sai pela modalidade. */
+  const enviarFichaV3WhatsApp = (a: AvaliacaoV3, posicao: number) => {
+    const texto = gerarRelatorioV3Texto(a, contextoFichaV3(posicao));
+    const url =
+      Platform.OS === "web"
+        ? `https://wa.me/?text=${encodeURIComponent(texto)}`
+        : `whatsapp://send?text=${encodeURIComponent(texto)}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert("Erro", "Não foi possível abrir o WhatsApp neste dispositivo."),
+    );
+  };
+
+  /**
+   * Gera a ficha de todos os conferentes de uma vez.
+   *
+   * No Android o usuário escolhe a pasta uma única vez e os PDFs caem lá; na
+   * web cada um baixa pelo navegador. Sem isso, "baixar a ficha de cada
+   * conferente" viraria uma janela de compartilhamento por pessoa.
+   */
+  const handleGerarTodasAsFichas = async () => {
+    if (avaliacoesV3.length === 0) {
+      Alert.alert("Sem avaliações", "Processe a avaliação antes de gerar as fichas.");
+      return;
+    }
+    setGerandoFichas(true);
+    try {
+      const arquivos: ArquivoGerado[] = [];
+      const semPdf: string[] = [];
+
+      for (let i = 0; i < avaliacoesV3.length; i += 1) {
+        const a = avaliacoesV3[i];
+        const html = gerarRelatorioV3Html(a, contextoFichaV3(i + 1));
+        const base64 = await renderizarPdfBase64(html);
+        if (base64) {
+          arquivos.push({
+            nome: nomeArquivoFicha(a),
+            base64,
+            mimeType: "application/pdf",
+          });
+        } else {
+          // Web: o expo-print não gera PDF — entrega o HTML, que imprime igual.
+          semPdf.push(a.nome);
+          arquivos.push({
+            nome: nomeArquivoFicha(a).replace(/\.pdf$/i, ".html"),
+            base64: btoaUtf8(html),
+            mimeType: "text/html;charset=utf-8",
+          });
+        }
+      }
+
+      const r = await salvarArquivosEmLote(arquivos, "Salvar fichas de avaliação");
+
+      if (r.via === "cancelado") {
+        Alert.alert("Cancelado", "Nenhuma ficha foi salva.");
+        return;
+      }
+      const destino =
+        r.via === "pasta"
+          ? "na pasta escolhida"
+          : r.via === "download"
+            ? "na pasta de downloads"
+            : "pelo compartilhamento";
+      Alert.alert(
+        "Fichas geradas",
+        `${r.salvos} de ${arquivos.length} ficha(s) ${destino}.` +
+          (r.falhas.length ? `\n\nFalharam: ${r.falhas.map((f) => f.nome).join(", ")}` : "") +
+          (semPdf.length ? `\n\nNo navegador as fichas saem em HTML — imprima como PDF.` : ""),
+      );
+    } catch (e) {
+      console.warn("[InventExp] Falha ao gerar fichas em lote:", e);
+      Alert.alert("Erro", "Falha ao gerar as fichas da equipe.");
+    } finally {
+      setGerandoFichas(false);
+    }
+  };
+
+  /** Planilha consolidada — a visão do líder, com as oito abas de análise. */
+  const handleExportarConsolidado = async () => {
+    if (avaliacoesV3.length === 0) {
+      Alert.alert(
+        "Sem avaliações",
+        "A avaliação geral usa o motor v3. Anexe .prc, PROD_SEÇÃO e ACURACIDADE e processe.",
+      );
+      return;
+    }
+    try {
+      const wb = montarWorkbookConsolidado(avaliacoesV3, {
+        loja: lojaRef,
+        dataInventario: publishDate,
+        operacao: operationType,
+        medianaEquipe,
+        diagnostico: diagV3
+          ? {
+              ...diagV3,
+              enderecosForaPadrao: prcInfo?.enderecosForaPadrao,
+              datasDistintas: prcInfo?.datas,
+              arquivosPrc: prcInfo?.count,
+            }
+          : null,
+        emitidoPor: leaderName.trim() || undefined,
+      });
+      await shareXlsxWorkbook(
+        nomeArquivoConsolidado(lojaRef),
+        wb,
+        "Avaliação geral do inventário",
+      );
+    } catch (e) {
+      console.warn("[InventExp] Falha ao gerar consolidado:", e);
+      Alert.alert("Erro", "Falha ao gerar a planilha consolidada.");
+    }
   };
 
   const handlePublishProdutividade = async () => {
@@ -1305,20 +1453,82 @@ export default function InventExpImportScreen() {
                     {a.relogioOk ? "" : " · relógio fora de data"}
                   </Text>
                 </View>
-                <Pressable
-                  onPress={() => void exportarFichaV3(a, i + 1)}
-                  hitSlop={8}
-                  style={styles.v3Export}
-                >
+                <View style={styles.v3Acoes}>
                   <Text style={styles.v3Nota}>{a.nota.toFixed(1)}</Text>
-                  <Ionicons name="download-outline" size={16} color="#1F3864" />
-                </Pressable>
+                  <Pressable
+                    onPress={() => void exportarFichaV3(a, i + 1)}
+                    hitSlop={8}
+                    style={styles.v3BotaoAcao}
+                    accessibilityLabel={`Baixar ficha de ${a.nome}`}
+                  >
+                    <Ionicons name="document-text-outline" size={18} color="#1F3864" />
+                    <Text style={styles.v3BotaoTexto}>PDF</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => enviarFichaV3WhatsApp(a, i + 1)}
+                    hitSlop={8}
+                    style={styles.v3BotaoAcao}
+                    accessibilityLabel={`Enviar ficha de ${a.nome} por WhatsApp`}
+                  >
+                    <Ionicons name="logo-whatsapp" size={18} color="#128C7E" />
+                  </Pressable>
+                </View>
               </View>
             ))}
             <Text style={styles.prcPreview}>
-              Toque na nota para exportar a ficha individual em PDF. A linguagem do
-              documento segue a modalidade de contratação de cada um.
+              A linguagem de cada ficha segue a modalidade de contratação: prestador
+              de serviço não recebe posição no ranking nem instrução de trabalho.
             </Text>
+          </View>
+        )}
+
+        {avaliacoesV3.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Entregáveis da avaliação</Text>
+            <Text style={styles.subtitle}>
+              Dois documentos, públicos diferentes: a ficha é do conferente, a
+              planilha é do líder.
+            </Text>
+
+            <Pressable
+              style={[styles.btnPrimary, gerandoFichas && styles.btnDisabled]}
+              onPress={() => void handleGerarTodasAsFichas()}
+              disabled={gerandoFichas}
+            >
+              <Ionicons name="people-outline" size={18} color="#FFF" />
+              <Text style={styles.btnTextWhite}>
+                {gerandoFichas
+                  ? "Gerando fichas…"
+                  : `Fichas de toda a equipe (${avaliacoesV3.length} PDF)`}
+              </Text>
+            </Pressable>
+            <Text style={styles.prcPreview}>
+              {Platform.OS === "android"
+                ? "Escolha a pasta uma vez e todas as fichas são gravadas lá."
+                : Platform.OS === "web"
+                  ? "Cada ficha baixa pelo navegador, em HTML pronto para imprimir."
+                  : "Uma janela de compartilhamento por ficha."}
+            </Text>
+
+            <Pressable
+              style={styles.btnPrimary}
+              onPress={() => void handleExportarConsolidado()}
+            >
+              <Ionicons name="grid-outline" size={18} color="#FFF" />
+              <Text style={styles.btnTextWhite}>Avaliação geral do inventário (XLSX)</Text>
+            </Pressable>
+            <Text style={styles.prcPreview}>
+              Oito abas: Resumo, Ranking, Por_Conferente, Erros_Detalhados,
+              Nao_Contados, Mapa_Areas, Ressalvas e Metodologia. É o documento de
+              análise do líder e o registro de rastreabilidade do inventário.
+            </Text>
+
+            {!publishRef.trim() && (
+              <Text style={styles.warnText}>
+                Preencha a referência (loja / evento) no fim da tela — ela nomeia os
+                arquivos e identifica o inventário nos cabeçalhos.
+              </Text>
+            )}
           </View>
         )}
 
@@ -1725,6 +1935,18 @@ const styles = StyleSheet.create({
   v3Nome: { fontSize: 14, fontWeight: "600", color: "#0F172A" },
   v3Meta: { fontSize: 11, color: "#64748B", marginTop: 2 },
   v3Export: { alignItems: "center", gap: 2 },
+  v3Acoes: { alignItems: "center", flexDirection: "row", gap: 6 },
+  v3BotaoAcao: {
+    alignItems: "center",
+    backgroundColor: "#EEF2FA",
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  v3BotaoTexto: { color: "#1F3864", fontSize: 12, fontWeight: "700" },
+  btnDisabled: { opacity: 0.6 },
   v3Nota: { fontSize: 18, fontWeight: "800", color: "#1F3864", width: 54, textAlign: "right" },
   prcPreview: {
     fontSize: 12,
