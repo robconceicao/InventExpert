@@ -1,9 +1,11 @@
 import * as XLSX from "xlsx";
 
 import type { AvaliacaoV3 } from "../../services/AvaliacaoV3Service";
+import type { InventoryCheckerEvaluation } from "../../types";
 import {
   encaminhamento,
   montarWorkbookConsolidado,
+  montarWorkbookConsolidadoV21,
   nomeArquivoConsolidado,
   type ContextoConsolidado,
 } from "../avaliacaoConsolidadaXlsx";
@@ -255,5 +257,77 @@ describe("nomeArquivoConsolidado", () => {
 
   it("limpa caracteres que quebram nome de arquivo", () => {
     expect(nomeArquivoConsolidado("DPSP / L2601")).toMatch(/^Avaliacao_Consolidada_DPSP___L2601_/);
+  });
+});
+
+describe("montarWorkbookConsolidadoV21", () => {
+  const ev = (over: Partial<InventoryCheckerEvaluation> = {}): InventoryCheckerEvaluation =>
+    ({
+      input: {
+        nome: "AMANDA DE OLIVEIRA",
+        matricula: "12345",
+        qtde: 752,
+        qtde1a1: 0,
+        produtividade: 395.33,
+        erro: 13,
+      },
+      operationType: "FARMACIA",
+      pctErro: 1.73,
+      pctBloco: 2.4,
+      scoreQualidade: 88,
+      scoreProdutividade: 70,
+      scoreAderencia: 90,
+      scoreFinal: 83,
+      nivel: "BOM",
+      nivelColor: "#0A0",
+      tags: [],
+      secoes: [
+        {
+          area_nome: "MEDICAMENTOS",
+          qtd_c1: 100,
+          erros: 3,
+          pctErro: 3,
+          bloco_pct: 80,
+          limite_bloco: 0,
+          violacao_bloco: true,
+        },
+      ],
+      ...over,
+    }) as InventoryCheckerEvaluation;
+
+  it("entrega a planilha do líder mesmo sem os arquivos do v3", () => {
+    const wb = montarWorkbookConsolidadoV21([ev()], CTX);
+    expect(wb.SheetNames).toEqual([
+      "Resumo",
+      "Ranking",
+      "Por_Conferente",
+      "Secoes",
+      "Ressalvas",
+      "Metodologia",
+    ]);
+  });
+
+  it("declara na aba de ressalvas o que falta e como habilitar", () => {
+    const t = texto(aba(montarWorkbookConsolidadoV21([ev()], CTX), "Ressalvas"));
+    expect(t).toContain("motor v2.1");
+    expect(t).toContain("Sem capítulo de não contados");
+    expect(t).toContain("Anexar .prc, PROD_SEÇÃO e ACURACIDADE");
+  });
+
+  it("leva a violação de bloco por área para a aba de seções", () => {
+    const t = texto(aba(montarWorkbookConsolidadoV21([ev()], CTX), "Secoes"));
+    expect(t).toContain("MEDICAMENTOS");
+    expect(t).toContain("SIM");
+  });
+
+  it("numera o ranking e traz o encaminhamento", () => {
+    const t = texto(aba(montarWorkbookConsolidadoV21([ev()], CTX), "Ranking"));
+    expect(t).toContain("AMANDA DE OLIVEIRA");
+    expect(t).toContain("Devolutiva");
+  });
+
+  it("avisa quando não há PRODUÇÃO_SEÇÃO anexado", () => {
+    const t = texto(aba(montarWorkbookConsolidadoV21([ev({ secoes: [] })], CTX), "Secoes"));
+    expect(t).toContain("Sem PRODUÇÃO_SEÇÃO anexado");
   });
 });

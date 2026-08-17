@@ -370,7 +370,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis (2026-08):** **344 testes / 26 suites** ·
+**Baseline v3 + entregáveis (2026-08):** **349 testes / 26 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -459,6 +459,7 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Match de EAN com sufixo de 8+ dígitos | Regra herdada do módulo Auditoria; cobre prefixo do arquivo final e EAN-13 vs EAN-14 |
 | Identidade resolvida por agentes.txt/CadFun | O coletor grava CPF, o relatório grava matrícula, o ProInv usa código de 6 dígitos |
 | Modalidade nula bloqueia a avaliação | Default 'CLT' fazia prestador receber relatório com termos de vínculo; o bloqueio é a única garantia contra esquecimento |
+| Entregáveis valem para os dois motores | O v3 exige três arquivos; sem eles quem responde é o v2.1, e o líder continua precisando entregar a ficha de cada conferente |
 | Ficha individual e consolidado do líder são documentos distintos | A ficha é lida junto com o conferente; a planilha expõe o ranking inteiro — ver `docs/PROCEDIMENTO_AVALIACAO.md` |
 | Lote de fichas via Storage Access Framework no Android | Escolher a pasta uma vez é o único caminho em que "baixar a ficha de cada conferente" não vira uma janela de compartilhamento por pessoa |
 | Modalidade no Supabase, não só local | O mesmo conferente não pode sair como CLT numa loja e prestador em outra |

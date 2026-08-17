@@ -13,7 +13,10 @@ import * as XLSX from "xlsx";
 
 import type { AvaliacaoV3 } from "../services/AvaliacaoV3Service";
 import type { AreaAtribuida } from "../services/AreaMappingService";
-import type { InventoryOperationType } from "../types";
+import type {
+  InventoryCheckerEvaluation,
+  InventoryOperationType,
+} from "../types";
 
 /** Diagnóstico da execução — o que sustenta a aba de ressalvas. */
 export interface DiagnosticoConsolidado {
@@ -557,4 +560,182 @@ export function montarWorkbookConsolidado(
 export function nomeArquivoConsolidado(loja: string, data = new Date()): string {
   const lojaLimpa = (loja || "inventario").replace(/[^\w-]/g, "_").slice(0, 24);
   return `Avaliacao_Consolidada_${lojaLimpa}_${data.toISOString().slice(0, 10)}.xlsx`;
+}
+
+// ---------------------------------------------------------------------------
+// Consolidado do motor v2.1
+// ---------------------------------------------------------------------------
+
+/**
+ * Mesma planilha, a partir do motor v2.1.
+ *
+ * O v3 depende de `.prc` + PROD_SEÇÃO + ACURACIDADE. Quando falta qualquer um
+ * deles a avaliação ainda acontece — só que sem área física, sem divergência
+ * localizada e sem não contados. O líder continua precisando do consolidado, e
+ * é melhor entregar a planilha com as abas que existem e uma ressalva dizendo
+ * o que falta do que não entregar nada.
+ */
+export function montarWorkbookConsolidadoV21(
+  avaliacoes: InventoryCheckerEvaluation[],
+  ctx: ContextoConsolidado,
+): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+  const nomeDe = (e: InventoryCheckerEvaluation) => e.nome || e.input.nome || "sem nome";
+
+  const totalPecas = avaliacoes.reduce((s, e) => s + (e.input.qtde || 0), 0);
+  const totalErro = avaliacoes.reduce((s, e) => s + (e.input.erro || 0), 0);
+  const notas = avaliacoes.map((e) => e.scoreFinal).sort((a, b) => a - b);
+  const mediana = notas.length
+    ? notas.length % 2
+      ? notas[(notas.length - 1) / 2]
+      : (notas[notas.length / 2 - 1] + notas[notas.length / 2]) / 2
+    : 0;
+
+  const resumo: Linha[] = [
+    [`AVALIAÇÃO DE CONFERENTES — INVENTÁRIO ${ctx.loja}`],
+    [
+      [
+        `Data-base ${ctx.dataInventario}`,
+        `Operação ${ctx.operacao}`,
+        `Emissão ${new Date().toLocaleDateString("pt-BR")}`,
+        "Motor v2.1",
+      ].join(" · "),
+    ],
+    [],
+    ["Indicador", "Valor", "Fonte"],
+    ["Conferentes avaliados", avaliacoes.length, "PRODUÇÃO"],
+    ["Peças contadas", totalPecas, "PRODUÇÃO"],
+    ["Erro total (unidades)", totalErro, "PRODUÇÃO"],
+    ["Nota mediana da equipe", PCT(mediana), "Motor v2.1"],
+    [],
+    ["Score = Qualidade + Produtividade + Aderência, ponderados por perfil de operação"],
+  ];
+
+  const ranking: Linha[] = [
+    ["RANKING GERAL — MOTOR v2.1"],
+    [],
+    [
+      "Posição",
+      "Conferente",
+      "Matrícula",
+      "Vínculo",
+      "Score",
+      "Nível",
+      "Qualidade",
+      "Produtividade",
+      "Aderência",
+      "% erro",
+      "% bloco",
+      "Sinalizações",
+      "Encaminhamento",
+    ],
+  ];
+  avaliacoes.forEach((e, i) => {
+    ranking.push([
+      i + 1,
+      nomeDe(e),
+      e.matricula ?? e.input.matricula ?? "",
+      e.modalidade ?? "não conferida",
+      PCT(e.scoreFinal),
+      e.nivel,
+      Math.round(e.scoreQualidade),
+      Math.round(e.scoreProdutividade),
+      Math.round(e.scoreAderencia),
+      PCT(e.pctErro),
+      PCT(e.pctBloco),
+      e.tags.join(" | "),
+      encaminhamento(e.scoreFinal),
+    ]);
+  });
+
+  const porConferente: Linha[] = [
+    ["FICHA POR CONFERENTE — MOTOR v2.1"],
+    [],
+    [
+      "Nome",
+      "Matrícula",
+      "Vínculo",
+      "Peças",
+      "Peças 1a1",
+      "Produtividade (peças/h)",
+      "Erro (un)",
+      "% erro",
+      "% bloco",
+      "Score",
+      "Nível",
+      "Áreas com violação de bloco",
+    ],
+  ];
+  for (const e of avaliacoes) {
+    const violacoes = e.violacoes ?? e.violacoesBloco ?? [];
+    porConferente.push([
+      nomeDe(e),
+      e.matricula ?? e.input.matricula ?? "",
+      e.modalidade ?? "não conferida",
+      e.input.qtde ?? 0,
+      e.input.qtde1a1 ?? 0,
+      PCT(e.input.produtividade ?? 0),
+      e.input.erro ?? 0,
+      PCT(e.pctErro),
+      PCT(e.pctBloco),
+      PCT(e.scoreFinal),
+      e.nivel,
+      violacoes.map((v) => v.area_nome ?? v.area ?? "").filter(Boolean).join(" · "),
+    ]);
+  }
+
+  const secoes: Linha[] = [
+    ["ACURÁCIA POR ÁREA"],
+    ["Vem do PRODUÇÃO_SEÇÃO; o bloco% por área é calculado das bipadas quando há .prc."],
+    [],
+    ["Conferente", "Área", "Peças", "Erro (un)", "% erro", "% bloco", "Limite bloco", "Violação"],
+  ];
+  for (const e of avaliacoes) {
+    for (const s of e.secoes ?? []) {
+      secoes.push([
+        nomeDe(e),
+        s.area_nome ?? s.area ?? "",
+        s.qtd_c1 ?? s.totalC1 ?? s.totalItens ?? 0,
+        s.erros ?? 0,
+        PCT(s.pctErro ?? 0),
+        PCT(s.bloco_pct ?? s.pctBloco ?? 0),
+        s.limite_bloco ?? "",
+        s.violacao_bloco ? "SIM" : "não",
+      ]);
+    }
+  }
+  if (secoes.length === 4) secoes.push(["Sem PRODUÇÃO_SEÇÃO anexado."]);
+
+  const ressalvas: Linha[] = [
+    ["RESSALVAS E LIMITES DA ANÁLISE"],
+    [],
+    ["Ressalva", "Efeito"],
+    [
+      "Avaliação gerada pelo motor v2.1",
+      "Faltou pelo menos um dos três arquivos do v3 (.prc, PROD_SEÇÃO, ACURACIDADE)",
+    ],
+    ["Sem mapa de área física", "O erro não é localizado por rua/parede, apenas por seção"],
+    ["Sem atribuição item a item", "A divergência não é ligada ao produto e à hora da bipada"],
+    ["Sem capítulo de não contados", "A cobertura não entra na nota"],
+    ["Sem valorização em reais", "O eixo de valor não é calculado"],
+    [
+      "Como habilitar",
+      "Anexar .prc, PROD_SEÇÃO e ACURACIDADE e processar de novo — a planilha sai com as oito abas",
+    ],
+  ];
+
+  const abas: [string, Linha[], number[]][] = [
+    ["Resumo", resumo, [42, 18, 34]],
+    ["Ranking", ranking, [8, 30, 16, 16, 8, 14, 12, 14, 12, 10, 10, 40, 40]],
+    ["Por_Conferente", porConferente, [30, 16, 16, 10, 12, 20, 10, 10, 10, 8, 14, 40]],
+    ["Secoes", secoes, [30, 26, 10, 10, 10, 10, 12, 10]],
+    ["Ressalvas", ressalvas, [40, 70]],
+    ["Metodologia", abaMetodologia(ctx), [40, 70]],
+  ];
+  for (const [nome, linhas, larguras] of abas) {
+    const ws = XLSX.utils.aoa_to_sheet(linhas);
+    aplicarLarguras(ws, larguras);
+    XLSX.utils.book_append_sheet(wb, ws, nome);
+  }
+  return wb;
 }
