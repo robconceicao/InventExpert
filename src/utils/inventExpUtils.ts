@@ -50,7 +50,7 @@ export function canonizarGondola(nome: string): string | null {
 }
 
 /** Chave usada para casar com a tabela de limites (gôndola equivale a gôndola). */
-function chaveParaLimite(nome: string): string {
+export function chaveParaLimite(nome: string): string {
   return canonizarGondola(nome) ?? chaveArea(nome);
 }
 

@@ -10,7 +10,7 @@
  * limite 9999 = sem limite definido (não penalizar).
  */
 
-import { chaveArea } from '../utils/inventExpUtils';
+import { chaveParaLimite, mesmaArea } from '../utils/inventExpUtils';
 
 import {
   buildViolacaoBloco,
@@ -154,8 +154,12 @@ export interface RegraBlocoArea {
 }
 
 /**
- * Chaves em UPPERCASE (normalizarNomeArea antes de consultar).
- * Valores alinhados à migration Supabase (fonte de verdade remota).
+ * Chaves comparadas por `chaveParaLimite()` — sem acento e com gôndola
+ * canonizada. Valores alinhados à migration Supabase (fonte de verdade remota).
+ *
+ * Revisão 2026-08 (`docs/LIMITES_BLOCO_FARMACIA.md`), calibrada contra o
+ * inventário L2601: as áreas marcadas "L2601" entraram porque existem no campo
+ * e não tinham cadastro nenhum — ou seja, o bloco delas nunca era verificado.
  */
 export const LIMITES_BLOCO_FARMACIA: Record<string, RegraBlocoArea> = {
   // Proibido — tolerância zero (ANVISA/SNGPC)
@@ -163,19 +167,32 @@ export const LIMITES_BLOCO_FARMACIA: Record<string, RegraBlocoArea> = {
   "AVARIAS E VENCIDOS": { limite: 0, critica: true },
   MEDICAMENTOS: { limite: 0, critica: true },
   PSICOTRÓPICOS: { limite: 0, critica: true },
+  PSICO: { limite: 0, critica: true }, // L2601
   TERMOLÁBEIS: { limite: 0, critica: true },
+  THERMOLABS: { limite: 0, critica: true }, // L2601
+  VACINAS: { limite: 0, critica: true }, // L2601 — cadeia de frio
   CAIXAS: { limite: 0, critica: true },
   "GELADEIRAS MEDICAMENTOS": { limite: 0, critica: true },
   "SALA DE APLICAÇÃO": { limite: 0, critica: true },
 
   // Crítico — tolerância muito baixa (alerta formal: limite <= 5)
   "MEDICAMENTOS OTC": { limite: 5, critica: true },
-  "P DERMO": { limite: 5, critica: true },
   /** Alias legado / XLS de campo (patch1) */
   "OTC / MIP (CAIXA)": { limite: 5, critica: true },
 
+  /**
+   * Dermo e infantil: 10% cobre o pack promocional de 2–3 unidades, que 5%
+   * penalizava indevidamente. `critica` fica ligada de propósito — o alerta
+   * formal dispara por `crítica OU limite <= 5%`, e sem o flag subir o limite
+   * apagaria a visibilidade junto. São as duas áreas com os SKUs mais
+   * parecidos entre si e o maior valor unitário da loja.
+   */
+  "P DERMO": { limite: 10, critica: true },
+  "PAREDE DERMO": { limite: 10, critica: true }, // L2601
+  "P INFANTIL": { limite: 10, critica: true },
+  "PAREDE INFANTIL": { limite: 10, critica: true }, // L2601
+
   // Com limite — não-críticas
-  "P INFANTIL": { limite: 10, critica: false },
   "SUPLEMENTOS / VITAMINAS": { limite: 10, critica: false },
   "G 1": { limite: 15, critica: false },
   "G 2": { limite: 15, critica: false },
@@ -188,19 +205,43 @@ export const LIMITES_BLOCO_FARMACIA: Record<string, RegraBlocoArea> = {
   "G 9": { limite: 15, critica: false },
   "G 10": { limite: 15, critica: false },
   "P PERFUMARIA / COSMÉTICOS": { limite: 15, critica: false },
-  "MEDICAMENTOS CARTELADOS": { limite: 30, critica: false },
-  ILHAS: { limite: 30, critica: false },
+
+  /**
+   * Balcão e atrás do caixa guardam OTC — nenhuma área do L2601 se chama OTC,
+   * mas a loja vende. `BALCÃO DE ATENDIMENTO` era `sem limite`, o que deixava
+   * 1.426 peças de ponto de venda sem verificação nenhuma.
+   */
+  "BALCÃO DE ATENDIMENTO": { limite: 20, critica: false },
+  BALCAO: { limite: 20, critica: false }, // L2601
+  "ATRÁS DE CAIXA": { limite: 20, critica: false },
+  "ATRAS DO CAIXA": { limite: 20, critica: false }, // L2601
+
+  /** Ilha é pilha de SKU único por definição; 75 peças/seção no L2601. */
+  ILHAS: { limite: 50, critica: false },
+  "ILHAS FRENTE DE LOJA": { limite: 50, critica: false }, // L2601
+  "ILHAS FUNDO": { limite: 50, critica: false }, // L2601
+
+  /**
+   * Cartelado: medicamento fora da caixa, solto na gancheira. Contar peça a
+   * peça é inviável e o limite reconhece isso — mas 70%, e não 100%, porque a
+   * mercadoria é OTC e a área tem a maior densidade da loja (153,8 peças/seção).
+   * Os três nomes descrevem a mesma parede e por isso carregam o mesmo número.
+   */
+  CARTELADO: { limite: 70, critica: false },
+  "PAREDE CARTELADO": { limite: 70, critica: false }, // L2601
+  "MEDICAMENTOS CARTELADOS": { limite: 70, critica: false },
+
   ESTOQUE: { limite: 80, critica: false },
   "ESTOQUE 2": { limite: 80, critica: false },
   "ESTOQUE 3": { limite: 80, critica: false },
+  "ESTOQUE FRENTE": { limite: 80, critica: false }, // L2601
+  "ESTOQUE FUNDOS": { limite: 80, critica: false }, // L2601
   "ESTOQUE FRENTE DE CAIXA": { limite: 90, critica: false },
   "FRENTE DE CAIXA": { limite: 90, critica: false },
-  "ATRÁS DE CAIXA": { limite: 90, critica: false },
   "GELADEIRAS FRENTE CAIXA": { limite: 100, critica: false },
   SORVETES: { limite: 100, critica: false },
-  CARTELADO: { limite: 100, critica: false },
+  /** Bucket da auditoria dirigida — não é área física, não penaliza. */
   "NÃO CONTADOS": { limite: 100, critica: false },
-  "BALCÃO DE ATENDIMENTO": { limite: LIMITE_BLOCO_SEM_LIMITE, critica: false },
 };
 
 export interface LimiteBlocoRow {
@@ -223,13 +264,25 @@ export function getLimitesBlocoFallback(
   }));
 }
 
+/**
+ * Índice por `chaveParaLimite()` — sem acento e com gôndola canonizada.
+ * O lookup literal por `toUpperCase()` fazia ANTIBIOTICOS não achar
+ * ANTIBIÓTICOS e RUA 3 FRENTE não achar G 3, deixando área crítica sem
+ * verificação de bloco.
+ */
+const INDICE_LIMITES_FARMACIA: Map<string, RegraBlocoArea> = new Map(
+  Object.entries(LIMITES_BLOCO_FARMACIA).map(([nome, regra]) => [
+    chaveParaLimite(nome),
+    regra,
+  ]),
+);
+
 export function lookupLimiteBlocoArea(
   nomeArea: string,
   operationType: InventoryOperationType = "FARMACIA",
 ): RegraBlocoArea | null {
   if (operationType !== "FARMACIA") return null;
-  const key = nomeArea.trim().toUpperCase();
-  return LIMITES_BLOCO_FARMACIA[key] ?? null;
+  return INDICE_LIMITES_FARMACIA.get(chaveParaLimite(nomeArea)) ?? null;
 }
 
 /**
@@ -264,9 +317,7 @@ export function getViolacoesBloco(
 
     if (useRows) {
       const row = limites!.find(
-        (l) =>
-          l.tipo_operacao === operationType &&
-          chaveArea(l.nome_area) === chaveArea(areaNome),
+        (l) => l.tipo_operacao === operationType && mesmaArea(l.nome_area, areaNome),
       );
       if (!row) {
         console.warn(

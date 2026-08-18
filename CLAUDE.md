@@ -156,6 +156,7 @@ supabase/
 ├── migration_campos_adicionais.sql            ← campos extras (codigo_loja, segmento)
 ├── migration_limites_bloco_area.sql           ← limites de bloco por área
 ├── migration_limites_bloco_area_patch1.sql    ← upsert seed + alias OTC + RLS
+├── migration_limites_bloco_area_patch2.sql    ← revisão 2026-08 dos limites (docs/LIMITES_BLOCO_FARMACIA.md)
 ├── migration_secao_lookup.sql                 ← lookup seção código → nome
 ├── migration_colaboradores_modalidade.sql      ← modalidade de contratação + RPC
 ├── migration_attendance_stats_field_events.sql ← presença em field_events + kinds H/I/J
@@ -277,7 +278,7 @@ objeto de opções no estilo expo-speech — causa crash em produção
 | `RELATORIOS/ACURACIDADE.xls` | XLS (Crystal Reports) | Por SEÇÃO + EAN: C1, A1/A2/A3, FINAL, AJST(QTD) — base da atribuição de erro |
 | `RELATORIOS/NAO CONTADOS.xls` | XLS (Crystal Reports) | Produtos com saldo em sistema e sem coleta |
 | `RELATORIOS/DOBRO.xls` | XLS (Crystal Reports) | Bipadas repetidas — indicador de método, não erro de quantidade |
-| `RELATORIOS/BLOCO.xls` | XLS (Crystal Reports) | Seção + CPF + EAN na mesma linha — **conferência independente** da seção e da regra de bloco |
+| `RELATORIOS/BLOCO.xls` | XLS (Crystal Reports) | Seção + CPF + EAN + família + qtde — **conferência independente** da seção e da regra de bloco, e única fonte do bloco% observado sem o `.prc`. Repete linhas nas quebras de página: deduplicar por capa+seção+CPF+código+qtde |
 | Auditoria dirigida (folha assinada) | Papel / foto | Produtos recuperados na seção 9999 — transcrever manualmente |
 | `cadastro.txt` | Texto fixo 38 chars/linha, latin-1 | Código interno → descrição produto |
 | `invent_DSP_[DATA].old` | CSV `;`, latin-1 | Código → EAN real → descrição + classe legal |
@@ -381,7 +382,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis (2026-08):** **362 testes / 26 suites** ·
+**Baseline v3 + entregáveis + limites (2026-08):** **384 testes / 27 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -450,6 +451,11 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Limites em Supabase + fallback local = seed migration | Offline e remoto alinhados; FRENTE DE CAIXA 90% |
 | Ausência de registro = warn + sem penalidade (nunca default 20%) | Não punir área desconhecida silenciosamente |
 | Área comparada sem acento (`chaveArea`) | Tabela usa "ANTIBIÓTICOS", relatório usa "ANTIBIOTICOS"; comparação literal deixava área crítica de limite 0% sem verificação |
+| Gôndola canonizada só para casar limite (`canonizarGondola`) | A mesma gôndola chega como RUA 3 FRENTE, R3, G3 ou G 03 FUNDO; frente e fundo são o mesmo móvel. O nome de exibição não muda — o conferente conhece a área assim |
+| Área física herda o limite da categoria **mais restritiva** que contém | O quadro de risco é por categoria de produto, a tabela é por área física; média deixaria dermocosmético de R$ 200 contável em bloco por causa do sabonete ao lado — ver `docs/LIMITES_BLOCO_FARMACIA.md` |
+| Nenhuma área em `limite = 9999` | "Sem limite" no BALCÃO deixava 1.426 peças de ponto de venda sem verificação; nenhuma área do L2601 se chama OTC e o OTC está fisicamente lá |
+| Dermo e infantil a 10% com `critica: true` | 5% penalizava pack promocional legítimo; o alerta formal dispara por "crítica OU limite ≤ 5%", então sem o flag subir o limite apagaria a visibilidade junto |
+| Os três nomes do cartelado com o mesmo limite | `CARTELADO`, `PAREDE CARTELADO` e `MEDICAMENTOS CARTELADOS` são a mesma parede; limites diferentes fariam o critério depender de qual nome a loja cadastrou |
 | Lacuna de cadastro visível na tela e no consolidado | `console.warn` ninguém lê em produção; área sem limite não tem bloco verificado e isso precisa estar no relatório |
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
 | Mapa Seção→Área do evento por cima do `secao_lookup` | A tabela é opcional e vive vazia; sem o mapa do PROD_SEÇÃO o bloco% por área caía no valor da planilha e a violação sumia — ver `docs/SUPABASE_ESTADO.md` |
@@ -526,5 +532,7 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não decidir "é planilha ou texto" pela extensão — usar `detectarFormato()`
 - ❌ Não importar `readAsStringAsync` de `expo-file-system` (só de `/legacy`)
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
+- ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
+- ❌ Não somar BLOCO.xls sem deduplicar as linhas repetidas na quebra de página
 - ❌ Não recriar policies `USING (true)` / `WITH CHECK (true)` nas tabelas core
 - ❌ Não conceder `EXECUTE` de `gerar_escala`/`listar_escala` a `anon` ou `PUBLIC`
