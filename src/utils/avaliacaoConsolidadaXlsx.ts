@@ -13,7 +13,18 @@ import * as XLSX from "xlsx";
 
 import type { AvaliacaoV3 } from "../services/AvaliacaoV3Service";
 import type { AreaAtribuida } from "../services/AreaMappingService";
-import type { InventoryOperationType } from "../types";
+import {
+  getViolacaoArea,
+  getViolacaoLimitePct,
+  getViolacaoRealPct,
+  type InventoryCheckerEvaluation,
+  type InventoryOperationType,
+} from "../types";
+import {
+  gravidadeDaViolacao,
+  penalidadeDaViolacao,
+  type GravidadeBloco,
+} from "../config/inventoryEvalConfig";
 
 /** Diagnóstico da execução — o que sustenta a aba de ressalvas. */
 export interface DiagnosticoConsolidado {
@@ -30,6 +41,8 @@ export interface DiagnosticoConsolidado {
   enderecosForaPadrao?: number;
   datasDistintas?: string[];
   arquivosPrc?: number;
+  /** Áreas do inventário sem limite de bloco na tabela — bloco não verificado. */
+  areasSemLimiteBloco?: string[];
 }
 
 export interface ContextoConsolidado {
@@ -114,7 +127,7 @@ function abaResumo(
       ["Divergências atribuídas", d.divergencias, "Par SEÇÃO+EAN"],
       ["Divergências órfãs", d.orfas, "Sem bipada correspondente — não atribuídas"],
       ["Divergências compartilhadas", d.compartilhadas, "Mais de um conferente no par"],
-      ["Produtos não contados", d.naoContados, `${d.naoContadosAlta} com confiança ALTA`],
+      ["Produtos não contados", d.naoContados, `${d.naoContadosAlta} com falha de contagem comprovada (recuperados na auditoria)`],
       ["Itens em dobro", d.dobro, "DOBRO.xls — indicador de método"],
       [
         "Reconciliação com Erro (Qtde)",
@@ -127,7 +140,7 @@ function abaResumo(
   linhas.push(
     [],
     ["Nota = 0,35×Acuracidade + 0,25×Produtividade + 0,25×Valor + 0,15×Cobertura − penalidades"],
-    ["Penalidades: −5 por divergência em controlado · −2 por não contado de confiança ALTA (−1 se recuperado)"],
+    ["Penalidades: −5 por divergência em controlado · −2 por falha de contagem comprovada (item recuperado na auditoria dirigida, confiança ALTA)"],
   );
 
   return linhas;
@@ -208,7 +221,7 @@ function abaPorConferente(avaliacoes: AvaliacaoV3[]): Linha[] {
       "Valor contado (R$)",
       "Valor ajustado (R$)",
       "% erro valor",
-      "Não contados ALTA",
+      "Falhas de contagem comprovadas",
       "Divergências controlados",
       "Itens em dobro",
       "Nota",
@@ -307,7 +320,7 @@ function abaNaoContados(avaliacoes: AvaliacaoV3[]): Linha[] {
       "Os relatórios de não contados não trazem seção. A área provável vem do local onde produtos da mesma marca (ou família) foram contados.",
     ],
     [
-      "ALTA pesa na nota · MÉDIA e BAIXA dirigem recontagem e não penalizam ninguém.",
+      "Penaliza apenas o item RECUPERADO na auditoria dirigida com confiança ALTA — falha de contagem provada. O que permaneceu não encontrado fica registrado sem dono.",
     ],
     [],
     [
@@ -426,9 +439,9 @@ function abaRessalvas(
         "Par SEÇÃO+EAN bipado por mais de um conferente",
       ],
       [
-        "Não contados sem confiança ALTA",
+        "Não contados que não penalizam",
         Math.max(0, d.naoContados - d.naoContadosAlta),
-        "Dirigem recontagem; não pesam na nota",
+        "Permaneceram não encontrados, ou sem confiança ALTA — dirigem recontagem",
       ],
     );
 
@@ -445,6 +458,14 @@ function abaRessalvas(
           `esperado ${f.esperado}, apurado ${f.apurado}`,
         ]);
       }
+    }
+
+    if (d.areasSemLimiteBloco && d.areasSemLimiteBloco.length > 0) {
+      linhas.push([
+        "Áreas sem limite de bloco cadastrado",
+        d.areasSemLimiteBloco.length,
+        `O bloco NÃO foi verificado nelas: ${d.areasSemLimiteBloco.join(", ")}`,
+      ]);
     }
 
     if (d.enderecosForaPadrao) {
@@ -493,7 +514,7 @@ function abaMetodologia(ctx: ContextoConsolidado): Linha[] {
     ["Acuracidade — 35%", "(1 − unidades em erro ÷ peças contadas) × 100"],
     ["Produtividade — 25%", "peças/h ÷ mediana da equipe × 100, limitado a 100"],
     ["Valor — 25%", "100 − (valor ajustado ÷ valor contado × 100)"],
-    ["Cobertura — 15%", "100 − fatia do valor perdida em não contados de confiança ALTA"],
+    ["Cobertura — 15%", "100 − fatia do valor em falhas de contagem comprovadas (recuperados na auditoria, ALTA)"],
     ["", ""],
     ["DECISÕES DE MÉTODO", ""],
     ["Mediana, não média", "Um conferente muito rápido desloca a média e faz o resto parecer lento"],
@@ -506,7 +527,8 @@ function abaMetodologia(ctx: ContextoConsolidado): Linha[] {
     ["", ""],
     ["LIMITES", ""],
     ["Não atribuível", "Divergência sem bipada correspondente fica órfã — nunca se atribui por proximidade"],
-    ["Não contado", "Só pesa na nota com confiança ALTA; MÉDIA e BAIXA dirigem recontagem"],
+    ["Não contado", "Só pesa quando foi RECUPERADO na auditoria dirigida e atribuído com ALTA: é a única situação em que a falha de contagem está provada"],
+    ["Não encontrado", "Permaneceu perdido: pode ser erro de saldo do cliente. Fica no relatório, sem dono e sem penalidade"],
     ["Sem dado", "Métrica sem fonte aparece como 'sem dado' — nunca estimada"],
     ["", ""],
     ["EMISSÃO", ""],
@@ -557,4 +579,247 @@ export function montarWorkbookConsolidado(
 export function nomeArquivoConsolidado(loja: string, data = new Date()): string {
   const lojaLimpa = (loja || "inventario").replace(/[^\w-]/g, "_").slice(0, 24);
   return `Avaliacao_Consolidada_${lojaLimpa}_${data.toISOString().slice(0, 10)}.xlsx`;
+}
+
+// ---------------------------------------------------------------------------
+// Consolidado do motor v2.1
+// ---------------------------------------------------------------------------
+
+/**
+ * Mesma planilha, a partir do motor v2.1.
+ *
+ * O v3 depende de `.prc` + PROD_SEÇÃO + ACURACIDADE. Quando falta qualquer um
+ * deles a avaliação ainda acontece — só que sem área física, sem divergência
+ * localizada e sem não contados. O líder continua precisando do consolidado, e
+ * é melhor entregar a planilha com as abas que existem e uma ressalva dizendo
+ * o que falta do que não entregar nada.
+ */
+export function montarWorkbookConsolidadoV21(
+  avaliacoes: InventoryCheckerEvaluation[],
+  ctx: ContextoConsolidado,
+): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+  const nomeDe = (e: InventoryCheckerEvaluation) => e.nome || e.input.nome || "sem nome";
+
+  const totalPecas = avaliacoes.reduce((s, e) => s + (e.input.qtde || 0), 0);
+  const totalErro = avaliacoes.reduce((s, e) => s + (e.input.erro || 0), 0);
+  const notas = avaliacoes.map((e) => e.scoreFinal).sort((a, b) => a - b);
+  const mediana = notas.length
+    ? notas.length % 2
+      ? notas[(notas.length - 1) / 2]
+      : (notas[notas.length / 2 - 1] + notas[notas.length / 2]) / 2
+    : 0;
+
+  const resumo: Linha[] = [
+    [`AVALIAÇÃO DE CONFERENTES — INVENTÁRIO ${ctx.loja}`],
+    [
+      [
+        `Data-base ${ctx.dataInventario}`,
+        `Operação ${ctx.operacao}`,
+        `Emissão ${new Date().toLocaleDateString("pt-BR")}`,
+        "Motor v2.1",
+      ].join(" · "),
+    ],
+    [],
+    ["Indicador", "Valor", "Fonte"],
+    ["Conferentes avaliados", avaliacoes.length, "PRODUÇÃO"],
+    ["Peças contadas", totalPecas, "PRODUÇÃO"],
+    ["Erro total (unidades)", totalErro, "PRODUÇÃO"],
+    ["Nota mediana da equipe", PCT(mediana), "Motor v2.1"],
+    [],
+    ["Score = Qualidade + Produtividade + Aderência, ponderados por perfil de operação"],
+  ];
+
+  const ranking: Linha[] = [
+    ["RANKING GERAL — MOTOR v2.1"],
+    [],
+    [
+      "Posição",
+      "Conferente",
+      "Matrícula",
+      "Vínculo",
+      "Score",
+      "Nível",
+      "Qualidade",
+      "Produtividade",
+      "Aderência",
+      "% erro",
+      "% bloco",
+      "Sinalizações",
+      "Encaminhamento",
+    ],
+  ];
+  avaliacoes.forEach((e, i) => {
+    ranking.push([
+      i + 1,
+      nomeDe(e),
+      e.matricula ?? e.input.matricula ?? "",
+      e.modalidade ?? "não conferida",
+      PCT(e.scoreFinal),
+      e.nivel,
+      Math.round(e.scoreQualidade),
+      Math.round(e.scoreProdutividade),
+      Math.round(e.scoreAderencia),
+      PCT(e.pctErro),
+      PCT(e.pctBloco),
+      e.tags.join(" | "),
+      encaminhamento(e.scoreFinal),
+    ]);
+  });
+
+  const porConferente: Linha[] = [
+    ["FICHA POR CONFERENTE — MOTOR v2.1"],
+    [],
+    [
+      "Nome",
+      "Matrícula",
+      "Vínculo",
+      "Peças",
+      "Peças 1a1",
+      "Produtividade (peças/h)",
+      "Erro (un)",
+      "% erro",
+      "% bloco",
+      "Score",
+      "Nível",
+      "Áreas com violação de bloco",
+    ],
+  ];
+  for (const e of avaliacoes) {
+    const violacoes = e.violacoes ?? e.violacoesBloco ?? [];
+    porConferente.push([
+      nomeDe(e),
+      e.matricula ?? e.input.matricula ?? "",
+      e.modalidade ?? "não conferida",
+      e.input.qtde ?? 0,
+      e.input.qtde1a1 ?? 0,
+      PCT(e.input.produtividade ?? 0),
+      e.input.erro ?? 0,
+      PCT(e.pctErro),
+      PCT(e.pctBloco),
+      PCT(e.scoreFinal),
+      e.nivel,
+      violacoes.map((v) => v.area_nome ?? v.area ?? "").filter(Boolean).join(" · "),
+    ]);
+  }
+
+  const secoes: Linha[] = [
+    ["ACURÁCIA POR ÁREA"],
+    ["Vem do PRODUÇÃO_SEÇÃO; o bloco% por área é calculado das bipadas quando há .prc."],
+    [],
+    ["Conferente", "Área", "Peças", "Erro (un)", "% erro", "% bloco", "Limite bloco", "Violação"],
+  ];
+  for (const e of avaliacoes) {
+    for (const s of e.secoes ?? []) {
+      secoes.push([
+        nomeDe(e),
+        s.area_nome ?? s.area ?? "",
+        s.qtd_c1 ?? s.totalC1 ?? s.totalItens ?? 0,
+        s.erros ?? 0,
+        PCT(s.pctErro ?? 0),
+        PCT(s.bloco_pct ?? s.pctBloco ?? 0),
+        s.limite_bloco ?? "",
+        s.violacao_bloco ? "SIM" : "não",
+      ]);
+    }
+  }
+  if (secoes.length === 4) secoes.push(["Sem PRODUÇÃO_SEÇÃO anexado."]);
+
+  /**
+   * Advertências de bloco, ordenadas pela gravidade.
+   *
+   * Fica em aba própria e não diluída no ranking porque tolerância zero é
+   * restrição sanitária, não desempenho: quem lê essa aba precisa levar a
+   * ocorrência ao RT farmacêutico do cliente, e isso não pode depender de
+   * alguém reparar numa coluna lateral da Por_Conferente.
+   */
+  const advertencias: Linha[] = [
+    ["ADVERTÊNCIAS DE CONTAGEM EM BLOCO"],
+    [
+      "TOLERÂNCIA ZERO = área de restrição sanitária (ANVISA/SNGPC). " +
+        "Encaminhar ao RT farmacêutico do cliente.",
+    ],
+    [],
+    [
+      "Gravidade",
+      "Conferente",
+      "Matrícula",
+      "Vínculo",
+      "Área",
+      "Limite",
+      "Realizado",
+      "Penalidade (pts de Qualidade)",
+    ],
+  ];
+  const ORDEM_GRAVIDADE: GravidadeBloco[] = [
+    "TOLERANCIA_ZERO_GRAVE",
+    "TOLERANCIA_ZERO_ALTA",
+    "TOLERANCIA_ZERO",
+    "AREA_CRITICA",
+    "EXCESSO_ALTO",
+    "EXCESSO_LEVE",
+  ];
+  const ROTULO_GRAVIDADE: Record<GravidadeBloco, string> = {
+    TOLERANCIA_ZERO_GRAVE: "TOLERÂNCIA ZERO — GRAVE (>20%)",
+    TOLERANCIA_ZERO_ALTA: "TOLERÂNCIA ZERO — ALTA (>5%)",
+    TOLERANCIA_ZERO: "TOLERÂNCIA ZERO",
+    AREA_CRITICA: "ÁREA CRÍTICA",
+    EXCESSO_ALTO: "excesso alto",
+    EXCESSO_LEVE: "excesso leve",
+  };
+  const linhasAdvertencia = avaliacoes
+    .flatMap((e) =>
+      (e.violacoes ?? e.violacoesBloco ?? []).map((v) => ({ e, v, g: gravidadeDaViolacao(v) })),
+    )
+    .sort((a, b) => ORDEM_GRAVIDADE.indexOf(a.g) - ORDEM_GRAVIDADE.indexOf(b.g));
+  for (const { e, v, g } of linhasAdvertencia) {
+    const limite = getViolacaoLimitePct(v);
+    advertencias.push([
+      ROTULO_GRAVIDADE[g],
+      nomeDe(e),
+      e.matricula ?? e.input.matricula ?? "",
+      e.modalidade ?? "não conferida",
+      getViolacaoArea(v),
+      limite === 0 ? "bloco proibido" : PCT(limite),
+      PCT(getViolacaoRealPct(v)),
+      penalidadeDaViolacao(v),
+    ]);
+  }
+  if (linhasAdvertencia.length === 0) {
+    advertencias.push(["Nenhuma violação de limite de bloco no evento."]);
+  }
+
+  const ressalvas: Linha[] = [
+    ["RESSALVAS E LIMITES DA ANÁLISE"],
+    [],
+    ["Ressalva", "Efeito"],
+    [
+      "Avaliação gerada pelo motor v2.1",
+      "Faltou pelo menos um dos três arquivos do v3 (.prc, PROD_SEÇÃO, ACURACIDADE)",
+    ],
+    ["Sem mapa de área física", "O erro não é localizado por rua/parede, apenas por seção"],
+    ["Sem atribuição item a item", "A divergência não é ligada ao produto e à hora da bipada"],
+    ["Sem capítulo de não contados", "A cobertura não entra na nota"],
+    ["Sem valorização em reais", "O eixo de valor não é calculado"],
+    [
+      "Como habilitar",
+      "Anexar .prc, PROD_SEÇÃO e ACURACIDADE e processar de novo — a planilha sai com as oito abas",
+    ],
+  ];
+
+  const abas: [string, Linha[], number[]][] = [
+    ["Resumo", resumo, [42, 18, 34]],
+    ["Ranking", ranking, [8, 30, 16, 16, 8, 14, 12, 14, 12, 10, 10, 40, 40]],
+    ["Por_Conferente", porConferente, [30, 16, 16, 10, 12, 20, 10, 10, 10, 8, 14, 40]],
+    ["Secoes", secoes, [30, 26, 10, 10, 10, 10, 12, 10]],
+    ["Advertencias", advertencias, [32, 30, 16, 16, 26, 16, 12, 28]],
+    ["Ressalvas", ressalvas, [40, 70]],
+    ["Metodologia", abaMetodologia(ctx), [40, 70]],
+  ];
+  for (const [nome, linhas, larguras] of abas) {
+    const ws = XLSX.utils.aoa_to_sheet(linhas);
+    aplicarLarguras(ws, larguras);
+    XLSX.utils.book_append_sheet(wb, ws, nome);
+  }
+  return wb;
 }

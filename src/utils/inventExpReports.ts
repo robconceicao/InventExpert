@@ -1,4 +1,10 @@
-import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
+import {
+  INVENTORY_PROFILES,
+  ehToleranciaZero,
+  gravidadeDaViolacao,
+  penalidadeDaViolacao,
+  type GravidadeBloco,
+} from "../config/inventoryEvalConfig";
 import {
   getSectionAreaNome,
   getSectionBlocoPct,
@@ -150,17 +156,53 @@ function statusSecao(sec: SectionAccuracyRecord): string {
   return "✅";
 }
 
+/**
+ * Advertência de bloco, escalonada pela gravidade e adaptada à modalidade.
+ *
+ * Área de tolerância zero (medicamentos, controlados, termolábeis) recebe
+ * enquadramento sanitário explícito: a restrição não é convenção interna da
+ * operação, é rastreabilidade exigida pela ANVISA/SNGPC, e a ocorrência sobe
+ * para o RT farmacêutico do cliente independentemente do vínculo de quem
+ * contou. Acima de 20% o texto deixa de falar em engano e passa a falar em
+ * método de contagem, porque é o que o número mostra.
+ *
+ * A regra de linguagem do FREE continua valendo em qualquer gravidade: nada de
+ * "colaborador", "medida disciplinar", "Código de Conduta" ou "convocação".
+ */
 function textoAlertaModalidade(
   mod: ModalidadeContrato,
   area: string,
   limite: number,
   real: number,
+  gravidade: GravidadeBloco,
 ): string {
   const canon = normalizeModalidade(mod);
-  const header =
-    `🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA\n\n` +
-    `Área: ${area}\n` +
-    `Limite permitido: ${limite}%  |  Seu percentual: ${real.toFixed(1)}%\n\n`;
+  const zero = ehToleranciaZero(gravidade);
+  const grave = gravidade === "TOLERANCIA_ZERO_GRAVE";
+
+  const titulo = zero
+    ? `🚨 ADVERTÊNCIA — CONTAGEM EM BLOCO EM ÁREA DE TOLERÂNCIA ZERO`
+    : `🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA`;
+
+  const linhaLimite = zero
+    ? `Limite permitido: 0% (bloco proibido)  |  Seu percentual: ${real.toFixed(1)}%\n`
+    : `Limite permitido: ${limite}%  |  Seu percentual: ${real.toFixed(1)}%\n`;
+
+  let header = `${titulo}\n\n` + `Área: ${area}\n` + linhaLimite;
+
+  if (zero) {
+    header +=
+      `\nEsta é uma área de restrição sanitária: a contagem precisa ser peça a\n` +
+      `peça porque o estoque dela é controle legal (ANVISA/SNGPC), e a\n` +
+      `divergência não se resolve com ajuste — exige justificativa formal.\n` +
+      `A ocorrência foi encaminhada ao RT farmacêutico do cliente.\n`;
+    if (grave) {
+      header +=
+        `\nO percentual acima de 20% indica que a área foi contada em bloco\n` +
+        `como método, e não por engano pontual.\n`;
+    }
+  }
+  header += `\n`;
 
   if (canon === "CLT") {
     return (
@@ -259,6 +301,7 @@ export function generateInventExpIndividualReportText(
         getViolacaoArea(v),
         getViolacaoLimitePct(v),
         getViolacaoRealPct(v),
+        gravidadeDaViolacao(v),
       );
       r += `\n`;
     }
@@ -279,12 +322,15 @@ export function generateInventExpIndividualReportText(
       const vLimit = getViolacaoLimitePct(v);
       const vReal = getViolacaoRealPct(v);
       const vCritica = getViolacaoCritica(v);
+      // Mostrar os pontos torna a advertência auditável: o conferente vê o
+      // tamanho do desconto e por que uma área pesou mais que outra.
+      const pontos = penalidadeDaViolacao(v);
       if (vLimit === 0 && vCritica) {
-        r += `- **${vArea}** | PROIBIDO BLOCO | Realizado ${vReal.toFixed(1)}%\n`;
+        r += `- **${vArea}** | PROIBIDO BLOCO | Realizado ${vReal.toFixed(1)}% | −${pontos} pts de Qualidade\n`;
       } else {
         r += `- **${vArea}** | Limite ${vLimit.toFixed(1)}% | Realizado ${vReal.toFixed(1)}%${
           vCritica ? " (CRÍTICA)" : ""
-        }\n`;
+        } | −${pontos} pts de Qualidade\n`;
       }
     });
     r += `\n`;

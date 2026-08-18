@@ -204,17 +204,33 @@ export function gerarRelatorioV3Texto(
   }
 
   // --- não contados ---
-  const ncAlta = a.naoContados.filter((n) => n.nivel === 'ALTA');
+  // Só o item recuperado na auditoria pesa: ele estava na prateleira e não foi
+  // bipado. O que permaneceu perdido pode ser erro de saldo do cliente, e a
+  // ficha precisa deixar essa diferença explícita — é o que sustenta a conversa.
+  const ncPesam = a.naoContados.filter((n) => n.peso > 0);
   if (a.naoContados.length > 0) {
     r += `## 📦 PRODUTOS SEM CONTAGEM\n\n`;
-    for (const n of a.naoContados) {
-      const marca = n.nivel === 'ALTA' ? '' : ' (indicativo, não pesa na nota)';
-      r += `- ${n.descricao} — ${n.area} · ${reais(n.valor)}${marca}\n`;
-      r += `  ${n.base}\n`;
+
+    if (ncPesam.length > 0) {
+      r += `**Encontrados na conferência do cliente — não foram bipados:**\n\n`;
+      for (const n of ncPesam) {
+        r += `- ${n.descricao} — ${n.area} · ${reais(n.valor)}\n`;
+        r += `  ${n.base}\n`;
+      }
+      r += `\n`;
     }
-    r += `\n`;
-    if (ncAlta.length === 0) {
-      r += `Nenhum destes itens tem localização confirmada; servem para dirigir recontagem.\n\n`;
+
+    const ncNaoPesam = a.naoContados.filter((n) => n.peso <= 0);
+    if (ncNaoPesam.length > 0) {
+      r += `**Sem contagem e não localizados** — não entram na sua nota:\n\n`;
+      for (const n of ncNaoPesam) {
+        r += `- ${n.descricao} — ${n.area} · ${reais(n.valor)}\n`;
+        r += `  ${n.base}\n`;
+      }
+      r += `\n`;
+      r += free
+        ? `Estes itens não foram localizados nem na conferência do cliente: não há como afirmar que estavam na prateleira.\n\n`
+        : `Estes itens não foram localizados nem na conferência do cliente. Podem ser diferença de saldo do sistema, e por isso não pesam na avaliação.\n\n`;
     }
   }
 

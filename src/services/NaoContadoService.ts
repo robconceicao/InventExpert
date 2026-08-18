@@ -46,6 +46,13 @@ export interface NaoContadoInput {
   valor: number;
   /** Código do departamento, quando disponível. */
   departamento?: string;
+  /**
+   * Nome do departamento vindo do próprio relatório ("COMPLEMENTOS
+   * VITAMINICOS"). É o vínculo mais forte com a área física: o departamento
+   * ocupa um trecho contínuo da loja, então onde ele foi contado é onde o
+   * produto estava.
+   */
+  departamentoNome?: string;
   familia?: string;
 }
 
@@ -114,6 +121,17 @@ function detectarTrocaEan(
   return null;
 }
 
+/** Rótulo comparável entre vocabulários diferentes (acento, plural, espaço). */
+function rotulo(v: string): string {
+  return v
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function atribuirNaoContados(
   itens: NaoContadoInput[],
   acuracidade: AcuracidadeRow[],
@@ -166,7 +184,11 @@ export function atribuirNaoContados(
   const saida: NaoContadoAtribuido[] = [];
 
   for (const item of itens) {
-    const pesoBase = item.situacao === 'RECUPERADO' ? 0.5 : 1;
+    // Só a falha COMPROVADA pesa. Item recuperado na auditoria dirigida estava
+    // na prateleira e ninguém bipou: a falha de contagem é certa. Item que
+    // permaneceu perdido pode ser erro de estoque do cliente — não há como
+    // provar que alguém passou por ele, e ninguém é penalizado por isso.
+    const pesoBase = item.situacao === 'RECUPERADO' ? 1 : 0;
 
     // 1) troca de EAN comprovada
     const troca = detectarTrocaEan(item, divergencias);
@@ -213,7 +235,48 @@ export function atribuirNaoContados(
       continue;
     }
 
-    // 3) família do produto
+    // 3) departamento do relatório
+    //
+    // O departamento ocupa um trecho contínuo da loja: onde ele foi contado é
+    // onde o produto estava. É o sinal mais forte depois da marca, e cobre
+    // justamente os casos em que a marca não aparece em nenhum item contado.
+    //
+    // A ponte é o nome: o relatório traz "COMPLEMENTOS VITAMINICOS" e o
+    // CadProd traz a família com o mesmo vocabulário. Por ser vínculo de
+    // rótulo — e não de produto — o resultado nunca sobe a ALTA: dirige
+    // recontagem, não penaliza.
+    if (item.departamentoNome) {
+      const alvo = rotulo(item.departamentoNome);
+      let secoesDep: Map<string, number> | undefined;
+      let familiaCasada = '';
+
+      for (const [familia, secoes] of familiaSecoes) {
+        if (rotulo(familia) === alvo) {
+          secoesDep = secoes;
+          familiaCasada = familia;
+          break;
+        }
+      }
+
+      if (secoesDep && secoesDep.size > 0) {
+        const r = resolverPorSecoes(secoesDep);
+        const forte = r.concentracao >= concentracao;
+        saida.push({
+          ...item,
+          nivel: forte ? 'MEDIA' : 'BAIXA',
+          area: r.area,
+          matricula: r.matricula,
+          base:
+            `departamento "${item.departamentoNome}" (${familiaCasada}) · ` +
+            `${Math.round(r.concentracao * 100)}% das bipadas da família nesta área`,
+          secoesReferencia: r.secoes,
+          peso: 0,
+        });
+        continue;
+      }
+    }
+
+    // 4) família do produto
     let porFamilia: NaoContadoAtribuido | null = null;
     for (const ean of item.eans) {
       const f = opcoes.familiaPorEan?.get(ean);
@@ -238,7 +301,8 @@ export function atribuirNaoContados(
         nivel: null,
         area: '—',
         matricula: null,
-        base: 'sem produto da mesma marca ou família contado — não atribuível',
+        base:
+          'sem produto da mesma marca, departamento ou família contado — não atribuível',
         secoesReferencia: [],
         peso: 0,
       },
@@ -250,8 +314,13 @@ export function atribuirNaoContados(
 
 /**
  * Cobertura de um conferente: 100 menos a fatia do valor contado que ficou de
- * fora por não contados de confiança ALTA. Recuperado na auditoria entra com
- * metade do peso — a falha de contagem foi a mesma, o prejuízo não.
+ * fora por **falha de contagem comprovada** — item recuperado na auditoria
+ * dirigida, com confiança ALTA.
+ *
+ * Produto que permaneceu não encontrado não entra: não há prova de que estava
+ * na prateleira, e o mais provável é erro de saldo do cliente. Ele continua no
+ * relatório como informação de cobertura do inventário, sem dono e sem
+ * penalidade.
  */
 export function calcularCobertura(
   naoContados: NaoContadoAtribuido[],

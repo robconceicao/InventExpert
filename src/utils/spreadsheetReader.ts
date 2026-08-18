@@ -27,19 +27,38 @@ export class ErroLeituraArquivo extends Error {
   }
 }
 
-/** Bytes do arquivo já lidos, com o formato reconhecido pelo conteúdo. */
+/**
+ * Arquivo lido, com o formato reconhecido pelo conteúdo.
+ *
+ * `bytes()` decodifica sob demanda e memoiza. Planilha binária (XLS/XLSX) vai
+ * direto do `base64` para o SheetJS e **nunca** paga esse custo: decodificar um
+ * ACURACIDADE de 6 MB só para farejar 4 KB de assinatura chegava a travar o
+ * aparelho sem mensagem nenhuma.
+ */
 export type ArquivoLido = {
   /** Conteúdo original em base64 — caminho direto para o SheetJS binário. */
   base64: string;
-  bytes: Uint8Array;
+  /** Primeiros bytes, o suficiente para identificar o formato. */
+  amostra: Uint8Array;
   formato: FormatoArquivo;
+  /** Bytes completos, decodificados na primeira chamada. */
+  bytes: () => Uint8Array;
+  /** Tamanho aproximado do arquivo, sem decodificar. */
+  tamanhoBytes: number;
 };
 
-export function identificarArquivo(base64: string, bytes: Uint8Array): ArquivoLido {
+export function identificarArquivo(
+  base64: string,
+  decodificar: (limite?: number) => Uint8Array,
+): ArquivoLido {
+  const amostra = decodificar(BYTES_DE_DETECCAO);
+  let completo: Uint8Array | null = null;
   return {
     base64,
-    bytes,
-    formato: detectarFormato(bytes.subarray(0, BYTES_DE_DETECCAO)),
+    amostra,
+    formato: detectarFormato(amostra),
+    bytes: () => (completo ??= decodificar()),
+    tamanhoBytes: Math.floor((base64.length * 3) / 4),
   };
 }
 
@@ -49,7 +68,7 @@ export function identificarArquivo(base64: string, bytes: Uint8Array): ArquivoLi
  * `rotulo` é só o nome exibido na mensagem de erro.
  */
 export function abrirComoWorkbook(arquivo: ArquivoLido, rotulo: string): XLSX.WorkBook {
-  if (arquivo.bytes.length === 0) {
+  if (arquivo.tamanhoBytes === 0) {
     throw new ErroLeituraArquivo(`O arquivo "${rotulo}" está vazio.`);
   }
 
@@ -57,14 +76,22 @@ export function abrirComoWorkbook(arquivo: ArquivoLido, rotulo: string): XLSX.Wo
     switch (arquivo.formato) {
       case "XLSX":
       case "XLS":
-        return XLSX.read(arquivo.base64, { type: "base64" });
+        // Fórmula, estilo e HTML de célula não são usados por nenhum parser do
+        // app e multiplicam a memória num relatório de milhares de linhas —
+        // que é justamente onde a leitura travava no aparelho.
+        return XLSX.read(arquivo.base64, {
+          type: "base64",
+          cellFormula: false,
+          cellHTML: false,
+          cellStyles: false,
+        });
 
       case "HTML":
       case "XML": {
         // Export "Excel" do Crystal Reports: é HTML (às vezes MHTML) com
         // extensão .xls. O SheetJS só entende isso como string, nunca como
         // base64 binário — e o texto precisa vir com o encoding já resolvido.
-        const texto = decodificarTexto(arquivo.bytes);
+        const texto = decodificarTexto(arquivo.bytes());
         const html = extrairHtmlDeMhtml(texto) ?? texto;
         // `raw: true` mantém a célula como texto: sem isso o SheetJS decide o
         // separador decimal por conta própria e "1,73%" chega ao parser como
@@ -74,7 +101,7 @@ export function abrirComoWorkbook(arquivo: ArquivoLido, rotulo: string): XLSX.Wo
 
       default:
         // CSV/TXT também abrem no SheetJS: ele detecta o separador sozinho.
-        return XLSX.read(decodificarTexto(arquivo.bytes), { type: "string", raw: true });
+        return XLSX.read(decodificarTexto(arquivo.bytes()), { type: "string", raw: true });
     }
   } catch (erro) {
     if (erro instanceof ErroLeituraArquivo) throw erro;
@@ -101,11 +128,11 @@ export function primeiraPlanilhaParaCsv(workbook: XLSX.WorkBook): string {
  * cru, já decodificado com o encoding certo.
  */
 export function arquivoParaTextoTabular(arquivo: ArquivoLido, rotulo: string): string {
-  if (arquivo.bytes.length === 0) {
+  if (arquivo.tamanhoBytes === 0) {
     throw new ErroLeituraArquivo(`O arquivo "${rotulo}" está vazio.`);
   }
   if (arquivo.formato === "TEXTO") {
-    return decodificarTexto(arquivo.bytes);
+    return decodificarTexto(arquivo.bytes());
   }
   return primeiraPlanilhaParaCsv(abrirComoWorkbook(arquivo, rotulo));
 }

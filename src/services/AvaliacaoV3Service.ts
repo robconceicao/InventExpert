@@ -96,6 +96,11 @@ export interface AvaliacaoV3 {
 
   divergencias: DivergenciaAtribuida[];
   naoContados: NaoContadoAtribuido[];
+  /**
+   * Falhas de contagem comprovadas: item recuperado na auditoria dirigida e
+   * atribuído com confiança ALTA. São os únicos não contados que pesam na nota
+   * — produto que permaneceu perdido não penaliza ninguém.
+   */
   naoContadosAlta: number;
   divergenciasControlados: number;
 
@@ -198,7 +203,9 @@ export function avaliarConferenteV3(
     referencia > 0 ? Math.min(100, (produtividade / referencia) * 100) : 100;
 
   const controlados = minhasDiv.filter((d) => d.controlado).length;
-  const alta = meusNC.filter((n) => n.nivel === 'ALTA');
+  // `peso` já vale 0 para o que permaneceu não encontrado; a penalidade e a
+  // contagem exibida seguem a mesma regra, sem divergir do que a nota usou.
+  const alta = meusNC.filter((n) => n.nivel === 'ALTA' && n.peso > 0);
   const penalidade =
     controlados * AVALIACAO_V3.penalidadeControlado +
     alta.reduce((s, n) => s + AVALIACAO_V3.penalidadeNaoContadoAlta * n.peso, 0);

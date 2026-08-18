@@ -54,6 +54,7 @@ import {
 } from "../utils/export";
 import {
     montarWorkbookConsolidado,
+    montarWorkbookConsolidadoV21,
     nomeArquivoConsolidado,
 } from "../utils/avaliacaoConsolidadaXlsx";
 import { generateInventExpIndividualReportHtml } from "../utils/inventExpReportHtml";
@@ -69,6 +70,7 @@ import {
     filtrarSecoesDoConferente,
     resolverAreasNasContagens,
 } from "../utils/inventoryImportParsers";
+import { areasSemLimiteCadastrado } from "../utils/inventExpUtils";
 import { parseInventoryCheckersCsv } from "../utils/parsers";
 import { parsePrcFiles } from "../utils/prcParser";
 import { pickSheetAsMatrix } from "../utils/excelParser";
@@ -208,6 +210,33 @@ export default function InventExpImportScreen() {
   const [publishing, setPublishing] = useState(false);
   /** Trava o botão enquanto as fichas da equipe são renderizadas. */
   const [gerandoFichas, setGerandoFichas] = useState(false);
+  /** Áreas do inventário sem limite de bloco na tabela — bloco não verificado. */
+  const [areasSemLimiteBloco, setAreasSemLimiteBloco] = useState<string[]>([]);
+  /**
+   * Rótulo do arquivo sendo lido, ou null.
+   *
+   * Um ACURACIDADE de 6 MB leva vários segundos entre escolher o arquivo e o
+   * botão ficar verde. Sem sinal na tela, a leitura em andamento é
+   * indistinguível de "não aconteceu nada" — foi assim que uma leitura lenta
+   * passou por arquivo não anexado.
+   */
+  const [lendoArquivo, setLendoArquivo] = useState<string | null>(null);
+
+  /** Envolve um anexo com o aviso de "lendo" e um erro sempre visível. */
+  const comLeitura = async (rotulo: string, fn: () => Promise<void>) => {
+    if (lendoArquivo) {
+      Alert.alert("Aguarde", `Ainda lendo ${lendoArquivo}.`);
+      return;
+    }
+    setLendoArquivo(rotulo);
+    try {
+      await fn();
+    } catch (e: any) {
+      Alert.alert("Erro", `Falha ao ler ${rotulo}: ${e?.message ?? e}`);
+    } finally {
+      setLendoArquivo(null);
+    }
+  };
 
   const handlePickFile = async () => {
     try {
@@ -300,11 +329,16 @@ export default function InventExpImportScreen() {
    * Um único arquivo alimenta os dois motores: as linhas viram `ProdSecaoRow`
    * para o mapa de áreas do v3 e `SectionAccuracyRecord` para o motor v2.1.
    */
-  const handlePickProducaoSecao = async () => {
+  const handlePickProducaoSecao = async () =>
+    comLeitura("PROD_SEÇÃO", async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
 
       const linhas = parseProdSecaoMatrix(matriz);
       if (linhas.length === 0) {
@@ -324,56 +358,83 @@ export default function InventExpImportScreen() {
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler PROD_SEÇÃO: " + (e?.message ?? ""));
     }
-  };
+  });
 
-  const handlePickAcuracidade = async () => {
+  const handlePickAcuracidade = async () =>
+    comLeitura("ACURACIDADE", async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const linhas = parseAcuracidadeMatrix(matriz);
       setAcuracidade(linhas);
       const div = linhas.filter((l) => l.ajuste !== 0).length;
+      if (linhas.length === 0) {
+        Alert.alert(
+          "ACURACIDADE sem linhas",
+          `O cabeçalho foi encontrado em "${nome ?? "arquivo"}", mas nenhuma linha tinha SEÇÃO e EAN preenchidos.`,
+        );
+        return;
+      }
       Alert.alert(
         "ACURACIDADE carregado",
-        `${linhas.length.toLocaleString("pt-BR")} itens · ${div} com divergência`,
+        `${nome ?? "Arquivo"}\n${linhas.length.toLocaleString("pt-BR")} itens · ${div} com divergência`,
       );
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler ACURACIDADE: " + (e?.message ?? ""));
     }
-  };
+  });
 
-  const handlePickNaoContados = async () => {
+  const handlePickNaoContados = async () =>
+    comLeitura("NÃO CONTADOS", async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const itens = parseNaoContadosMatrix(matriz);
       setNaoContadosArq(itens);
       Alert.alert("NÃO CONTADOS carregado", `${itens.length} produto(s) sem coleta`);
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler NAO CONTADOS: " + (e?.message ?? ""));
     }
-  };
+  });
 
-  const handlePickDobro = async () => {
+  const handlePickDobro = async () =>
+    comLeitura("DOBRO", async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const linhas = parseDobroMatrix(matriz);
       setDobroRows(linhas);
       Alert.alert("DOBRO carregado", `${linhas.length} bipada(s) em duplicidade`);
     } catch {
       Alert.alert("Erro", "Falha ao ler DOBRO.");
     }
-  };
+  });
 
-  const handlePickBloco = async () => {
+  const handlePickBloco = async () =>
+    comLeitura("BLOCO", async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const linhas = parseBlocoMatrix(matriz);
       setBlocoRows(linhas);
       Alert.alert(
@@ -383,20 +444,25 @@ export default function InventExpImportScreen() {
     } catch {
       Alert.alert("Erro", "Falha ao ler BLOCO.");
     }
-  };
+  });
 
-  const handlePickControlados = async () => {
+  const handlePickControlados = async () =>
+    comLeitura("CONTROLADOS", async () => {
     try {
-      const { matriz, erro } = await pickSheetAsMatrix();
+      const { matriz, erro, cancelado, nome } = await pickSheetAsMatrix();
+      if (cancelado) return;
       if (erro) { Alert.alert("Erro", erro); return; }
-      if (matriz.length === 0) return;
+      if (matriz.length === 0) {
+        Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
+        return;
+      }
       const eans = parseControladosMatrix(matriz);
       setControlados(eans);
       Alert.alert("CONTROLADOS carregado", `${eans.size} código(s) de barras`);
     } catch {
       Alert.alert("Erro", "Falha ao ler CONTROLADOS.");
     }
-  };
+  });
 
   /** Arquivo de saldo/auditoria do CadProd — traz o custo unitário. */
   const handlePickSaldoAuditoria = async () => {
@@ -608,7 +674,7 @@ export default function InventExpImportScreen() {
       reconciliacaoOk: falhas.length === 0,
       falhasReconciliacao: falhas,
       naoContados: naoContados.length,
-      naoContadosAlta: naoContados.filter((n) => n.nivel === "ALTA").length,
+      naoContadosAlta: naoContados.filter((n) => n.nivel === "ALTA" && n.peso > 0).length,
       dobro: dobroRows.length,
       bloco: blocoRows.length > 0 ? conferirBloco(blocoRows, contagens) : null,
     });
@@ -696,6 +762,15 @@ export default function InventExpImportScreen() {
       if (!limites.length) {
         limites = getLimitesBlocoFallback(operationType);
       }
+
+      // Área sem limite cadastrado nao tem bloco verificado. Isso precisa
+      // aparecer: no L2601 só 3 das 25 areas casavam, e ANTIBIOTICOS, PSICO e
+      // THERMOLABS — todas criticas — passavam sem conferencia nenhuma.
+      const areasSemLimite = areasSemLimiteCadastrado(
+        [...new Set(producaoSecao.map((s) => s.area_nome ?? s.area ?? ""))],
+        limites,
+      );
+      setAreasSemLimiteBloco(areasSemLimite);
 
       // Resolve produto + área em todas as contagens .prc acumuladas
       let contagensAtualizadas = resolverAreasNasContagens(
@@ -912,14 +987,10 @@ export default function InventExpImportScreen() {
       ev.secoes,
       ev.violacoes,
     );
-    const safeName = (ev.input.nome || "conferente")
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "_")
-      .slice(0, 40);
     await sharePdfFromHtml(
-      `avaliacao_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`,
+      nomeArquivoFichaV21(ev),
       html,
-      "Exportar PDF Avaliação Individual",
+      "Exportar ficha de avaliação",
     );
   };
 
@@ -951,6 +1022,18 @@ export default function InventExpImportScreen() {
     return `Avaliacao_${a.matricula || "sem_matricula"}_${nome}.pdf`;
   };
 
+  /** Mesmo padrão de nome para as fichas do motor v2.1. */
+  const nomeArquivoFichaV21 = (ev: InventoryCheckerEvaluation) => {
+    const nome = (ev.nome || ev.input.nome || "conferente")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "_")
+      .slice(0, 40);
+    return `Avaliacao_${ev.matricula || ev.input.matricula || "sem_matricula"}_${nome}.pdf`;
+  };
+
   const exportarFichaV3 = async (a: AvaliacaoV3, posicao: number) => {
     const html = gerarRelatorioV3Html(a, contextoFichaV3(posicao));
     await sharePdfFromHtml(
@@ -975,6 +1058,59 @@ export default function InventExpImportScreen() {
   };
 
   /**
+   * Ficha de cada conferente, independentemente do motor que gerou a avaliação.
+   *
+   * O v3 exige `.prc` + PROD_SEÇÃO + ACURACIDADE. Quando falta algum, quem
+   * responde é o v2.1 — e o líder continua precisando entregar a ficha de cada
+   * pessoa. Amarrar os entregáveis só ao v3 deixava a tela sem nenhuma opção de
+   * download individual justamente no caminho mais comum.
+   */
+  type FichaEmitivel = {
+    chave: string;
+    nome: string;
+    nomeArquivo: string;
+    html: () => string;
+    texto: () => string;
+  };
+
+  const fichas: FichaEmitivel[] = useMemo(() => {
+    if (avaliacoesV3.length > 0) {
+      return avaliacoesV3.map((a, i) => ({
+        chave: a.matricula || a.nome,
+        nome: a.nome,
+        nomeArquivo: nomeArquivoFicha(a),
+        html: () => gerarRelatorioV3Html(a, contextoFichaV3(i + 1)),
+        texto: () => gerarRelatorioV3Texto(a, contextoFichaV3(i + 1)),
+      }));
+    }
+    return evaluations.map((ev, i) => ({
+      chave: ev.matricula || ev.input.nome,
+      nome: ev.nome || ev.input.nome,
+      nomeArquivo: nomeArquivoFichaV21(ev),
+      html: () =>
+        generateInventExpIndividualReportHtml(
+          operationType,
+          ev,
+          i + 1,
+          evaluations.length,
+          undefined,
+          ev.secoes,
+          ev.violacoes,
+        ),
+      texto: () =>
+        generateInventExpIndividualReportText(
+          operationType,
+          ev,
+          i + 1,
+          evaluations.length,
+          undefined,
+          ev.secoes,
+          ev.violacoes,
+        ),
+    }));
+  }, [avaliacoesV3, evaluations, operationType, medianaEquipe, publishRef]);
+
+  /**
    * Gera a ficha de todos os conferentes de uma vez.
    *
    * No Android o usuário escolhe a pasta uma única vez e os PDFs caem lá; na
@@ -982,7 +1118,7 @@ export default function InventExpImportScreen() {
    * conferente" viraria uma janela de compartilhamento por pessoa.
    */
   const handleGerarTodasAsFichas = async () => {
-    if (avaliacoesV3.length === 0) {
+    if (fichas.length === 0) {
       Alert.alert("Sem avaliações", "Processe a avaliação antes de gerar as fichas.");
       return;
     }
@@ -991,21 +1127,20 @@ export default function InventExpImportScreen() {
       const arquivos: ArquivoGerado[] = [];
       const semPdf: string[] = [];
 
-      for (let i = 0; i < avaliacoesV3.length; i += 1) {
-        const a = avaliacoesV3[i];
-        const html = gerarRelatorioV3Html(a, contextoFichaV3(i + 1));
+      for (const ficha of fichas) {
+        const html = ficha.html();
         const base64 = await renderizarPdfBase64(html);
         if (base64) {
           arquivos.push({
-            nome: nomeArquivoFicha(a),
+            nome: ficha.nomeArquivo,
             base64,
             mimeType: "application/pdf",
           });
         } else {
           // Web: o expo-print não gera PDF — entrega o HTML, que imprime igual.
-          semPdf.push(a.nome);
+          semPdf.push(ficha.nome);
           arquivos.push({
-            nome: nomeArquivoFicha(a).replace(/\.pdf$/i, ".html"),
+            nome: ficha.nomeArquivo.replace(/\.pdf$/i, ".html"),
             base64: btoaUtf8(html),
             mimeType: "text/html;charset=utf-8",
           });
@@ -1040,29 +1175,35 @@ export default function InventExpImportScreen() {
 
   /** Planilha consolidada — a visão do líder, com as oito abas de análise. */
   const handleExportarConsolidado = async () => {
-    if (avaliacoesV3.length === 0) {
-      Alert.alert(
-        "Sem avaliações",
-        "A avaliação geral usa o motor v3. Anexe .prc, PROD_SEÇÃO e ACURACIDADE e processe.",
-      );
+    if (avaliacoesV3.length === 0 && evaluations.length === 0) {
+      Alert.alert("Sem avaliações", "Processe a avaliação antes de gerar a planilha.");
       return;
     }
     try {
-      const wb = montarWorkbookConsolidado(avaliacoesV3, {
+      const base = {
         loja: lojaRef,
         dataInventario: publishDate,
         operacao: operationType,
         medianaEquipe,
-        diagnostico: diagV3
-          ? {
-              ...diagV3,
-              enderecosForaPadrao: prcInfo?.enderecosForaPadrao,
-              datasDistintas: prcInfo?.datas,
-              arquivosPrc: prcInfo?.count,
-            }
-          : null,
         emitidoPor: leaderName.trim() || undefined,
-      });
+      };
+      // Sem os três arquivos do v3 a planilha sai reduzida, com uma aba de
+      // ressalvas dizendo o que falta — melhor que não entregar nada ao líder.
+      const wb =
+        avaliacoesV3.length > 0
+          ? montarWorkbookConsolidado(avaliacoesV3, {
+              ...base,
+              diagnostico: diagV3
+                ? {
+                    ...diagV3,
+                    enderecosForaPadrao: prcInfo?.enderecosForaPadrao,
+                    datasDistintas: prcInfo?.datas,
+                    arquivosPrc: prcInfo?.count,
+                    areasSemLimiteBloco,
+                  }
+                : null,
+            })
+          : montarWorkbookConsolidadoV21(evaluations, base);
       await shareXlsxWorkbook(
         nomeArquivoConsolidado(lojaRef),
         wb,
@@ -1195,9 +1336,19 @@ export default function InventExpImportScreen() {
               <Ionicons name="grid-outline" size={20} color={prodSecaoRows.length ? "#059669" : "#2563EB"} />
               <Text style={[styles.btnAttachText, prodSecaoRows.length > 0 && styles.btnAttachTextGreen]}>PROD_SEÇÃO</Text>
             </Pressable>
-            <Pressable style={[styles.btnAttach, acuracidade.length > 0 && styles.btnAttachDone]} onPress={handlePickAcuracidade}>
+            <Pressable
+              style={[
+                styles.btnAttach,
+                acuracidade.length > 0 && styles.btnAttachDone,
+                lendoArquivo === "ACURACIDADE" && styles.btnDisabled,
+              ]}
+              onPress={handlePickAcuracidade}
+              disabled={lendoArquivo !== null}
+            >
               <Ionicons name="analytics-outline" size={20} color={acuracidade.length ? "#059669" : "#2563EB"} />
-              <Text style={[styles.btnAttachText, acuracidade.length > 0 && styles.btnAttachTextGreen]}>ACURACIDADE</Text>
+              <Text style={[styles.btnAttachText, acuracidade.length > 0 && styles.btnAttachTextGreen]}>
+                {lendoArquivo === "ACURACIDADE" ? "Lendo…" : "ACURACIDADE"}
+              </Text>
             </Pressable>
             <Pressable style={[styles.btnAttach, prcInfo && styles.btnAttachDone]} onPress={handlePickPrcFiles}>
               <Ionicons name="documents-outline" size={20} color={prcInfo ? "#059669" : "#2563EB"} />
@@ -1402,7 +1553,7 @@ export default function InventExpImportScreen() {
               {diagV3.compartilhadas > 0 ? ` · ${diagV3.compartilhadas} compartilhada(s)` : ""}
             </Text>
             <Text style={styles.prcPreview}>
-              Não contados: {diagV3.naoContados} · {diagV3.naoContadosAlta} com confiança
+              Não contados: {diagV3.naoContados} · {diagV3.naoContadosAlta} com falha comprovada · confiança
               ALTA (os únicos que pesam na nota)
             </Text>
             {diagV3.dobro > 0 && (
@@ -1482,13 +1633,19 @@ export default function InventExpImportScreen() {
           </View>
         )}
 
-        {avaliacoesV3.length > 0 && (
+        {fichas.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Entregáveis da avaliação</Text>
             <Text style={styles.subtitle}>
               Dois documentos, públicos diferentes: a ficha é do conferente, a
               planilha é do líder.
             </Text>
+            {avaliacoesV3.length === 0 && (
+              <Text style={styles.warnText}>
+                Motor v2.1: sem .prc, PROD_SEÇÃO e ACURACIDADE a ficha sai sem área
+                física, erro localizado e não contados — e a planilha, com menos abas.
+              </Text>
+            )}
 
             <Pressable
               style={[styles.btnPrimary, gerandoFichas && styles.btnDisabled]}
@@ -1499,7 +1656,7 @@ export default function InventExpImportScreen() {
               <Text style={styles.btnTextWhite}>
                 {gerandoFichas
                   ? "Gerando fichas…"
-                  : `Fichas de toda a equipe (${avaliacoesV3.length} PDF)`}
+                  : `Fichas de toda a equipe (${fichas.length} PDF)`}
               </Text>
             </Pressable>
             <Text style={styles.prcPreview}>
@@ -1527,6 +1684,16 @@ export default function InventExpImportScreen() {
               <Text style={styles.warnText}>
                 Preencha a referência (loja / evento) no fim da tela — ela nomeia os
                 arquivos e identifica o inventário nos cabeçalhos.
+              </Text>
+            )}
+
+            {areasSemLimiteBloco.length > 0 && (
+              <Text style={styles.warnText}>
+                ⚠ {areasSemLimiteBloco.length} área(s) sem limite de bloco cadastrado —
+                o bloco NÃO foi verificado nelas:{" "}
+                {areasSemLimiteBloco.slice(0, 8).join(", ")}
+                {areasSemLimiteBloco.length > 8 ? ` e mais ${areasSemLimiteBloco.length - 8}` : ""}.
+                Cadastre em limites_bloco_area antes de tratar a nota como final.
               </Text>
             )}
           </View>
@@ -1627,13 +1794,10 @@ export default function InventExpImportScreen() {
                 <Text style={[styles.th, { flex: 0.9 }]}>% Erro</Text>
                 <Text style={[styles.th, { flex: 1.1 }]}>Prod/h</Text>
                 <Text style={[styles.th, { flex: 1 }]}>Bloco%</Text>
+                <Text style={[styles.th, { flex: 1.2 }]}>Ficha</Text>
               </View>
               {evaluations.map((ev, index) => (
-                <Pressable
-                  key={ev.input.nome}
-                  style={styles.tableRow}
-                  onPress={() => handleSendIndividualWhatsApp(ev, index)}
-                >
+                <View key={ev.input.nome} style={styles.tableRow}>
                   <Text style={[styles.tdRank, { flex: 0.5 }]}>
                     {index + 1}º
                   </Text>
@@ -1657,7 +1821,25 @@ export default function InventExpImportScreen() {
                   <Text style={[styles.td, { flex: 1 }]}>
                     {ev.pctBloco.toFixed(1)}%
                   </Text>
-                </Pressable>
+                  <View style={[styles.v3Acoes, { flex: 1.2 }]}>
+                    <Pressable
+                      onPress={() => void handleExportIndividualPdf(ev, index)}
+                      hitSlop={8}
+                      style={styles.v3BotaoAcao}
+                      accessibilityLabel={`Baixar ficha de ${ev.input.nome}`}
+                    >
+                      <Ionicons name="document-text-outline" size={16} color="#1F3864" />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleSendIndividualWhatsApp(ev, index)}
+                      hitSlop={8}
+                      style={styles.v3BotaoAcao}
+                      accessibilityLabel={`Enviar ficha de ${ev.input.nome} por WhatsApp`}
+                    >
+                      <Ionicons name="logo-whatsapp" size={16} color="#128C7E" />
+                    </Pressable>
+                  </View>
+                </View>
               ))}
             </View>
 
@@ -1768,15 +1950,7 @@ export default function InventExpImportScreen() {
                 <Ionicons name="document-text-outline" size={20} color="#fff" />
                 <Text style={styles.btnTextWhite}>Relatório Gerencial</Text>
               </Pressable>
-              {evaluations[0] && (
-                <Pressable
-                  onPress={() => void handleExportIndividualPdf(evaluations[0], 0)}
-                  style={[styles.btnExport, { backgroundColor: "#b91c1c" }]}
-                >
-                  <Ionicons name="print-outline" size={20} color="#fff" />
-                  <Text style={styles.btnTextWhite}>PDF 1º ranking</Text>
-                </Pressable>
-              )}
+
             </View>
           </>
         )}

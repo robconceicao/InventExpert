@@ -42,6 +42,15 @@ correta, já aplicada:
 | 13 | `mover_pg_trgm_para_schema_extensions` | pg_trgm sai do schema exposto |
 | 14 | `attendance_stats_sobre_field_events_e_kinds_h_i_j` | consolida presença em field_events; libera reportH/I/J |
 
+**Pendente de aplicação:** `migration_limites_bloco_area_patch2.sql` — revisão
+dos limites de bloco de 2026-08 (`docs/LIMITES_BLOCO_FARMACIA.md`). Cadastra
+as áreas reais que nunca tiveram linha na tabela (`PSICO`, `THERMOLABS`,
+`VACINAS` e as variantes de nome das paredes, ilhas e estoques) e revisa
+BALCÃO, ATRÁS DO CAIXA, CARTELADO, ILHAS e DERMO. Enquanto não for aplicada, o
+app usa o fallback de `inventoryEvalConfig.ts`, que já está com os valores
+novos — os dois só divergem se a tabela remota estiver populada com o seed
+antigo, e nesse caso **a tabela vence**.
+
 **`harden` vem antes de `cleanup`**, apesar dos nomes. O cleanup revoga
 permissões das funções `is_staff_*` que o harden cria; na ordem alfabética
 falharia com `function does not exist`.

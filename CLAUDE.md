@@ -94,8 +94,10 @@ sai ora como .xls binário, ora como tabela HTML com extensão .xls, e o Android
 entrega o arquivo sem extensão no cache do picker. Formato TEXTO vai para
 `csvParaMatriz()`; o resto vai para o SheetJS.
 
-No NAO CONTADOS o cabeçalho e os dados saem desalinhados entre si: a descrição é
-a maior célula de texto da linha, e o valor é o último número. Índice fixo quebra.
+No NAO CONTADOS o cabeçalho e os dados saem desalinhados por uma coluna: a
+descrição fica à esquerda do rótulo e o preço à direita. Procurar **perto** do
+índice do cabeçalho, nunca nele nem na "maior célula de texto" — o nome do
+departamento é mais longo que a descrição do produto e vencia.
 
 ### Avaliação — base v2.1 (2026-07)
 
@@ -154,6 +156,7 @@ supabase/
 ├── migration_campos_adicionais.sql            ← campos extras (codigo_loja, segmento)
 ├── migration_limites_bloco_area.sql           ← limites de bloco por área
 ├── migration_limites_bloco_area_patch1.sql    ← upsert seed + alias OTC + RLS
+├── migration_limites_bloco_area_patch2.sql    ← revisão 2026-08 dos limites (docs/LIMITES_BLOCO_FARMACIA.md)
 ├── migration_secao_lookup.sql                 ← lookup seção código → nome
 ├── migration_colaboradores_modalidade.sql      ← modalidade de contratação + RPC
 ├── migration_attendance_stats_field_events.sql ← presença em field_events + kinds H/I/J
@@ -188,6 +191,17 @@ Quatro componentes: **Qualidade**, **Produtividade**, **Aderência ao Método**,
 **Regra absoluta:** Qualidade **nunca pode ser 100** quando há violação de bloco.
 Assertion presente em `InventoryEvaluationService.ts`.
 
+**Penalidade escalonada (`classificarGravidadeBloco`).** Área de tolerância
+zero vale 20 pts até 5% de bloco, 30 acima de 5% e 40 acima de 20% — antes eram
+20 fixos, e 0,5% de MEDICAMENTOS pesava o mesmo que 16%. Área crítica de limite
+> 0 (dermo, infantil, OTC) vale 15. Não-crítica segue em 10 / 5.
+
+A gravidade é fonte única para a nota, o texto da advertência e o ícone da
+ficha. Tolerância zero recebe **advertência com enquadramento sanitário**
+(ANVISA/SNGPC + encaminhamento ao RT farmacêutico do cliente) nos três
+vínculos — a restrição é da ANVISA, não do contrato. Só a *consequência* muda
+por modalidade, e o FREE continua sem termo de vínculo.
+
 ### Bloco por área — Farmácia
 
 Limites armazenados em `limites_bloco_area` (Supabase). Áreas críticas (limite 0%):
@@ -210,8 +224,17 @@ o nome da área do XLS ou do `.prc`. A tabela de aliases cobre:
 'P OTC'            → 'MEDICAMENTOS OTC'
 ```
 
-Se uma área chegar sem match na tabela `limites_bloco_area`, emitir
-`console.warn` — nunca falhar silenciosamente.
+Comparar área **sempre por `mesmaArea()`/`chaveArea()`**, nunca por
+`toUpperCase()` literal: a tabela usa acento ("ANTIBIÓTICOS", "TERMOLÁBEIS",
+"ATRÁS DE CAIXA") e o relatório do sistema não usa.
+
+Área sem match na tabela **não tem bloco verificado**. Isso não pode ficar só
+num `console.warn`: `areasSemLimiteCadastrado()` alimenta o aviso da tela e a
+aba Ressalvas do consolidado.
+
+> Conferido no L2601: das 25 áreas reais, **3 casavam**. ANTIBIOTICOS caía por
+> acento; PSICO, THERMOLABS e VACINAS — todas críticas de limite 0% — não têm
+> correspondente na tabela. O bloco dessas áreas nunca foi verificado.
 
 ### Relatório por modalidade de contrato
 
@@ -266,7 +289,7 @@ objeto de opções no estilo expo-speech — causa crash em produção
 | `RELATORIOS/ACURACIDADE.xls` | XLS (Crystal Reports) | Por SEÇÃO + EAN: C1, A1/A2/A3, FINAL, AJST(QTD) — base da atribuição de erro |
 | `RELATORIOS/NAO CONTADOS.xls` | XLS (Crystal Reports) | Produtos com saldo em sistema e sem coleta |
 | `RELATORIOS/DOBRO.xls` | XLS (Crystal Reports) | Bipadas repetidas — indicador de método, não erro de quantidade |
-| `RELATORIOS/BLOCO.xls` | XLS (Crystal Reports) | Seção + CPF + EAN na mesma linha — **conferência independente** da seção e da regra de bloco |
+| `RELATORIOS/BLOCO.xls` | XLS (Crystal Reports) | Seção + CPF + EAN + família + qtde — **conferência independente** da seção e da regra de bloco, e única fonte do bloco% observado sem o `.prc`. Repete linhas nas quebras de página: deduplicar por capa+seção+CPF+código+qtde |
 | Auditoria dirigida (folha assinada) | Papel / foto | Produtos recuperados na seção 9999 — transcrever manualmente |
 | `cadastro.txt` | Texto fixo 38 chars/linha, latin-1 | Código interno → descrição produto |
 | `invent_DSP_[DATA].old` | CSV `;`, latin-1 | Código → EAN real → descrição + classe legal |
@@ -370,7 +393,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis (2026-08):** **344 testes / 26 suites** ·
+**Baseline v3 + entregáveis + limites (2026-08):** **398 testes / 27 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -438,6 +461,13 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | `listar_escala`/`gerar_escala` sem EXECUTE para anon/PUBLIC | SECURITY DEFINER só para `authenticated` + `service_role` |
 | Limites em Supabase + fallback local = seed migration | Offline e remoto alinhados; FRENTE DE CAIXA 90% |
 | Ausência de registro = warn + sem penalidade (nunca default 20%) | Não punir área desconhecida silenciosamente |
+| Área comparada sem acento (`chaveArea`) | Tabela usa "ANTIBIÓTICOS", relatório usa "ANTIBIOTICOS"; comparação literal deixava área crítica de limite 0% sem verificação |
+| Gôndola canonizada só para casar limite (`canonizarGondola`) | A mesma gôndola chega como RUA 3 FRENTE, R3, G3 ou G 03 FUNDO; frente e fundo são o mesmo móvel. O nome de exibição não muda — o conferente conhece a área assim |
+| Área física herda o limite da categoria **mais restritiva** que contém | O quadro de risco é por categoria de produto, a tabela é por área física; média deixaria dermocosmético de R$ 200 contável em bloco por causa do sabonete ao lado — ver `docs/LIMITES_BLOCO_FARMACIA.md` |
+| Nenhuma área em `limite = 9999` | "Sem limite" no BALCÃO deixava 1.426 peças de ponto de venda sem verificação; nenhuma área do L2601 se chama OTC e o OTC está fisicamente lá |
+| Dermo e infantil a 10% com `critica: true` | 5% penalizava pack promocional legítimo; o alerta formal dispara por "crítica OU limite ≤ 5%", então sem o flag subir o limite apagaria a visibilidade junto |
+| Os três nomes do cartelado com o mesmo limite | `CARTELADO`, `PAREDE CARTELADO` e `MEDICAMENTOS CARTELADOS` são a mesma parede; limites diferentes fariam o critério depender de qual nome a loja cadastrou |
+| Lacuna de cadastro visível na tela e no consolidado | `console.warn` ninguém lê em produção; área sem limite não tem bloco verificado e isso precisa estar no relatório |
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
 | Mapa Seção→Área do evento por cima do `secao_lookup` | A tabela é opcional e vive vazia; sem o mapa do PROD_SEÇÃO o bloco% por área caía no valor da planilha e a violação sumia — ver `docs/SUPABASE_ESTADO.md` |
 | "Perfil Operacional" removido do relatório | Baseado em histórico: incoerente com classificação do evento atual |
@@ -450,6 +480,10 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Seção = últimos 4 dígitos do endereço `PInnnnnn` | Os 6 dígitos não batem com `secao_lookup` nem com `limites_bloco_area` |
 | Área física derivada de PROD_SEÇÃO + recorte de blocos | Não existe tabela Seção→Área; o recorte fechou 68 de 72 combinações no L2601 |
 | Divergência atribuída por SEÇÃO+EAN contra o `.prc` | Único par que liga o ACURACIDADE ao CPF de quem contou; 56 de 56 com dono único |
+| Não contado localizado por marca → departamento → família | O departamento ocupa trecho contínuo da loja; cobre o caso em que nenhum item da marca foi bipado. Vínculo por rótulo, então nunca chega a ALTA |
+| Descrição do NAO CONTADOS pelo índice do cabeçalho, não pela maior célula | O nome do departamento é mais longo que a descrição do produto e vencia: 4 dos 18 itens do L2601 saíam como "COMPLEMENTOS VITAMINICOS" |
+| Só o não contado RECUPERADO na auditoria penaliza | O item estava na prateleira e ninguém bipou: falha provada. O que permaneceu perdido pode ser erro de saldo do cliente — fica no relatório, sem dono e sem penalidade |
+| Matrícula da folha de auditoria dirigida não atribui culpa | É quem registrou a auditoria (líder/auditor), não quem deixou de bipar — no L2601, os 10 itens com a mesma pessoa na seção 9999 |
 | Não contado só pesa na nota com confiança ALTA | MÉDIA e BAIXA não sustentam conversa de avaliação; servem para dirigir recontagem |
 | Auditoria dirigida (seção 9999) fora da produtividade | Quem executa a auditoria era penalizado no ranking por trabalho que não é contagem |
 | Mediana da equipe como referência de produtividade | Menos sensível a extremos que a média e que a meta fixa do perfil |
@@ -459,6 +493,7 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Match de EAN com sufixo de 8+ dígitos | Regra herdada do módulo Auditoria; cobre prefixo do arquivo final e EAN-13 vs EAN-14 |
 | Identidade resolvida por agentes.txt/CadFun | O coletor grava CPF, o relatório grava matrícula, o ProInv usa código de 6 dígitos |
 | Modalidade nula bloqueia a avaliação | Default 'CLT' fazia prestador receber relatório com termos de vínculo; o bloqueio é a única garantia contra esquecimento |
+| Entregáveis valem para os dois motores | O v3 exige três arquivos; sem eles quem responde é o v2.1, e o líder continua precisando entregar a ficha de cada conferente |
 | Ficha individual e consolidado do líder são documentos distintos | A ficha é lida junto com o conferente; a planilha expõe o ranking inteiro — ver `docs/PROCEDIMENTO_AVALIACAO.md` |
 | Lote de fichas via Storage Access Framework no Android | Escolher a pasta uma vez é o único caminho em que "baixar a ficha de cada conferente" não vira uma janela de compartilhamento por pessoa |
 | Modalidade no Supabase, não só local | O mesmo conferente não pode sair como CLT numa loja e prestador em outra |
@@ -496,6 +531,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não guardar a seção com 6 dígitos — são sempre os últimos 4
 - ❌ Não medir horas trabalhadas da primeira à última bipada quando houver mais de uma data
 - ❌ Não atribuir não contado a um conferente sem declarar o nível de confiança
+- ❌ Não penalizar ninguém por produto que permaneceu não encontrado — só o recuperado na auditoria
+- ❌ Não usar a matrícula da folha de auditoria dirigida para atribuir responsabilidade
 - ❌ Não publicar avaliação sem rodar `conferirReconciliacao()` contra Erro (Qtde)
 - ❌ Não entregar a planilha consolidada ao conferente — ela traz o ranking da equipe
 - ❌ Não usar BOM em download binário na web (corrompe XLSX e PDF)
@@ -506,5 +543,9 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não decidir "é planilha ou texto" pela extensão — usar `detectarFormato()`
 - ❌ Não importar `readAsStringAsync` de `expo-file-system` (só de `/legacy`)
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
+- ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
+- ❌ Não somar BLOCO.xls sem deduplicar as linhas repetidas na quebra de página
+- ❌ Não usar penalidade fixa para bloco em área de tolerância zero — escala por faixa
+- ❌ Não omitir o enquadramento ANVISA/SNGPC da advertência por causa da modalidade
 - ❌ Não recriar policies `USING (true)` / `WITH CHECK (true)` nas tabelas core
 - ❌ Não conceder `EXECUTE` de `gerar_escala`/`listar_escala` a `anon` ou `PUBLIC`

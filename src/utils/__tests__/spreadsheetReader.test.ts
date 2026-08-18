@@ -10,7 +10,10 @@ import {
 
 /** Monta o `ArquivoLido` do jeito que `fileImport` monta depois de ler a URI. */
 function arquivoDe(bytes: Uint8Array) {
-  return identificarArquivo(Buffer.from(bytes).toString("base64"), bytes);
+  const base64 = Buffer.from(bytes).toString("base64");
+  return identificarArquivo(base64, (limite) =>
+    limite === undefined ? bytes : bytes.subarray(0, limite),
+  );
 }
 
 function arquivoDeTexto(texto: string, encoding: BufferEncoding = "utf8") {

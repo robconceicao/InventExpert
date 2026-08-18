@@ -3,11 +3,10 @@ import {
   getLimitesBlocoFallback,
   getViolacoesBloco,
   LIMITE_BLOCO_SEM_LIMITE,
-  PENALIDADE_BLOCO_AREA_CRITICA,
-  PENALIDADE_BLOCO_EXCESSO_ALTO,
-  PENALIDADE_BLOCO_EXCESSO_LEVE,
+  penalidadeDaViolacao,
   type LimiteBlocoRow,
 } from "../config/inventoryEvalConfig";
+import { mesmaArea } from "../utils/inventExpUtils";
 import {
   buildViolacaoBloco,
   getSectionAreaNome,
@@ -76,7 +75,7 @@ export function detectarViolacoesBloco(
     const limite = limites.find(
       (l) =>
         l.tipo_operacao === tipoOperacao &&
-        l.nome_area.toUpperCase() === area.toUpperCase(),
+        mesmaArea(l.nome_area, area),
     );
     if (!limite) {
       console.warn(
@@ -226,22 +225,16 @@ function resolverViolacoes(args: {
   return getViolacoesBloco(secoesParaAvaliacao, operationType, limites);
 }
 
+/**
+ * Penalidade de Qualidade somada sobre as violações.
+ *
+ * A escala está em `classificarGravidadeBloco()`: área de tolerância zero vale
+ * de 20 a 40 pontos conforme o tamanho do bloco observado, e não mais 20
+ * fixos. Contar 0,5% de MEDICAMENTOS em bloco é engano; contar 16% é método —
+ * e a nota precisa distinguir os dois.
+ */
 function aplicarPenalidadeBloco(violacoes: ViolacaoBloco[]): number {
-  let qualidadePenalty = 0;
-  for (const v of violacoes) {
-    const critica = getViolacaoCritica(v);
-    const limitPct = getViolacaoLimitePct(v);
-    const excesso = getViolacaoExcessoFator(v);
-
-    if (critica && limitPct === 0) {
-      qualidadePenalty += PENALIDADE_BLOCO_AREA_CRITICA;
-    } else if (excesso > 2) {
-      qualidadePenalty += PENALIDADE_BLOCO_EXCESSO_ALTO;
-    } else {
-      qualidadePenalty += PENALIDADE_BLOCO_EXCESSO_LEVE;
-    }
-  }
-  return qualidadePenalty;
+  return violacoes.reduce((total, v) => total + penalidadeDaViolacao(v), 0);
 }
 
 function marcarViolacoesNasSecoes(

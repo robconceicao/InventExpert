@@ -39,12 +39,37 @@ export function parseNumeroBr(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Localiza a linha de cabeçalho pelos rótulos e devolve o índice de cada coluna. */
+/**
+ * Primeiras linhas com cara de cabeçalho, para a mensagem de erro.
+ *
+ * Sem isso, "cabeçalho não encontrado" não diz o que o arquivo realmente tem —
+ * e quem está em campo não consegue reportar nada além de "não funcionou".
+ */
+function amostrarLinhas(matriz: any[][], quantas = 5): string {
+  const candidatas = matriz
+    .slice(0, 200)
+    .filter((l) => Array.isArray(l) && l.filter((c) => norm(c)).length >= 3)
+    .slice(0, quantas)
+    .map((l, i) => `${i + 1}) ${l.filter((c) => norm(c)).slice(0, 8).map(norm).join(' | ')}`);
+
+  if (candidatas.length === 0) {
+    return `A planilha tem ${matriz.length} linha(s), nenhuma com 3 ou mais colunas preenchidas.`;
+  }
+  return `Linhas encontradas no arquivo:\n${candidatas.join('\n')}`;
+}
+
+/**
+ * Localiza a linha de cabeçalho pelos rótulos e devolve o índice de cada coluna.
+ *
+ * O limite existe para não varrer a planilha inteira atrás de um cabeçalho que
+ * não existe. 60 linhas era pouco: o Crystal empilha título, filtros e linhas
+ * em branco antes do cabeçalho, e `blankrows: true` faz cada uma delas contar.
+ */
 function localizarCabecalho(
   matriz: any[][],
   obrigatorios: string[],
   colunas: Record<string, string[]>,
-  limite = 60,
+  limite = 200,
 ): { linha: number; idx: Record<string, number> } | null {
   for (let i = 0; i < Math.min(matriz.length, limite); i++) {
     const linha = matriz[i];
@@ -167,7 +192,10 @@ export function parseAcuracidadeMatrix(matriz: any[][]): AcuracidadeRow[] {
     },
   );
   if (!cab) {
-    throw new Error('Cabeçalho não encontrado no ACURACIDADE (esperado "SECAO" e "C1").');
+    throw new Error(
+      'Cabeçalho não encontrado no ACURACIDADE (esperado "SECAO" e "C1").\n\n' +
+        amostrarLinhas(matriz),
+    );
   }
 
   const { idx } = cab;
@@ -224,10 +252,14 @@ export function parseAcuracidadeMatrix(matriz: any[][]): AcuracidadeRow[] {
 export function parseNaoContadosMatrix(matriz: any[][]): NaoContadoInput[] {
   const cab = localizarCabecalho(matriz, ['ORDEM', 'DESCRICAO'], {
     ordem: ['ORDEM'],
+    descricao: ['DESCRICAO'],
     dep: ['DEP'],
+    preco: ['PRECO UNIT', 'PRECO'],
   });
 
   const iOrdem = cab?.idx.ordem ?? 1;
+  const iDesc = cab?.idx.descricao ?? -1;
+  const iDep = cab?.idx.dep ?? -1;
   const inicio = (cab?.linha ?? 4) + 1;
 
   const itens: NaoContadoInput[] = [];
@@ -241,24 +273,69 @@ export function parseNaoContadosMatrix(matriz: any[][]): NaoContadoInput[] {
     const ehProduto = ordem > 0 && Number.isInteger(ordem);
 
     if (ehProduto) {
-      // As colunas do Crystal saem desalinhadas entre cabeçalho e dados, então
-      // a descrição é a maior célula de texto da linha, e o valor é o último
-      // número — mais estável do que apostar num índice fixo.
-      let descricao = '';
-      let departamento = '';
-      let valor = 0;
+      // As colunas do Crystal saem desalinhadas entre cabeçalho e dados — no
+      // L2601 a descrição fica uma coluna à esquerda do rótulo e o preço, uma à
+      // direita. Por isso se procura PERTO do índice do cabeçalho, em vez de
+      // confiar nele ou de apostar na "maior célula de texto".
+      //
+      // A maior célula era a regra antiga e estava errada no dado real: o nome
+      // do departamento ("COMPLEMENTOS VITAMINICOS") é mais longo que a
+      // descrição do produto ("MOTILEX HA C/ 60 CAPS") e vencia. A inferência
+      // por marca passava a rodar em cima do nome do departamento.
+      const textoEm = (c: number) => (l[c] ?? '').toString().trim();
+      const ehTexto = (v: string) => v.length > 0 && !/^[\d.,\s-]+$/.test(v);
 
-      l.forEach((celula, c) => {
-        if (c === iOrdem) return;
-        const v = (celula ?? '').toString().trim();
-        if (!v) return;
-        if (/^\d{1,4}$/.test(v) && !departamento && v.length === 3) departamento = v;
-        if (/^[\d.,\s-]+$/.test(v)) {
-          const n = parseNumeroBr(v);
-          if (n > 0 && !/^0*\d{12,15}$/.test(v.replace(/\D/g, ''))) valor = n;
-          return;
+      let departamento = '';
+      let iCodigoDep = -1;
+      const janelaDep = iDep >= 0 ? [iDep, iDep - 1, iDep + 1] : [];
+      for (const c of janelaDep) {
+        const v = textoEm(c);
+        if (/^\d{3}$/.test(v)) {
+          departamento = v;
+          iCodigoDep = c;
+          break;
         }
-        if (v.length > descricao.length) descricao = v;
+      }
+
+      // O nome do departamento vem logo depois do código — nunca é a descrição.
+      let departamentoNome = '';
+      if (iCodigoDep >= 0) {
+        for (let c = iCodigoDep + 1; c <= iCodigoDep + 5 && c < l.length; c++) {
+          const v = textoEm(c);
+          if (ehTexto(v)) {
+            departamentoNome = v;
+            break;
+          }
+        }
+      }
+
+      let descricao = '';
+      const janelaDesc =
+        iDesc >= 0 ? [iDesc, iDesc - 1, iDesc + 1, iDesc - 2, iDesc + 2] : [];
+      for (const c of janelaDesc) {
+        const v = textoEm(c);
+        if (ehTexto(v) && v !== departamentoNome) {
+          descricao = v;
+          break;
+        }
+      }
+      if (!descricao) {
+        // Sem cabeçalho utilizável: maior texto que não seja o departamento.
+        l.forEach((celula, c) => {
+          if (c === iOrdem || c === iCodigoDep) return;
+          const v = (celula ?? '').toString().trim();
+          if (!ehTexto(v) || v === departamentoNome) return;
+          if (v.length > descricao.length) descricao = v;
+        });
+      }
+
+      let valor = 0;
+      l.forEach((celula, c) => {
+        if (c === iOrdem || c === iCodigoDep) return;
+        const v = (celula ?? '').toString().trim();
+        if (!v || !/^[\d.,\s-]+$/.test(v)) return;
+        const n = parseNumeroBr(v);
+        if (n > 0 && !/^0*\d{12,15}$/.test(v.replace(/\D/g, ''))) valor = n;
       });
 
       if (!descricao) continue;
@@ -268,6 +345,7 @@ export function parseNaoContadosMatrix(matriz: any[][]): NaoContadoInput[] {
         situacao: 'NAO_ENCONTRADO',
         valor,
         departamento,
+        departamentoNome: departamentoNome || undefined,
       };
       itens.push(atual);
       continue;

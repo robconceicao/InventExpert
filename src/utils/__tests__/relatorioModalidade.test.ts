@@ -1,7 +1,8 @@
 import { generateInventExpIndividualReportText } from '../inventExpReports';
-import type {
-  InventoryCheckerEvaluation,
-  ModalidadeContratoCanonico,
+import {
+  buildViolacaoBloco,
+  type InventoryCheckerEvaluation,
+  type ModalidadeContratoCanonico,
 } from '../../types';
 
 /**
@@ -110,5 +111,55 @@ describe('relatório individual — prestador de serviço', () => {
 
   it('fecha como prestação de serviço', () => {
     expect(r).toContain('prestação de serviço');
+  });
+});
+
+/**
+ * A advertência de tolerância zero é o texto mais duro da ficha, e por isso o
+ * ponto onde a regra do FREE tem mais chance de escapar: a tentação é escrever
+ * "falta grave" e "medida disciplinar" para todo mundo. O enquadramento
+ * sanitário vale para os três vínculos — a restrição é da ANVISA, não do
+ * contrato —, mas a consequência descrita não pode ser trabalhista para quem
+ * presta serviço.
+ */
+describe('advertência de tolerância zero por modalidade', () => {
+  const comViolacao = (modalidade: ModalidadeContratoCanonico) => {
+    const ev = avaliacao(modalidade);
+    ev.violacoes = [
+      buildViolacaoBloco({
+        area_nome: 'MEDICAMENTOS',
+        real_pct: 34.2,
+        limite_pct: 0,
+        area_critica: true,
+      }),
+    ];
+    return generateInventExpIndividualReportText('FARMACIA', ev, 9, 15, '06/08/2026');
+  };
+
+  it.each<ModalidadeContratoCanonico>(['CLT', 'INTERMITENTE', 'FREE'])(
+    'o enquadramento sanitário aparece para %s',
+    (m) => {
+      const r = comViolacao(m);
+      expect(r).toContain('ÁREA DE TOLERÂNCIA ZERO');
+      expect(r).toContain('ANVISA/SNGPC');
+      expect(r).toContain('RT farmacêutico');
+      // Acima de 20% o texto acusa método, não engano pontual.
+      expect(r).toContain('contada em bloco');
+    },
+  );
+
+  it('FREE recebe a advertência sem nenhum termo de vínculo', () => {
+    const r = comViolacao('FREE');
+    ['medida disciplinar', 'Código de Conduta', 'convocaç', 'CLT', 'colaborador'].forEach(
+      (proibido) => expect(r.toLowerCase()).not.toContain(proibido.toLowerCase()),
+    );
+    expect(r).toContain('OCORRÊNCIA REGISTRADA');
+    expect(r).toContain('escopo do serviço contratado');
+  });
+
+  it('CLT mantém o enquadramento trabalhista junto do sanitário', () => {
+    const r = comViolacao('CLT');
+    expect(r).toContain('medida disciplinar');
+    expect(r).toContain('FALTA GRAVE');
   });
 });
