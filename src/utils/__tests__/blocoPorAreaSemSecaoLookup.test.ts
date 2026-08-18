@@ -15,7 +15,12 @@
 import { construirMapaAreas, type ProdSecaoRow } from "../../services/AreaMappingService";
 import type { ContagemDetalhada, SectionAccuracyRecord } from "../../types";
 import type { LimiteBlocoRow } from "../../config/inventoryEvalConfig";
-import { areasSemLimiteCadastrado, mesmaArea } from "../inventExpUtils";
+import {
+  areasSemLimiteCadastrado,
+  canonizarGondola,
+  mesmaArea,
+  normalizarNomeArea,
+} from "../inventExpUtils";
 import {
   enriquecerSecoesComBloco,
   resolverAreasNasContagens,
@@ -185,5 +190,34 @@ describe("áreas sem limite de bloco cadastrado", () => {
     expect(mesmaArea("ATRAS  DE CAIXA", "ATRÁS DE CAIXA")).toBe(true);
     expect(mesmaArea("PSICO", "PSICOTRÓPICOS")).toBe(false);
     expect(mesmaArea("", "MEDICAMENTOS")).toBe(false);
+  });
+});
+
+describe("nomenclatura de gôndola", () => {
+  it("os três padrões da rede caem na mesma gôndola", () => {
+    ["RUA 3 FRENTE", "R 3 FRENTE", "R3", "G3", "G 03 FUNDO"].forEach((n) =>
+      expect(canonizarGondola(n)).toBe("GONDOLA 3"),
+    );
+  });
+
+  it("os dois lados herdam o limite da gôndola cadastrada", () => {
+    expect(mesmaArea("RUA 4 FRENTE", "G 4")).toBe(true);
+    expect(mesmaArea("RUA 4 FUNDO", "G 4")).toBe(true);
+    expect(mesmaArea("RUA 4 FUNDO", "G 5")).toBe(false);
+  });
+
+  it("o nome de exibição não muda — o conferente conhece a área assim", () => {
+    expect(normalizarNomeArea("RUA 4 FUNDO")).toBe("RUA 4 FUNDO");
+  });
+
+  it("não captura área que apenas começa com R ou G", () => {
+    expect(canonizarGondola("REFRIGERADOS")).toBeNull();
+    expect(canonizarGondola("GELADEIRAS MEDICAMENTOS")).toBeNull();
+    expect(canonizarGondola("PAREDE DERMO")).toBeNull();
+  });
+
+  it("gôndola sem cadastro continua aparecendo como lacuna", () => {
+    expect(areasSemLimiteCadastrado(["RUA 7"], [{ nome_area: "G 4" }])).toEqual(["RUA 7"]);
+    expect(areasSemLimiteCadastrado(["RUA 4 FUNDO"], [{ nome_area: "G 4" }])).toEqual([]);
   });
 });
