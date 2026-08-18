@@ -70,6 +70,7 @@ import {
     filtrarSecoesDoConferente,
     resolverAreasNasContagens,
 } from "../utils/inventoryImportParsers";
+import { areasSemLimiteCadastrado } from "../utils/inventExpUtils";
 import { parseInventoryCheckersCsv } from "../utils/parsers";
 import { parsePrcFiles } from "../utils/prcParser";
 import { pickSheetAsMatrix } from "../utils/excelParser";
@@ -209,6 +210,8 @@ export default function InventExpImportScreen() {
   const [publishing, setPublishing] = useState(false);
   /** Trava o botão enquanto as fichas da equipe são renderizadas. */
   const [gerandoFichas, setGerandoFichas] = useState(false);
+  /** Áreas do inventário sem limite de bloco na tabela — bloco não verificado. */
+  const [areasSemLimiteBloco, setAreasSemLimiteBloco] = useState<string[]>([]);
   /**
    * Rótulo do arquivo sendo lido, ou null.
    *
@@ -760,6 +763,15 @@ export default function InventExpImportScreen() {
         limites = getLimitesBlocoFallback(operationType);
       }
 
+      // Área sem limite cadastrado nao tem bloco verificado. Isso precisa
+      // aparecer: no L2601 só 3 das 25 areas casavam, e ANTIBIOTICOS, PSICO e
+      // THERMOLABS — todas criticas — passavam sem conferencia nenhuma.
+      const areasSemLimite = areasSemLimiteCadastrado(
+        [...new Set(producaoSecao.map((s) => s.area_nome ?? s.area ?? ""))],
+        limites,
+      );
+      setAreasSemLimiteBloco(areasSemLimite);
+
       // Resolve produto + área em todas as contagens .prc acumuladas
       let contagensAtualizadas = resolverAreasNasContagens(
         prcContagens,
@@ -1187,6 +1199,7 @@ export default function InventExpImportScreen() {
                     enderecosForaPadrao: prcInfo?.enderecosForaPadrao,
                     datasDistintas: prcInfo?.datas,
                     arquivosPrc: prcInfo?.count,
+                    areasSemLimiteBloco,
                   }
                 : null,
             })
@@ -1671,6 +1684,16 @@ export default function InventExpImportScreen() {
               <Text style={styles.warnText}>
                 Preencha a referência (loja / evento) no fim da tela — ela nomeia os
                 arquivos e identifica o inventário nos cabeçalhos.
+              </Text>
+            )}
+
+            {areasSemLimiteBloco.length > 0 && (
+              <Text style={styles.warnText}>
+                ⚠ {areasSemLimiteBloco.length} área(s) sem limite de bloco cadastrado —
+                o bloco NÃO foi verificado nelas:{" "}
+                {areasSemLimiteBloco.slice(0, 8).join(", ")}
+                {areasSemLimiteBloco.length > 8 ? ` e mais ${areasSemLimiteBloco.length - 8}` : ""}.
+                Cadastre em limites_bloco_area antes de tratar a nota como final.
               </Text>
             )}
           </View>

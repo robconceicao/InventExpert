@@ -15,6 +15,7 @@
 import { construirMapaAreas, type ProdSecaoRow } from "../../services/AreaMappingService";
 import type { ContagemDetalhada, SectionAccuracyRecord } from "../../types";
 import type { LimiteBlocoRow } from "../../config/inventoryEvalConfig";
+import { areasSemLimiteCadastrado, mesmaArea } from "../inventExpUtils";
 import {
   enriquecerSecoesComBloco,
   resolverAreasNasContagens,
@@ -152,5 +153,37 @@ describe("bloco por área sem secao_lookup", () => {
     const resolvidas = resolverAreasNasContagens(contagens, secaoMap);
 
     expect(resolvidas.find((c) => c.area_codigo === "0217")!.area_nome).toBe("MEDICAMENTOS");
+  });
+});
+
+describe("áreas sem limite de bloco cadastrado", () => {
+  const limites = [
+    { nome_area: "ANTIBIÓTICOS" },
+    { nome_area: "MEDICAMENTOS" },
+    { nome_area: "ATRÁS DE CAIXA" },
+  ];
+
+  it("casa apesar da diferença de acento — era o que escondia área crítica", () => {
+    expect(areasSemLimiteCadastrado(["ANTIBIOTICOS"], limites)).toEqual([]);
+    expect(areasSemLimiteCadastrado(["ATRAS DE CAIXA"], limites)).toEqual([]);
+  });
+
+  it("lista o que realmente não tem cadastro", () => {
+    const faltando = areasSemLimiteCadastrado(
+      ["ANTIBIOTICOS", "PSICO", "RUA 1", "MEDICAMENTOS"],
+      limites,
+    );
+    expect(faltando).toEqual(["PSICO", "RUA 1"]);
+  });
+
+  it("não repete a mesma área escrita de formas diferentes", () => {
+    expect(areasSemLimiteCadastrado(["PSICO", "psico", "Psico "], limites)).toEqual(["PSICO"]);
+  });
+
+  it("mesmaArea ignora acento e espaço duplicado", () => {
+    expect(mesmaArea("ANTIBIOTICOS", "ANTIBIÓTICOS")).toBe(true);
+    expect(mesmaArea("ATRAS  DE CAIXA", "ATRÁS DE CAIXA")).toBe(true);
+    expect(mesmaArea("PSICO", "PSICOTRÓPICOS")).toBe(false);
+    expect(mesmaArea("", "MEDICAMENTOS")).toBe(false);
   });
 });

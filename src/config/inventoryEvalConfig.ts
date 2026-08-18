@@ -10,6 +10,8 @@
  * limite 9999 = sem limite definido (não penalizar).
  */
 
+import { chaveArea } from '../utils/inventExpUtils';
+
 import {
   buildViolacaoBloco,
   type InventoryOperationType,
@@ -264,7 +266,7 @@ export function getViolacoesBloco(
       const row = limites!.find(
         (l) =>
           l.tipo_operacao === operationType &&
-          l.nome_area.toUpperCase() === areaNome.toUpperCase(),
+          chaveArea(l.nome_area) === chaveArea(areaNome),
       );
       if (!row) {
         console.warn(

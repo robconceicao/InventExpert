@@ -8,6 +8,7 @@ import {
   PENALIDADE_BLOCO_EXCESSO_LEVE,
   type LimiteBlocoRow,
 } from "../config/inventoryEvalConfig";
+import { mesmaArea } from "../utils/inventExpUtils";
 import {
   buildViolacaoBloco,
   getSectionAreaNome,
@@ -76,7 +77,7 @@ export function detectarViolacoesBloco(
     const limite = limites.find(
       (l) =>
         l.tipo_operacao === tipoOperacao &&
-        l.nome_area.toUpperCase() === area.toUpperCase(),
+        mesmaArea(l.nome_area, area),
     );
     if (!limite) {
       console.warn(

@@ -212,8 +212,17 @@ o nome da área do XLS ou do `.prc`. A tabela de aliases cobre:
 'P OTC'            → 'MEDICAMENTOS OTC'
 ```
 
-Se uma área chegar sem match na tabela `limites_bloco_area`, emitir
-`console.warn` — nunca falhar silenciosamente.
+Comparar área **sempre por `mesmaArea()`/`chaveArea()`**, nunca por
+`toUpperCase()` literal: a tabela usa acento ("ANTIBIÓTICOS", "TERMOLÁBEIS",
+"ATRÁS DE CAIXA") e o relatório do sistema não usa.
+
+Área sem match na tabela **não tem bloco verificado**. Isso não pode ficar só
+num `console.warn`: `areasSemLimiteCadastrado()` alimenta o aviso da tela e a
+aba Ressalvas do consolidado.
+
+> Conferido no L2601: das 25 áreas reais, **3 casavam**. ANTIBIOTICOS caía por
+> acento; PSICO, THERMOLABS e VACINAS — todas críticas de limite 0% — não têm
+> correspondente na tabela. O bloco dessas áreas nunca foi verificado.
 
 ### Relatório por modalidade de contrato
 
@@ -372,7 +381,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis (2026-08):** **358 testes / 26 suites** ·
+**Baseline v3 + entregáveis (2026-08):** **362 testes / 26 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -440,6 +449,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | `listar_escala`/`gerar_escala` sem EXECUTE para anon/PUBLIC | SECURITY DEFINER só para `authenticated` + `service_role` |
 | Limites em Supabase + fallback local = seed migration | Offline e remoto alinhados; FRENTE DE CAIXA 90% |
 | Ausência de registro = warn + sem penalidade (nunca default 20%) | Não punir área desconhecida silenciosamente |
+| Área comparada sem acento (`chaveArea`) | Tabela usa "ANTIBIÓTICOS", relatório usa "ANTIBIOTICOS"; comparação literal deixava área crítica de limite 0% sem verificação |
+| Lacuna de cadastro visível na tela e no consolidado | `console.warn` ninguém lê em produção; área sem limite não tem bloco verificado e isso precisa estar no relatório |
 | normalizarNomeArea() no parser, não na tabela | Nomes completos na tabela são mais legíveis |
 | Mapa Seção→Área do evento por cima do `secao_lookup` | A tabela é opcional e vive vazia; sem o mapa do PROD_SEÇÃO o bloco% por área caía no valor da planilha e a violação sumia — ver `docs/SUPABASE_ESTADO.md` |
 | "Perfil Operacional" removido do relatório | Baseado em histórico: incoerente com classificação do evento atual |

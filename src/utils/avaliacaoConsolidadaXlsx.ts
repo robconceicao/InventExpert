@@ -33,6 +33,8 @@ export interface DiagnosticoConsolidado {
   enderecosForaPadrao?: number;
   datasDistintas?: string[];
   arquivosPrc?: number;
+  /** Áreas do inventário sem limite de bloco na tabela — bloco não verificado. */
+  areasSemLimiteBloco?: string[];
 }
 
 export interface ContextoConsolidado {
@@ -448,6 +450,14 @@ function abaRessalvas(
           `esperado ${f.esperado}, apurado ${f.apurado}`,
         ]);
       }
+    }
+
+    if (d.areasSemLimiteBloco && d.areasSemLimiteBloco.length > 0) {
+      linhas.push([
+        "Áreas sem limite de bloco cadastrado",
+        d.areasSemLimiteBloco.length,
+        `O bloco NÃO foi verificado nelas: ${d.areasSemLimiteBloco.join(", ")}`,
+      ]);
     }
 
     if (d.enderecosForaPadrao) {

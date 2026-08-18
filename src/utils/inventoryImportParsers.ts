@@ -1,5 +1,5 @@
 import { parseInventoryCheckersCsv } from "./parsers";
-import { normalizarNomeArea } from "./inventExpUtils";
+import { mesmaArea, normalizarNomeArea } from "./inventExpUtils";
 import type {
   ContagemDetalhada,
   SectionAccuracyRecord,
@@ -263,7 +263,7 @@ export function enriquecerSecoesComBloco(
     }
 
     const lim = limites.find(
-      (l) => l.nome_area.toUpperCase() === area.toUpperCase(),
+      (l) => mesmaArea(l.nome_area, area),
     );
     const limite_bloco =
       lim && lim.limite_pct < LIMITE_BLOCO_SEM_LIMITE
