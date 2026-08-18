@@ -518,3 +518,67 @@ describe('não contado: só a falha comprovada penaliza', () => {
     expect(calcularCobertura([perdido], mat, 10000)).toBe(100);
   });
 });
+
+describe('não contado: atribuição pelo departamento', () => {
+  /**
+   * Casos vindos do NAO_CONTADOS.xls real do L2601, onde a marca do produto
+   * não aparece em nenhum item contado e só o departamento localiza a área.
+   */
+  function cenarioDep(departamentoNome?: string) {
+    const { contagens, prodSecao } = cenario();
+    const mapa = construirMapaAreas(prodSecao, contagens);
+    // A família do CadProd usa o mesmo vocabulário do departamento.
+    const familiaPorEan = new Map(
+      contagens
+        .filter((c) => c.matricula === BIANKA)
+        .map((c) => [c.produto_ean, 'Dermocosméticos'] as const),
+    );
+
+    return atribuirNaoContados(
+      [
+        {
+          descricao: 'HYA-FIL ELAST 3D SERUM',
+          eans: ['003337875930338'],
+          situacao: 'NAO_ENCONTRADO',
+          valor: 172.29,
+          departamento: '383',
+          departamentoNome,
+        },
+      ],
+      [],
+      contagens,
+      mapa,
+      [],
+      { familiaPorEan },
+    );
+  }
+
+  it('localiza a área pelo departamento quando a marca não resolve', () => {
+    const [r] = cenarioDep('DERMOCOSMETICOS');
+    expect(r.area).toBe('PAREDE DERMO');
+    expect(r.matricula).toBe(BIANKA);
+    expect(r.base).toContain('departamento "DERMOCOSMETICOS"');
+  });
+
+  it('casa o rótulo ignorando acento e caixa', () => {
+    const [r] = cenarioDep('Dermocosmeticos');
+    expect(r.matricula).toBe(BIANKA);
+  });
+
+  it('nunca sobe a ALTA: é vínculo de rótulo, não de produto', () => {
+    const [r] = cenarioDep('DERMOCOSMETICOS');
+    expect(r.nivel).not.toBe('ALTA');
+    expect(r.peso).toBe(0);
+  });
+
+  it('declara não atribuível quando o departamento não casa com nada', () => {
+    const [r] = cenarioDep('PERFUMARIA IMPORTADA');
+    expect(r.matricula).toBeNull();
+    expect(r.base).toContain('não atribuível');
+  });
+
+  it('sem nome de departamento, o comportamento anterior é preservado', () => {
+    const [r] = cenarioDep(undefined);
+    expect(r.matricula).toBeNull();
+  });
+});

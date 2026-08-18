@@ -94,8 +94,10 @@ sai ora como .xls binário, ora como tabela HTML com extensão .xls, e o Android
 entrega o arquivo sem extensão no cache do picker. Formato TEXTO vai para
 `csvParaMatriz()`; o resto vai para o SheetJS.
 
-No NAO CONTADOS o cabeçalho e os dados saem desalinhados entre si: a descrição é
-a maior célula de texto da linha, e o valor é o último número. Índice fixo quebra.
+No NAO CONTADOS o cabeçalho e os dados saem desalinhados por uma coluna: a
+descrição fica à esquerda do rótulo e o preço à direita. Procurar **perto** do
+índice do cabeçalho, nunca nele nem na "maior célula de texto" — o nome do
+departamento é mais longo que a descrição do produto e vencia.
 
 ### Avaliação — base v2.1 (2026-07)
 
@@ -370,7 +372,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis (2026-08):** **353 testes / 26 suites** ·
+**Baseline v3 + entregáveis (2026-08):** **358 testes / 26 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -450,6 +452,8 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Seção = últimos 4 dígitos do endereço `PInnnnnn` | Os 6 dígitos não batem com `secao_lookup` nem com `limites_bloco_area` |
 | Área física derivada de PROD_SEÇÃO + recorte de blocos | Não existe tabela Seção→Área; o recorte fechou 68 de 72 combinações no L2601 |
 | Divergência atribuída por SEÇÃO+EAN contra o `.prc` | Único par que liga o ACURACIDADE ao CPF de quem contou; 56 de 56 com dono único |
+| Não contado localizado por marca → departamento → família | O departamento ocupa trecho contínuo da loja; cobre o caso em que nenhum item da marca foi bipado. Vínculo por rótulo, então nunca chega a ALTA |
+| Descrição do NAO CONTADOS pelo índice do cabeçalho, não pela maior célula | O nome do departamento é mais longo que a descrição do produto e vencia: 4 dos 18 itens do L2601 saíam como "COMPLEMENTOS VITAMINICOS" |
 | Só o não contado RECUPERADO na auditoria penaliza | O item estava na prateleira e ninguém bipou: falha provada. O que permaneceu perdido pode ser erro de saldo do cliente — fica no relatório, sem dono e sem penalidade |
 | Matrícula da folha de auditoria dirigida não atribui culpa | É quem registrou a auditoria (líder/auditor), não quem deixou de bipar — no L2601, os 10 itens com a mesma pessoa na seção 9999 |
 | Não contado só pesa na nota com confiança ALTA | MÉDIA e BAIXA não sustentam conversa de avaliação; servem para dirigir recontagem |

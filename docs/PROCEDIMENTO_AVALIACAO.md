@@ -133,14 +133,31 @@ traz `Matrícula Conferente` preenchida, mas é quem **registrou** a auditoria: 
 L2601, os 10 itens saíram com a mesma pessoa, SEQ consecutivo, seção 9999. Usar
 essa coluna penalizaria justamente quem executou a auditoria.
 
+**Como se localiza o responsável**, em ordem de força da evidência:
+
+1. **Troca de código comprovada** — a sobra de um produto da mesma linha, na
+   mesma quantidade, aponta direto para quem bipou o código errado.
+2. **Marca** — prefixo de dois tokens da descrição, depois de um. Onde produtos
+   da mesma marca foram contados é onde o produto estava.
+3. **Departamento** — o `DEP` do relatório traz código e nome
+   ("027 · COMPLEMENTOS VITAMINICOS"). O departamento ocupa um trecho contínuo
+   da loja, então onde ele foi contado é onde o produto estava. Cobre justamente
+   os casos em que nenhum item da marca foi bipado.
+4. **Família do produto** (CadProd) — o mais fraco, só indicativo.
+
+> A ponte do passo 3 é o **nome**: o relatório traz "COMPLEMENTOS VITAMINICOS"
+> e o CadProd traz a família com o mesmo vocabulário. Por ser vínculo de rótulo,
+> e não de produto, esse caminho **nunca chega a ALTA** — dirige recontagem, não
+> penaliza.
+
 Localizado o responsável, o nível de confiança define se pesa:
 
 | Nível | Critério | Pesa na nota |
 |---|---|---|
 | ALTA | Troca de código comprovada, ou marca com 3+ itens contados e um conferente concentrando ≥70% | Sim, **se recuperado** |
-| MÉDIA | Marca localizada, poucos itens de referência ou responsável dividido | Não — dirige recontagem |
-| BAIXA | Só a família aponta a área | Não — informativo |
-| Sem base | Nenhum item da marca ou família contado | Não — fica com a equipe |
+| MÉDIA | Marca localizada sem concentração, ou departamento concentrado ≥70% | Não — dirige recontagem |
+| BAIXA | Departamento sem concentração, ou só a família aponta a área | Não — informativo |
+| Sem base | Nenhum item da marca, departamento ou família contado | Não — fica com a equipe |
 
 > Implementação: `services/NaoContadoService.ts`.
 
