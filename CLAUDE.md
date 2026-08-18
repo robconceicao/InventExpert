@@ -191,6 +191,17 @@ Quatro componentes: **Qualidade**, **Produtividade**, **Aderência ao Método**,
 **Regra absoluta:** Qualidade **nunca pode ser 100** quando há violação de bloco.
 Assertion presente em `InventoryEvaluationService.ts`.
 
+**Penalidade escalonada (`classificarGravidadeBloco`).** Área de tolerância
+zero vale 20 pts até 5% de bloco, 30 acima de 5% e 40 acima de 20% — antes eram
+20 fixos, e 0,5% de MEDICAMENTOS pesava o mesmo que 16%. Área crítica de limite
+> 0 (dermo, infantil, OTC) vale 15. Não-crítica segue em 10 / 5.
+
+A gravidade é fonte única para a nota, o texto da advertência e o ícone da
+ficha. Tolerância zero recebe **advertência com enquadramento sanitário**
+(ANVISA/SNGPC + encaminhamento ao RT farmacêutico do cliente) nos três
+vínculos — a restrição é da ANVISA, não do contrato. Só a *consequência* muda
+por modalidade, e o FREE continua sem termo de vínculo.
+
 ### Bloco por área — Farmácia
 
 Limites armazenados em `limites_bloco_area` (Supabase). Áreas críticas (limite 0%):
@@ -382,7 +393,7 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis + limites (2026-08):** **384 testes / 27 suites** ·
+**Baseline v3 + entregáveis + limites (2026-08):** **398 testes / 27 suites** ·
 `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
@@ -534,5 +545,7 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
 - ❌ Não somar BLOCO.xls sem deduplicar as linhas repetidas na quebra de página
+- ❌ Não usar penalidade fixa para bloco em área de tolerância zero — escala por faixa
+- ❌ Não omitir o enquadramento ANVISA/SNGPC da advertência por causa da modalidade
 - ❌ Não recriar policies `USING (true)` / `WITH CHECK (true)` nas tabelas core
 - ❌ Não conceder `EXECUTE` de `gerar_escala`/`listar_escala` a `anon` ou `PUBLIC`

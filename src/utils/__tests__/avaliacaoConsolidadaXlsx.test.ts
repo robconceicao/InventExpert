@@ -1,7 +1,10 @@
 import * as XLSX from "xlsx";
 
 import type { AvaliacaoV3 } from "../../services/AvaliacaoV3Service";
-import type { InventoryCheckerEvaluation } from "../../types";
+import {
+  buildViolacaoBloco,
+  type InventoryCheckerEvaluation,
+} from "../../types";
 import {
   encaminhamento,
   montarWorkbookConsolidado,
@@ -302,9 +305,56 @@ describe("montarWorkbookConsolidadoV21", () => {
       "Ranking",
       "Por_Conferente",
       "Secoes",
+      "Advertencias",
       "Ressalvas",
       "Metodologia",
     ]);
+  });
+
+  it("a aba de advertências ordena por gravidade e mostra a penalidade", () => {
+    // Tolerância zero fica em aba própria, e não diluída numa coluna do
+    // ranking, porque quem lê precisa levar a ocorrência ao RT farmacêutico.
+    const wb = montarWorkbookConsolidadoV21(
+      [
+        ev({
+          violacoes: [
+            buildViolacaoBloco({
+              area_nome: "PAREDE DERMO",
+              real_pct: 33,
+              limite_pct: 10,
+              area_critica: true,
+            }),
+            buildViolacaoBloco({
+              area_nome: "MEDICAMENTOS",
+              real_pct: 34.2,
+              limite_pct: 0,
+              area_critica: true,
+            }),
+          ],
+        }),
+      ],
+      CTX,
+    );
+    const linhas = aba(wb, "Advertencias");
+    const t = texto(linhas);
+    expect(t).toContain("ANVISA/SNGPC");
+    expect(t).toContain("RT farmacêutico");
+
+    const dados = linhas.filter((l) => l[0] === "TOLERÂNCIA ZERO — GRAVE (>20%)" || l[0] === "ÁREA CRÍTICA");
+    expect(dados.map((l) => l[0])).toEqual([
+      "TOLERÂNCIA ZERO — GRAVE (>20%)",
+      "ÁREA CRÍTICA",
+    ]);
+    expect(dados[0]).toContain("MEDICAMENTOS");
+    expect(dados[0]).toContain("bloco proibido");
+    // O helper lê com raw:false, então a célula numérica volta formatada.
+    expect(dados[0][7]).toBe("40");
+    expect(dados[1][7]).toBe("15");
+  });
+
+  it("sem violação a aba de advertências diz isso explicitamente", () => {
+    const t = texto(aba(montarWorkbookConsolidadoV21([ev()], CTX), "Advertencias"));
+    expect(t).toContain("Nenhuma violação de limite de bloco no evento.");
   });
 
   it("declara na aba de ressalvas o que falta e como habilitar", () => {

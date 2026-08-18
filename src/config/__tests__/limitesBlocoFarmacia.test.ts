@@ -18,8 +18,12 @@ import {
   LIMITE_BLOCO_SEM_LIMITE,
   getLimitesBlocoFallback,
   getViolacoesBloco,
+  gravidadeDaViolacao,
+  ehToleranciaZero,
   lookupLimiteBlocoArea,
+  penalidadeDaViolacao,
 } from "../inventoryEvalConfig";
+import { buildViolacaoBloco } from "../../types";
 import { areasSemLimiteCadastrado } from "../../utils/inventExpUtils";
 
 /** As 25 áreas do inventário DPSP L2601, como saem do PROD_SEÇÃO. */
@@ -150,5 +154,49 @@ describe("o que não mudou", () => {
         getLimitesBlocoFallback("FARMACIA"),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("escalonamento da penalidade de bloco", () => {
+  const v = (limite: number, real: number, critica: boolean) =>
+    buildViolacaoBloco({
+      area_nome: "X",
+      real_pct: real,
+      limite_pct: limite,
+      area_critica: critica,
+    });
+
+  it("tolerância zero pesa conforme o tamanho do bloco, não mais 20 fixos", () => {
+    // O que muda em relação ao modelo antigo: contar 0,5% de MEDICAMENTOS em
+    // bloco é engano; contar 40% é método. A nota precisa distinguir os dois.
+    expect(penalidadeDaViolacao(v(0, 0.5, true))).toBe(20);
+    expect(penalidadeDaViolacao(v(0, 12, true))).toBe(30);
+    expect(penalidadeDaViolacao(v(0, 40, true))).toBe(40);
+  });
+
+  it("as faixas abrem no limite exato, não fecham", () => {
+    expect(gravidadeDaViolacao(v(0, 5, true))).toBe("TOLERANCIA_ZERO");
+    expect(gravidadeDaViolacao(v(0, 5.1, true))).toBe("TOLERANCIA_ZERO_ALTA");
+    expect(gravidadeDaViolacao(v(0, 20, true))).toBe("TOLERANCIA_ZERO_ALTA");
+    expect(gravidadeDaViolacao(v(0, 20.1, true))).toBe("TOLERANCIA_ZERO_GRAVE");
+  });
+
+  it("área crítica com limite > 0 pesa mais que área comum", () => {
+    // Dermo e infantil: os SKUs mais parecidos entre si e de maior valor.
+    expect(penalidadeDaViolacao(v(10, 25, true))).toBe(15);
+    expect(penalidadeDaViolacao(v(10, 25, false))).toBe(10); // excesso > 2×
+    expect(penalidadeDaViolacao(v(10, 15, false))).toBe(5);
+  });
+
+  it("só tolerância zero exige advertência sanitária", () => {
+    expect(ehToleranciaZero(gravidadeDaViolacao(v(0, 1, true)))).toBe(true);
+    expect(ehToleranciaZero(gravidadeDaViolacao(v(10, 90, true)))).toBe(false);
+    expect(ehToleranciaZero(gravidadeDaViolacao(v(70, 95, false)))).toBe(false);
+  });
+
+  it("limite 0 sem flag de crítica não vira tolerância zero", () => {
+    // A classificação depende das duas coisas; um cadastro com limite 0 e
+    // critica=false é erro de dados, e tratá-lo como sanitário mascararia isso.
+    expect(gravidadeDaViolacao(v(0, 30, false))).toBe("EXCESSO_ALTO");
   });
 });

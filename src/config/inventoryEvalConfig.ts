@@ -14,6 +14,10 @@ import { chaveParaLimite, mesmaArea } from '../utils/inventExpUtils';
 
 import {
   buildViolacaoBloco,
+  getViolacaoCritica,
+  getViolacaoExcessoFator,
+  getViolacaoLimitePct,
+  getViolacaoRealPct,
   type InventoryOperationType,
   type ViolacaoBloco,
 } from "../types";
@@ -30,9 +34,85 @@ export const METAS_PRODUTIVIDADE: Record<string, number> = {
 };
 
 /** Penalidade em pontos no componente Qualidade */
-export const PENALIDADE_BLOCO_AREA_CRITICA = 20; // limite 0% / área crítica
+export const PENALIDADE_BLOCO_AREA_CRITICA = 20; // tolerância zero, qualquer bloco
+export const PENALIDADE_BLOCO_TOLERANCIA_ZERO_ALTA = 30; // tolerância zero, > 5%
+export const PENALIDADE_BLOCO_TOLERANCIA_ZERO_GRAVE = 40; // tolerância zero, > 20%
+export const PENALIDADE_BLOCO_AREA_CRITICA_COM_LIMITE = 15; // crítica de limite > 0 (dermo, infantil, OTC)
 export const PENALIDADE_BLOCO_EXCESSO_ALTO = 10; // excesso > 2× o limite
 export const PENALIDADE_BLOCO_EXCESSO_LEVE = 5; // excesso até 2× o limite
+
+/**
+ * Faixas de escalonamento da área de tolerância zero, em % de bloco observado.
+ *
+ * Antes a área de tolerância zero valia 20 pontos fixos: 0,5% de bloco em
+ * MEDICAMENTOS pesava o mesmo que 16%. Como são áreas de restrição sanitária
+ * (ANVISA/SNGPC) e não de conveniência operacional, o tamanho da ocorrência
+ * precisa aparecer na nota — a diferença entre um engano pontual e ter contado
+ * a área inteira em bloco.
+ */
+export const FAIXA_TOLERANCIA_ZERO_ALTA = 5;
+export const FAIXA_TOLERANCIA_ZERO_GRAVE = 20;
+
+/** Gravidade de uma violação de bloco, da mais séria para a mais leve. */
+export type GravidadeBloco =
+  | "TOLERANCIA_ZERO_GRAVE"
+  | "TOLERANCIA_ZERO_ALTA"
+  | "TOLERANCIA_ZERO"
+  | "AREA_CRITICA"
+  | "EXCESSO_ALTO"
+  | "EXCESSO_LEVE";
+
+/**
+ * Classifica a violação. Fonte única para a penalidade da nota, o texto da
+ * advertência e o ícone da ficha — os três precisam contar a mesma história.
+ */
+export function classificarGravidadeBloco(params: {
+  critica: boolean;
+  limitePct: number;
+  realPct: number;
+  excessoFator: number;
+}): GravidadeBloco {
+  const { critica, limitePct, realPct, excessoFator } = params;
+
+  if (limitePct === 0 && critica) {
+    if (realPct > FAIXA_TOLERANCIA_ZERO_GRAVE) return "TOLERANCIA_ZERO_GRAVE";
+    if (realPct > FAIXA_TOLERANCIA_ZERO_ALTA) return "TOLERANCIA_ZERO_ALTA";
+    return "TOLERANCIA_ZERO";
+  }
+  // Crítica com limite > 0: dermo, infantil, OTC. Pesa mais que área comum
+  // porque são os SKUs mais parecidos entre si e de maior valor unitário.
+  if (critica) return "AREA_CRITICA";
+  return excessoFator > 2 ? "EXCESSO_ALTO" : "EXCESSO_LEVE";
+}
+
+export const PENALIDADE_POR_GRAVIDADE: Record<GravidadeBloco, number> = {
+  TOLERANCIA_ZERO_GRAVE: PENALIDADE_BLOCO_TOLERANCIA_ZERO_GRAVE,
+  TOLERANCIA_ZERO_ALTA: PENALIDADE_BLOCO_TOLERANCIA_ZERO_ALTA,
+  TOLERANCIA_ZERO: PENALIDADE_BLOCO_AREA_CRITICA,
+  AREA_CRITICA: PENALIDADE_BLOCO_AREA_CRITICA_COM_LIMITE,
+  EXCESSO_ALTO: PENALIDADE_BLOCO_EXCESSO_ALTO,
+  EXCESSO_LEVE: PENALIDADE_BLOCO_EXCESSO_LEVE,
+};
+
+/** Violação em área de restrição sanitária — advertência formal obrigatória. */
+export function ehToleranciaZero(g: GravidadeBloco): boolean {
+  return g.startsWith("TOLERANCIA_ZERO");
+}
+
+/** Gravidade de uma `ViolacaoBloco` já montada. */
+export function gravidadeDaViolacao(v: ViolacaoBloco): GravidadeBloco {
+  return classificarGravidadeBloco({
+    critica: getViolacaoCritica(v),
+    limitePct: getViolacaoLimitePct(v),
+    realPct: getViolacaoRealPct(v),
+    excessoFator: getViolacaoExcessoFator(v),
+  });
+}
+
+/** Pontos descontados da Qualidade por esta violação. */
+export function penalidadeDaViolacao(v: ViolacaoBloco): number {
+  return PENALIDADE_POR_GRAVIDADE[gravidadeDaViolacao(v)];
+}
 
 /**
  * Pesos e penalidades do modelo v3 (avaliação com áreas e não contados).

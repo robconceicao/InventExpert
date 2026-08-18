@@ -1,7 +1,12 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { INVENTORY_PROFILES } from "../config/inventoryEvalConfig";
+import {
+  INVENTORY_PROFILES,
+  ehToleranciaZero,
+  gravidadeDaViolacao,
+  penalidadeDaViolacao,
+} from "../config/inventoryEvalConfig";
 import {
   getSectionAreaNome,
   getSectionBlocoPct,
@@ -49,6 +54,9 @@ export function CheckerFeedbackReport({
   const pct1a1 = 100 - pctBloco;
   const violacoes = evaluation.violacoes || evaluation.violacoesBloco || [];
   const alertas = violacoes.filter(isAlertaFormal);
+  const temToleranciaZero = alertas.some((v) =>
+    ehToleranciaZero(gravidadeDaViolacao(v)),
+  );
   const secoes =
     secoesProp ||
     evaluation.secoes ||
@@ -107,14 +115,25 @@ export function CheckerFeedbackReport({
       {alertas.length > 0 && (
         <View style={styles.alertaBox}>
           <Text style={styles.alertaTitle}>
-            🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA
+            {temToleranciaZero
+              ? "🚨 ADVERTÊNCIA — BLOCO EM ÁREA DE TOLERÂNCIA ZERO"
+              : "🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA"}
           </Text>
           {alertas.map((v, i) => (
             <Text key={i} style={styles.alertaText}>
-              {getViolacaoArea(v)}: {getViolacaoRealPct(v).toFixed(1)}% (limite{" "}
-              {getViolacaoLimitePct(v)}%)
+              {getViolacaoArea(v)}: {getViolacaoRealPct(v).toFixed(1)}%{" "}
+              {ehToleranciaZero(gravidadeDaViolacao(v))
+                ? "(bloco proibido)"
+                : `(limite ${getViolacaoLimitePct(v)}%)`}{" "}
+              — −{penalidadeDaViolacao(v)} pts
             </Text>
           ))}
+          {temToleranciaZero && (
+            <Text style={styles.alertaText}>
+              Área de restrição sanitária (ANVISA/SNGPC): a ocorrência é
+              encaminhada ao RT farmacêutico do cliente.
+            </Text>
+          )}
         </View>
       )}
 

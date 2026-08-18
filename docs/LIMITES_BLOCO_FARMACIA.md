@@ -349,3 +349,65 @@ Pendente de decisão:
    conferente.
 7. **Bloco em MEDICAMENTOS e no psicotrópico B1** (§6.3) — é achado
    regulatório, não de configuração. Encaminhar ao RT farmacêutico.
+
+---
+
+## 8. Peso e advertência da violação (2026-08)
+
+A tabela de limites diz *o que é violação*. Esta seção diz *quanto custa* e
+*como é comunicado*, porque o achado da §6.3 — bloco em área de tolerância zero
+— não tinha peso proporcional nem enquadramento.
+
+### 8.1 A penalidade era plana
+
+Até aqui, área de tolerância zero descontava **20 pontos fixos** da Qualidade.
+Isso fazia 0,5% de bloco em MEDICAMENTOS pesar exatamente o mesmo que 16%. A
+escala agora é por faixa, em `classificarGravidadeBloco()`:
+
+| Gravidade | Condição | Pontos |
+|---|---|---:|
+| TOLERANCIA_ZERO_GRAVE | limite 0, crítica, > 20% | **40** |
+| TOLERANCIA_ZERO_ALTA | limite 0, crítica, > 5% | **30** |
+| TOLERANCIA_ZERO | limite 0, crítica | 20 |
+| AREA_CRITICA | crítica com limite > 0 (dermo, infantil, OTC) | **15** |
+| EXCESSO_ALTO | não-crítica, excesso > 2× o limite | 10 |
+| EXCESSO_LEVE | não-crítica | 5 |
+
+O corte em 20% não é arbitrário: acima dele o percentual deixa de ser
+compatível com engano pontual e passa a descrever o método usado na área.
+
+`AREA_CRITICA` é nova. Antes, dermo e infantil caíam na régua comum de 10 ou 5
+pontos, apesar de serem as áreas com os SKUs mais parecidos entre si e o maior
+valor unitário da loja — os mesmos motivos que justificam o limite baixo.
+
+**A classificação exige as duas condições**, limite 0 **e** `critica: true`.
+Um cadastro com limite 0 e `critica: false` é erro de dados; tratá-lo como
+sanitário mascararia a inconsistência em vez de expô-la.
+
+### 8.2 A advertência
+
+Violação de tolerância zero deixa de usar o texto genérico de área restrita e
+passa a trazer o enquadramento: a contagem precisa ser peça a peça porque o
+estoque da área é controle legal (ANVISA/SNGPC), a divergência não se resolve
+com ajuste, e a ocorrência é encaminhada ao RT farmacêutico do cliente.
+
+**O enquadramento sanitário vale para os três vínculos** — a restrição é da
+ANVISA, não do contrato. O que muda por modalidade é só a consequência
+descrita, e a regra do FREE continua intacta: nenhum termo de vínculo, nem na
+advertência mais dura. `relatorioModalidade.test.ts` trava isso.
+
+A ficha individual passou a mostrar **os pontos descontados por área**. Sem o
+número, a advertência não é auditável — o conferente vê que perdeu, não quanto
+nem por quê uma área pesou mais que outra.
+
+### 8.3 Onde aparece
+
+- **Ficha individual (v2.1)** — advertência antes dos números, e a linha de
+  penalidade com `−N pts de Qualidade`.
+- **Card visual** (`CheckerFeedbackReport`) — título escalonado e a nota do
+  encaminhamento ao RT.
+- **Consolidado do líder (v2.1)** — aba **Advertencias** nova, ordenada da
+  gravidade maior para a menor, com vínculo, área, limite, realizado e
+  penalidade. Fica em aba própria e não numa coluna do ranking porque quem lê
+  precisa levar a ocorrência ao cliente, e isso não pode depender de alguém
+  reparar num campo lateral.

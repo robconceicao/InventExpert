@@ -13,10 +13,18 @@ import * as XLSX from "xlsx";
 
 import type { AvaliacaoV3 } from "../services/AvaliacaoV3Service";
 import type { AreaAtribuida } from "../services/AreaMappingService";
-import type {
-  InventoryCheckerEvaluation,
-  InventoryOperationType,
+import {
+  getViolacaoArea,
+  getViolacaoLimitePct,
+  getViolacaoRealPct,
+  type InventoryCheckerEvaluation,
+  type InventoryOperationType,
 } from "../types";
+import {
+  gravidadeDaViolacao,
+  penalidadeDaViolacao,
+  type GravidadeBloco,
+} from "../config/inventoryEvalConfig";
 
 /** Diagnóstico da execução — o que sustenta a aba de ressalvas. */
 export interface DiagnosticoConsolidado {
@@ -717,6 +725,70 @@ export function montarWorkbookConsolidadoV21(
   }
   if (secoes.length === 4) secoes.push(["Sem PRODUÇÃO_SEÇÃO anexado."]);
 
+  /**
+   * Advertências de bloco, ordenadas pela gravidade.
+   *
+   * Fica em aba própria e não diluída no ranking porque tolerância zero é
+   * restrição sanitária, não desempenho: quem lê essa aba precisa levar a
+   * ocorrência ao RT farmacêutico do cliente, e isso não pode depender de
+   * alguém reparar numa coluna lateral da Por_Conferente.
+   */
+  const advertencias: Linha[] = [
+    ["ADVERTÊNCIAS DE CONTAGEM EM BLOCO"],
+    [
+      "TOLERÂNCIA ZERO = área de restrição sanitária (ANVISA/SNGPC). " +
+        "Encaminhar ao RT farmacêutico do cliente.",
+    ],
+    [],
+    [
+      "Gravidade",
+      "Conferente",
+      "Matrícula",
+      "Vínculo",
+      "Área",
+      "Limite",
+      "Realizado",
+      "Penalidade (pts de Qualidade)",
+    ],
+  ];
+  const ORDEM_GRAVIDADE: GravidadeBloco[] = [
+    "TOLERANCIA_ZERO_GRAVE",
+    "TOLERANCIA_ZERO_ALTA",
+    "TOLERANCIA_ZERO",
+    "AREA_CRITICA",
+    "EXCESSO_ALTO",
+    "EXCESSO_LEVE",
+  ];
+  const ROTULO_GRAVIDADE: Record<GravidadeBloco, string> = {
+    TOLERANCIA_ZERO_GRAVE: "TOLERÂNCIA ZERO — GRAVE (>20%)",
+    TOLERANCIA_ZERO_ALTA: "TOLERÂNCIA ZERO — ALTA (>5%)",
+    TOLERANCIA_ZERO: "TOLERÂNCIA ZERO",
+    AREA_CRITICA: "ÁREA CRÍTICA",
+    EXCESSO_ALTO: "excesso alto",
+    EXCESSO_LEVE: "excesso leve",
+  };
+  const linhasAdvertencia = avaliacoes
+    .flatMap((e) =>
+      (e.violacoes ?? e.violacoesBloco ?? []).map((v) => ({ e, v, g: gravidadeDaViolacao(v) })),
+    )
+    .sort((a, b) => ORDEM_GRAVIDADE.indexOf(a.g) - ORDEM_GRAVIDADE.indexOf(b.g));
+  for (const { e, v, g } of linhasAdvertencia) {
+    const limite = getViolacaoLimitePct(v);
+    advertencias.push([
+      ROTULO_GRAVIDADE[g],
+      nomeDe(e),
+      e.matricula ?? e.input.matricula ?? "",
+      e.modalidade ?? "não conferida",
+      getViolacaoArea(v),
+      limite === 0 ? "bloco proibido" : PCT(limite),
+      PCT(getViolacaoRealPct(v)),
+      penalidadeDaViolacao(v),
+    ]);
+  }
+  if (linhasAdvertencia.length === 0) {
+    advertencias.push(["Nenhuma violação de limite de bloco no evento."]);
+  }
+
   const ressalvas: Linha[] = [
     ["RESSALVAS E LIMITES DA ANÁLISE"],
     [],
@@ -740,6 +812,7 @@ export function montarWorkbookConsolidadoV21(
     ["Ranking", ranking, [8, 30, 16, 16, 8, 14, 12, 14, 12, 10, 10, 40, 40]],
     ["Por_Conferente", porConferente, [30, 16, 16, 10, 12, 20, 10, 10, 10, 8, 14, 40]],
     ["Secoes", secoes, [30, 26, 10, 10, 10, 10, 12, 10]],
+    ["Advertencias", advertencias, [32, 30, 16, 16, 26, 16, 12, 28]],
     ["Ressalvas", ressalvas, [40, 70]],
     ["Metodologia", abaMetodologia(ctx), [40, 70]],
   ];

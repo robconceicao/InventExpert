@@ -275,24 +275,37 @@ describe('relatorioOutput — Cenário 3: Tania (CLT, MEDICAMENTOS área crític
     'FARMACIA', ev, 5, 10, '01/01/2025', TANIA_SECTIONS,
   );
 
-  it('scoreQualidade < 100 por PENALIDADE_BLOCO_AREA_CRITICA (−20 pts)', () => {
+  it('scoreQualidade cai 30 pts — tolerância zero acima de 5% escala a penalidade', () => {
     expect(ev.scoreQualidade).toBeLessThan(100);
     // pctErro = 2/1360 ≈ 0.147% → base = 100*e^(-1.5*0.147) ≈ 80.2
-    // PENALIDADE_BLOCO_AREA_CRITICA = 20 → scoreQualidade ≈ 60.2
-    expect(ev.scoreQualidade).toBeCloseTo(60, 0);
+    // MEDICAMENTOS é tolerância zero e Tania fez 15,2% de bloco: passa da
+    // faixa de 5% e vale PENALIDADE_BLOCO_TOLERANCIA_ZERO_ALTA = 30, não os
+    // 20 fixos de antes. → scoreQualidade ≈ 50.2
+    expect(ev.scoreQualidade).toBeCloseTo(50, 0);
   });
 
   it('"Perfil Operacional" não aparece no relatório', () => {
     expect(report).not.toContain('Perfil Operacional');
   });
 
-  it('Alerta 🚨 aparece no relatório para violação em MEDICAMENTOS', () => {
-    expect(report).toContain('🚨 ALERTA — USO DE BLOCO EM ÁREA RESTRITA');
+  it('Advertência de tolerância zero traz o enquadramento sanitário', () => {
+    expect(report).toContain('🚨 ADVERTÊNCIA — CONTAGEM EM BLOCO EM ÁREA DE TOLERÂNCIA ZERO');
     expect(report).toContain('MEDICAMENTOS');
+    expect(report).toContain('bloco proibido');
+    expect(report).toContain('ANVISA/SNGPC');
+    expect(report).toContain('RT farmacêutico');
   });
 
-  it('Alerta aparece ANTES do bloco de números gerais (posição no relatório)', () => {
-    const alertIdx = report.indexOf('🚨 ALERTA');
+  it('abaixo de 20% não acusa "método" — 15,2% ainda é ocorrência pontual', () => {
+    expect(report).not.toContain('contada em bloco');
+  });
+
+  it('a penalidade em pontos aparece na ficha', () => {
+    expect(report).toContain('−30 pts de Qualidade');
+  });
+
+  it('Advertência aparece ANTES do bloco de números gerais (posição no relatório)', () => {
+    const alertIdx = report.indexOf('🚨 ADVERTÊNCIA');
     const numerosIdx = report.indexOf('OS SEUS NÚMEROS GERAIS');
     expect(alertIdx).toBeGreaterThan(-1);
     expect(alertIdx).toBeLessThan(numerosIdx);
