@@ -393,8 +393,8 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis + limites (2026-08):** **398 testes / 27 suites** ·
-`tsc --noEmit` = 0 erros.
+**Baseline v3 + entregáveis + limites + PDF do scanner (2026-08):**
+**415 testes / 28 suites** · `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
 ```
@@ -419,6 +419,7 @@ src/utils/__tests__/blocoPorAreaSemSecaoLookup.test.ts      ← bloco% por área
 src/utils/__tests__/avaliacaoConsolidadaXlsx.test.ts        ← as 8 abas da planilha do líder
 src/services/__tests__/AuditoriaAtribuicaoService.test.ts
 src/services/__tests__/AuditoriaReconciliacaoService.test.ts
+src/utils/__tests__/scannerPdfHtml.test.ts                 ← orientação da página, quebras N-1, modo documento
 ```
 
 **Antes de encerrar qualquer task:** rodar `tsc --noEmit` e confirmar
@@ -509,6 +510,10 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
 | Filtro P&B do scanner via WebView + canvas (`scanFilter.ts`) | Nem `expo-image-manipulator` nem o plugin de scanner expõem operação de cor; canal de tinta = `min(R,G,B)` elimina o matiz de caneta colorida |
 | Algoritmo do filtro guardado como string, não como função | Hermes descarta o corpo em `Function.prototype.toString()`; a string é injetada no WebView **e** avaliada nos testes — fonte única |
+| Orientação da página do PDF decidida pelas dimensões das folhas | `@page A4 portrait` fixo punha folha deitada (2480×1741) numa página em pé com 210 mm de largura e ~148 mm de altura: metade de baixo em branco, lida como "uma folha em branco embaixo" |
+| Orientação do PDF é do documento, não de cada página | Misturar tamanhos exigiria `@page` nomeadas, e no Android o tamanho físico vem do `PrintAttributes` que o expo-print monta a partir de `width`/`height` — a regra CSS nomeada não chega ao MediaBox. Maioria do lote decide; folha da orientação minoritária sai inteira e centralizada |
+| `width`/`height` do `printToFileAsync` e `@page size` da mesma fonte | No Android manda o primeiro, no iOS o segundo; discordar entre eles é o mesmo bug de volta em uma das plataformas |
+| Altura de `.page` 1 mm menor que a página | Altura definida em mm + arredondamento sub-pixel do Chromium empurra o bloco para uma segunda página em branco; a folga custa 0,3% da folha |
 | Formato do arquivo por magic bytes, não por extensão/MIME | Android manda `octet-stream` e o cache do picker pode perder o nome; extensão só serve para mensagem e `console.warn` |
 | Picker sempre `type: "*/*"` | Filtro de MIME deixava .xls/.prc/.txt cinza e inselecionáveis no Android |
 | IO separado da conversão (`fileImport` vs `spreadsheetReader`/`fileFormat`) | O miolo (bytes → planilha → CSV) roda no Jest sem mock de React Native |
@@ -542,6 +547,9 @@ sozinho e um build com `versionCode` repetido é recusado na publicação.
 - ❌ Não filtrar o DocumentPicker por MIME — usar `type: "*/*"` e validar pelo conteúdo
 - ❌ Não decidir "é planilha ou texto" pela extensão — usar `detectarFormato()`
 - ❌ Não importar `readAsStringAsync` de `expo-file-system` (só de `/legacy`)
+- ❌ Não fixar `@page size: A4 portrait` no PDF do scanner — a folha pode ser deitada
+- ❌ Não jogar fora `width`/`height` do `manipulateAsync` — é deles que sai a orientação da página
+- ❌ Não ancorar a folha no topo da página (`object-position: top`) — a sobra vira "folha em branco embaixo"
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
 - ❌ Não somar BLOCO.xls sem deduplicar as linhas repetidas na quebra de página
