@@ -429,6 +429,10 @@ que todos os testes passam.
 
 ## Build e Release
 
+**Versão atual: 1.8.1 · versionCode 22** (commit `1c2d011`). A fonte da verdade
+é o `app.json`; esta linha é só referência rápida e precisa ser atualizada junto
+com ele a cada release.
+
 ```bash
 # Type check + testes (antes de qualquer build)
 npx tsc --noEmit && npm test
@@ -451,6 +455,8 @@ Build local só depois de `npx expo prebuild -p android`, e aí o APK sai em
 **Sempre incrementar `versionCode` no `app.json` antes de gerar release** —
 `eas.json` usa `appVersionSource: "local"`, então o EAS não incrementa
 sozinho e um build com `versionCode` repetido é recusado na publicação.
+No mesmo commit, subir `version` e repetir os dois números na linha de versão
+acima, senão este arquivo passa a mentir sobre o que está publicado.
 
 ---
 
