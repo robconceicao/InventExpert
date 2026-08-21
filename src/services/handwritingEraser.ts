@@ -13,6 +13,7 @@
  */
 
 import { GEMINI_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY } from '@env';
+import type { OrientacaoPagina } from '../utils/scannerPdfHtml';
 
 export type EraserEngine = 'GEMINI' | 'GROQ' | 'OPENAI' | 'HYBRID_DEEPSEEK';
 
@@ -20,7 +21,18 @@ export type EraserResult =
   | { success: true; html: string; engine: string; model: string }
   | { success: false; error: string };
 
-const PROMPT_VISION = `Você é um sistema especialista em OCR e reconstrução digital de documentos.
+/**
+ * Frase de página do prompt. A folha fotografada pode ser deitada (relatório do
+ * Crystal em paisagem); pedir "A4 portrait" fixo devolvia um PDF em pé com
+ * metade branca, o mesmo defeito do PDF do lote.
+ */
+const frasePagina = (orientacao: OrientacaoPagina): string =>
+  orientacao === 'paisagem'
+    ? 'A4 landscape (horizontal/deitada)'
+    : 'A4 portrait (vertical)';
+
+const promptVision = (orientacao: OrientacaoPagina): string =>
+  `Você é um sistema especialista em OCR e reconstrução digital de documentos.
 
 A imagem enviada é um formulário impresso de inventário que foi preenchido manualmente.
 Sua missão é gerar um documento HTML limpo que seja a RECONSTRUÇÃO DIGITAL exata do formulário original, atendendo aos seguintes critérios:
@@ -33,27 +45,34 @@ Sua missão é gerar um documento HTML limpo que seja a RECONSTRUÇÃO DIGITAL e
 4. ESTILO E APARÊNCIA:
    - Use CSS inline limpo e profissional.
    - O documento final deve parecer um arquivo PDF novo em branco, gerado por computador e pronto para impressão.
-   - Configure a página para A4 portrait (vertical) com margens elegantes para que caiba perfeitamente no PDF.
+   - Configure a página para ${frasePagina(orientacao)} com margens elegantes para que caiba perfeitamente no PDF.
 
 Retorne APENAS o código HTML completo e válido (começando com <!DOCTYPE html> e terminando com </html>), sem blocos de código Markdown ou qualquer outro texto explicativo.`;
 
-const PROMPT_SYSTEM_DEEPSEEK = `Você é um sistema especialista em OCR, processamento de linguagem e reconstrução digital de documentos.
+const promptSystemDeepseek = (orientacao: OrientacaoPagina): string =>
+  `Você é um sistema especialista em OCR, processamento de linguagem e reconstrução digital de documentos.
 Você receberá os dados brutos de texto extraídos de uma imagem de formulário impresso de inventário preenchido à mão por meio de um sistema de OCR.
 Sua missão é gerar um documento HTML limpo que seja a RECONSTRUÇÃO DIGITAL exata do formulário original, atendendo aos seguintes critérios:
 1. Identifique e APAGUE COMPLETAMENTE toda a escrita manual (como números inseridos de quantidades, anotações de caneta, rasuras ou assinaturas).
 2. PRESERVE EXATAMENTE todo o texto impresso original (títulos como "FORMULARIO DE INVENTARIO", cabeçalhos de tabela, códigos de barra, nomes de produtos, etc.). O documento retornado deve conter esses textos como TEXTO DIGITAL selecionável no HTML.
 3. Se os dados de OCR contiverem tabelas ou sequências de colunas, crie uma tabela HTML real (<table>) com bordas finas e as linhas originais, mas com os valores preenchidos à mão zerados ou vazios para preenchimento posterior.
-4. Use CSS inline profissional e limpo. Configure a página para A4 portrait (vertical) com margens elegantes.
+4. Use CSS inline profissional e limpo. Configure a página para ${frasePagina(orientacao)} com margens elegantes.
 Retorne APENAS o código HTML completo e válido (começando com <!DOCTYPE html> e terminando com </html>), sem blocos de código Markdown ou qualquer outro texto explicativo.`;
 
 /**
  * Remove a escrita manual da foto reconstruindo o PDF digital usando IA.
+ *
+ * `orientacao` sai das dimensões da foto: folha deitada precisa de página
+ * deitada, senão o PDF volta em pé com metade da página vazia.
  */
 export async function eraseHandwriting(
   base64Image: string,
-  mimeType: "image/jpeg" | "image/png" = "image/jpeg"
+  mimeType: "image/jpeg" | "image/png" = "image/jpeg",
+  orientacao: OrientacaoPagina = "retrato"
 ): Promise<EraserResult> {
   const errors: string[] = [];
+  const PROMPT_VISION = promptVision(orientacao);
+  const PROMPT_SYSTEM_DEEPSEEK = promptSystemDeepseek(orientacao);
 
   // ==========================================
   // 1. TENTA GEMINI VISION (MÚLTIPLOS MODELOS ESTÁVEIS)

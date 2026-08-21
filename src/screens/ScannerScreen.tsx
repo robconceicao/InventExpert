@@ -56,26 +56,51 @@ import {
   somarTamanhoBytes,
   type GeracaoPdf,
 } from "../utils/scannerGeracao";
-import { SCAN_FILTER_CSS } from "../utils/scanFilter";
+import {
+  A4,
+  buildScannerPdfHtml,
+  orientacaoDaImagem,
+  type PaginaScan,
+} from "../utils/scannerPdfHtml";
 
 /** Preferência do modo documento (P&B) — sobrevive ao fechamento do app. */
 const MODO_DOCUMENTO_KEY = "inventexpert:scanner_modo_documento";
 
 // ---------------------------------------------------------------------------
-// Helper: converte URI de imagem para base64 com orientação portrait corrigida
+// Helper: lê a folha para o PDF (base64 + dimensões)
 // ---------------------------------------------------------------------------
-const toPortraitBase64 = async (uri: string): Promise<string> => {
-  // Normaliza para JPEG e garante orientação correta via manipulação
-  const manipResult = await ImageManipulator.manipulateAsync(
-    uri,
-    [{ rotate: 0 }], // força re-encode sem rotação extra
-    {
-      compress: 0.85,
-      format: ImageManipulator.SaveFormat.JPEG,
-      base64: true,
-    },
-  );
-  return manipResult.base64 ?? "";
+/**
+ * Reencoda em JPEG para assar a orientação do EXIF nos pixels — o base64
+ * embutido no HTML não carrega metadado — e devolve as dimensões junto.
+ *
+ * As dimensões vêm de graça do `manipulateAsync` e são o que decide se a página
+ * do PDF sai em pé ou deitada; jogá-las fora era o motivo de folha deitada cair
+ * numa página em pé com metade branca embaixo.
+ */
+const lerPaginaParaPdf = async (uri: string): Promise<PaginaScan> => {
+  try {
+    const manipResult = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ rotate: 0 }], // força re-encode sem rotação extra
+      {
+        compress: 0.85,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      },
+    );
+    return {
+      base64: manipResult.base64 ?? "",
+      largura: manipResult.width,
+      altura: manipResult.height,
+    };
+  } catch {
+    // Fallback: arquivo cru, sem dimensão. Essa folha não vota na orientação,
+    // mas continua entrando no PDF, centralizada como qualquer outra.
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return { base64 };
+  }
 };
 
 /** Filtra URIs válidos do plugin de scanner. */
@@ -462,10 +487,13 @@ export default function ScannerScreen() {
     setShareVisible(true);
   };
 
-  // ── Gera PDF com imagens em orientação portrait (página em pé)
-  //    Uma imagem = uma página A4, sem páginas em branco entre elas.
-  //    Usa page-break-before nas páginas seguintes (não page-break-after no
-  //    último bloco), o que evita a página em branco extra comum no WebKit.
+  // ── Gera o PDF do lote: uma folha = uma página A4, sem sobra em branco.
+  //    A orientação da página acompanha as folhas (maioria do lote), porque
+  //    folha deitada numa página em pé ocupa só a metade de cima e a metade de
+  //    baixo vazia é lida como "uma folha em branco embaixo".
+  //    O HTML e a caixa da página saem do mesmo buildScannerPdfHtml: no Android
+  //    quem manda é o width/height do printToFileAsync, no iOS o @page size —
+  //    os dois precisam concordar, então vêm de uma fonte só.
   const handleSharePdf = async () => {
     const trimmed = pdfName.trim().replace(/[/\\?%*:|"<>]/g, "");
     if (!trimmed) {
@@ -487,89 +515,15 @@ export default function ScannerScreen() {
     try {
       setIsSharing(true);
 
-      const pageBlocks = await Promise.all(
-        validUris.map(async (uri, idx) => {
-          let base64: string;
-          try {
-            base64 = await toPortraitBase64(uri);
-          } catch {
-            base64 = await FileSystem.readAsStringAsync(uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-          }
-          if (!base64) return "";
-          // Quebra ANTES da página (exceto a 1ª) — evita blank page trailing/extra
-          const pageBreak =
-            idx > 0
-              ? "page-break-before:always;break-before:page;"
-              : "page-break-before:auto;break-before:auto;";
-          return `<div class="page" style="${pageBreak}">
-  <img src="data:image/jpeg;base64,${base64}" alt="pagina-${idx + 1}" />
-</div>`;
-        }),
-      );
+      const paginas = (
+        await Promise.all(validUris.map((uri) => lerPaginaParaPdf(uri)))
+      ).filter((pagina) => pagina.base64.length > 0);
 
-      const pagesHtml = pageBlocks.filter(Boolean).join("\n");
-
-      /*
-       * Segunda camada do modo documento. O filtro de pixels já entrega branco
-       * e preto puros — grayscale/contraste sobre 0 e 255 não mexe nesses
-       * extremos —, então aplicar aqui é inofensivo quando ele funcionou e
-       * salva a saída quando o WebView falhou no aparelho.
-       */
-      const imgFilter = modoDocumento
-        ? `filter:${SCAN_FILTER_CSS};-webkit-filter:${SCAN_FILTER_CSS};`
-        : "";
-
-      const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<style>
-  @page { size: A4 portrait; margin: 0; }
-  html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    background: #fff;
-  }
-  .page {
-    width: 210mm;
-    max-width: 100%;
-    min-height: 0;
-    max-height: 297mm;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    box-sizing: border-box;
-    display: block;
-  }
-  .page img {
-    display: block;
-    width: 100%;
-    max-width: 210mm;
-    max-height: 297mm;
-    height: auto;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    object-fit: contain;
-    object-position: top center;
-    ${imgFilter}
-  }
-</style>
-</head>
-<body>${pagesHtml}</body>
-</html>`;
-
-      const printed = await Print.printToFileAsync({
-        html,
-        width: 595, // A4 @ 72dpi
-        height: 842,
+      const { html, width, height } = buildScannerPdfHtml(paginas, {
+        modoDocumento,
       });
+
+      const printed = await Print.printToFileAsync({ html, width, height });
       const targetName = trimmed.endsWith(".pdf") ? trimmed : `${trimmed}.pdf`;
       const outputUri = `${FileSystem.cacheDirectory}${targetName}`;
       await FileSystem.moveAsync({ from: printed.uri, to: outputUri });
@@ -641,11 +595,17 @@ export default function ScannerScreen() {
       );
       const jpegBase64 = jpegResult.base64 ?? "";
 
+      // A folha fotografada pode ser deitada: sem isso a IA reconstrói o
+      // formulário numa página em pé e sobra metade branca, igual ao lote.
+      const orientacaoFoto =
+        orientacaoDaImagem(jpegResult.width, jpegResult.height) ?? "retrato";
+      const medidasFoto = A4[orientacaoFoto];
+
       let finalPdfUri: string;
 
       // ── Passo 2: tenta a IA (Gemini Vision / Outras / Híbrida)
       setEraserStatus("Apagando escrita e adaptando...");
-      const result = await eraseHandwriting(jpegBase64, "image/jpeg");
+      const result = await eraseHandwriting(jpegBase64, "image/jpeg", orientacaoFoto);
 
       if (result.success) {
         setEraserStatus("Gerando PDF Digital...");
@@ -654,7 +614,11 @@ export default function ScannerScreen() {
         setEraserModelName(result.model);
         const html = result.html;
 
-        const printed = await Print.printToFileAsync({ html });
+        const printed = await Print.printToFileAsync({
+          html,
+          width: medidasFoto.width,
+          height: medidasFoto.height,
+        });
         finalPdfUri = `${FileSystem.cacheDirectory}folha_limpa_${Date.now()}.pdf`;
         await FileSystem.moveAsync({ from: printed.uri, to: finalPdfUri });
         setEraserResult(finalPdfUri);
@@ -709,7 +673,7 @@ export default function ScannerScreen() {
           <Text style={styles.cardTitle}>Scanner de Documentos</Text>
           <Text style={styles.subtitle}>
             Capture relatórios físicos e envie como PDF via WhatsApp.{"\n"}
-            As páginas são geradas em modo retrato (cabeçalho para cima).{"\n"}
+            As páginas seguem a orientação das folhas (em pé ou deitadas).{"\n"}
             Após escanear, revise as folhas antes de processar.
           </Text>
 
