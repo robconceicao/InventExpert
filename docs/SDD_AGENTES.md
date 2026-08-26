@@ -6,6 +6,11 @@ independentes**: Claude Code escrevendo o código e Codex CLI verificando o resu
 Escrito para ser executado no Windows, em PowerShell, dentro deste repositório.
 Ao terminar a Fase 3 você terá rodado um ciclo completo de verdade.
 
+> **Versão em página, com índice fixo e prompts copiáveis:**
+> <https://claude.ai/code/artifact/d3103b70-8bbc-4f0e-9fbe-5bdc9e929943>
+> Privada até ser compartilhada pelo menu da própria página. Este arquivo continua
+> sendo a fonte: ao editá-lo, republique a página para os dois não divergirem.
+
 **Convenções deste guia**
 
 - ⚠️ marca todo ponto em que **você revisa o diff antes de aprovar**. Não é formalidade:
