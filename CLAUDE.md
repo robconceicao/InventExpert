@@ -22,6 +22,30 @@ Após mudanças no app: `git push origin main` — a web atualiza sozinha.
 
 ---
 
+## SDD com dois agentes (escritor + verificador)
+
+Toda entrega nova começa por uma **spec** em [`specs/`](specs/) — escopo, não-escopo,
+contratos de dados, casos extremos e critérios de aceitação verificáveis, escritos
+**antes** do código. Depois de implementada, um segundo agente (Codex CLI, contexto em
+[`AGENTS.md`](AGENTS.md)) audita o diff contra a spec e devolve achados classificados
+como **bug de código** ou **lacuna de spec**. Lacuna vira linha nova na spec antes de
+virar correção no código.
+
+| | |
+|--|--|
+| Guia completo | [`docs/SDD_AGENTES.md`](docs/SDD_AGENTES.md) |
+| Specs | `specs/NNNN-slug.md` · molde em `specs/TEMPLATE.md` |
+| ADRs | `specs/decisions/NNNN-slug.md` |
+| Contexto do verificador | `AGENTS.md` (somente leitura — não escreve, não commita) |
+| Comando único de baseline | `npm run check` = `tsc --noEmit` + suíte Jest |
+
+Por que existe: o `TASK_LIST.md` registra 16 divergências (D1–D16) descobertas **depois**
+do código — limite de FRENTE DE CAIXA 15% no código e 90% na migration, três grafias de
+`ModalidadeContrato`, arquivos documentados que nunca existiram. Nenhuma é falha de
+programação; todas são perguntas que ninguém respondeu por escrito antes de programar.
+
+---
+
 ## Visão Geral do Projeto
 
 **InventExpert** é um app de gerenciamento de inventário físico (mobile + web
@@ -563,3 +587,7 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 - ❌ Não omitir o enquadramento ANVISA/SNGPC da advertência por causa da modalidade
 - ❌ Não recriar policies `USING (true)` / `WITH CHECK (true)` nas tabelas core
 - ❌ Não conceder `EXECUTE` de `gerar_escala`/`listar_escala` a `anon` ou `PUBLIC`
+- ❌ Não escrever código de entrega nova sem spec `APROVADA` em `specs/`
+- ❌ Não deixar spec divergindo do código — ou atualiza, ou marca `SUPERADA POR NNNN`
+- ❌ Não deixar o agente verificador editar, commitar ou corrigir — ele só relata
+- ❌ Não corrigir lacuna de spec só no código — a spec vem primeiro, senão ela volta

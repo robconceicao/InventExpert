@@ -52,6 +52,10 @@ jdk17/
 InventExpert-*.apk
 
 
+# rascunho de agente — relatorio de verificacao, PARADA.md, RESUMO.md
+.agent-scratch/
+specs/**/*.local.md
+
 # locais/temporarios
 .idea/
 fix*.py
