@@ -179,6 +179,12 @@ export default function InventExpImportScreen() {
   const [paraMarcar, setParaMarcar] = useState<ConferenteParaMarcar[]>([]);
   const [salvandoModalidade, setSalvandoModalidade] = useState(false);
   const [blocoRows, setBlocoRows] = useState<BlocoRow[]>([]);
+  /**
+   * Arquivos lidos por índice fixo, sem cabeçalho reconhecido (spec 0002).
+   * Não bloqueia o processamento — mas precisa aparecer na tela e na aba
+   * Ressalvas, porque o resultado é indistinguível de uma leitura correta.
+   */
+  const [arquivosSemCabecalho, setArquivosSemCabecalho] = useState<string[]>([]);
   const [agentesMap, setAgentesMap] = useState<Map<string, AuditoriaAgenteInfo>>(new Map());
   const [avaliacoesV3, setAvaliacoesV3] = useState<AvaliacaoV3[]>([]);
   const [diagV3, setDiagV3] = useState<{
@@ -238,7 +244,21 @@ export default function InventExpImportScreen() {
     }
   };
 
-  const handlePickFile = async () => {
+    /** Registra que um arquivo foi lido às cegas; a aba Ressalvas consome isto. */
+  const registrarLeituraAsCegas = (arquivo: string) =>
+    setArquivosSemCabecalho((atual) =>
+      atual.includes(arquivo) ? atual : [...atual, arquivo],
+    );
+
+  /** Frase acrescentada ao alerta de sucesso quando o cabeçalho não foi achado. */
+  const avisoLeituraAsCegas = (cabecalhoEncontrado: boolean) =>
+    cabecalhoEncontrado
+      ? ""
+      : "\n\n⚠ Cabeçalho não reconhecido. As colunas vieram das posições padrão, " +
+        "então os números podem ser de outra coluna — e linhas podem ter ficado de fora. " +
+        "Confira o arquivo antes de publicar a avaliação.";
+
+const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
       if (result.canceled) return;
@@ -340,7 +360,7 @@ export default function InventExpImportScreen() {
         return;
       }
 
-      const linhas = parseProdSecaoMatrix(matriz);
+      const { linhas, cabecalhoEncontrado } = parseProdSecaoMatrix(matriz);
       if (linhas.length === 0) {
         Alert.alert(
           "PROD_SEÇÃO",
@@ -348,12 +368,14 @@ export default function InventExpImportScreen() {
         );
         return;
       }
+      if (!cabecalhoEncontrado) registrarLeituraAsCegas("PROD_SEÇÃO");
       setProdSecaoRows(linhas);
       setProducaoSecao(prodSecaoParaSecoes(linhas));
       const areas = new Set(linhas.map((l) => l.area)).size;
       Alert.alert(
         "PROD_SEÇÃO carregado",
-        `${linhas.length} combinação(ões) · ${areas} área(s) físicas`,
+        `${linhas.length} combinação(ões) · ${areas} área(s) físicas` +
+          avisoLeituraAsCegas(cabecalhoEncontrado),
       );
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler PROD_SEÇÃO: " + (e?.message ?? ""));
@@ -399,9 +421,13 @@ export default function InventExpImportScreen() {
         Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
         return;
       }
-      const itens = parseNaoContadosMatrix(matriz);
+      const { linhas: itens, cabecalhoEncontrado } = parseNaoContadosMatrix(matriz);
       setNaoContadosArq(itens);
-      Alert.alert("NÃO CONTADOS carregado", `${itens.length} produto(s) sem coleta`);
+      if (!cabecalhoEncontrado) registrarLeituraAsCegas("NÃO CONTADOS");
+      Alert.alert(
+        "NÃO CONTADOS carregado",
+        `${itens.length} produto(s) sem coleta` + avisoLeituraAsCegas(cabecalhoEncontrado),
+      );
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler NAO CONTADOS: " + (e?.message ?? ""));
     }
@@ -417,9 +443,13 @@ export default function InventExpImportScreen() {
         Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
         return;
       }
-      const linhas = parseDobroMatrix(matriz);
+      const { linhas, cabecalhoEncontrado } = parseDobroMatrix(matriz);
       setDobroRows(linhas);
-      Alert.alert("DOBRO carregado", `${linhas.length} bipada(s) em duplicidade`);
+      if (!cabecalhoEncontrado) registrarLeituraAsCegas("DOBRO");
+      Alert.alert(
+        "DOBRO carregado",
+        `${linhas.length} bipada(s) em duplicidade` + avisoLeituraAsCegas(cabecalhoEncontrado),
+      );
     } catch {
       Alert.alert("Erro", "Falha ao ler DOBRO.");
     }
@@ -435,11 +465,13 @@ export default function InventExpImportScreen() {
         Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
         return;
       }
-      const linhas = parseBlocoMatrix(matriz);
+      const { linhas, cabecalhoEncontrado } = parseBlocoMatrix(matriz);
       setBlocoRows(linhas);
+      if (!cabecalhoEncontrado) registrarLeituraAsCegas("BLOCO");
       Alert.alert(
         "BLOCO carregado",
-        `${linhas.length} linha(s). Serve de conferência independente da seção e da regra de bloco.`,
+        `${linhas.length} linha(s). Serve de conferência independente da seção e da regra de bloco.` +
+          avisoLeituraAsCegas(cabecalhoEncontrado),
       );
     } catch {
       Alert.alert("Erro", "Falha ao ler BLOCO.");
@@ -1200,6 +1232,8 @@ export default function InventExpImportScreen() {
                     datasDistintas: prcInfo?.datas,
                     arquivosPrc: prcInfo?.count,
                     areasSemLimiteBloco,
+                    arquivosSemCabecalho:
+                      arquivosSemCabecalho.length > 0 ? arquivosSemCabecalho : undefined,
                   }
                 : null,
             })

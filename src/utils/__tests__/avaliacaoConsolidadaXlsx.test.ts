@@ -204,6 +204,28 @@ describe("montarWorkbookConsolidado", () => {
     expect(t).toContain("Datas distintas");
   });
 
+  it("Ressalvas registra os relatórios lidos sem cabeçalho reconhecido", () => {
+    // Spec 0002 / D3: leitura por índice fixo é indistinguível de leitura
+    // correta. Depois que a importação termina, esta linha é o único sinal
+    // que sobra para o líder.
+    const wb = montarWorkbookConsolidado(
+      [avaliacao()],
+      {
+        ...CTX,
+        diagnostico: { ...CTX.diagnostico!, arquivosSemCabecalho: ["BLOCO", "DOBRO"] },
+      },
+    );
+    const t = texto(aba(wb, "Ressalvas"));
+    expect(t).toContain("Relatórios lidos sem cabeçalho reconhecido");
+    expect(t).toContain("BLOCO, DOBRO");
+    expect(t).toContain("podem ter ficado de fora");
+  });
+
+  it("Ressalvas não inventa a linha quando todos os cabeçalhos foram achados", () => {
+    const t = texto(aba(montarWorkbookConsolidado([avaliacao()], CTX), "Ressalvas"));
+    expect(t).not.toContain("sem cabeçalho reconhecido");
+  });
+
   it("Ressalvas detalha cada conferente quando a reconciliação não fecha", () => {
     const wb = montarWorkbookConsolidado([avaliacao()], {
       ...CTX,

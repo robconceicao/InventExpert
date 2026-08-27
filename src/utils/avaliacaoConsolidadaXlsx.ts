@@ -43,6 +43,12 @@ export interface DiagnosticoConsolidado {
   arquivosPrc?: number;
   /** Áreas do inventário sem limite de bloco na tabela — bloco não verificado. */
   areasSemLimiteBloco?: string[];
+  /**
+   * Relatórios lidos por índice fixo, sem cabeçalho reconhecido (spec 0002).
+   * Ex.: ['BLOCO', 'DOBRO']. Os números daquele arquivo podem ser de outra
+   * coluna, e linhas podem ter ficado de fora.
+   */
+  arquivosSemCabecalho?: string[];
 }
 
 export interface ContextoConsolidado {
@@ -480,6 +486,16 @@ function abaRessalvas(
         "Datas distintas nas bipadas",
         d.datasDistintas.length,
         `Relógio de coletor fora de data (${d.datasDistintas.join(", ")}) — horas medidas por janela diária`,
+      ]);
+    }
+    // Spec 0002: leitura por índice fixo é indistinguível de leitura correta.
+    // A ressalva é o único sinal que sobra depois que a importação termina.
+    if (d.arquivosSemCabecalho && d.arquivosSemCabecalho.length > 0) {
+      linhas.push([
+        "Relatórios lidos sem cabeçalho reconhecido",
+        d.arquivosSemCabecalho.length,
+        `${d.arquivosSemCabecalho.join(", ")} — colunas vindas das posições padrão; ` +
+          "os números podem ser de outra coluna e linhas podem ter ficado de fora. Conferir o arquivo",
       ]);
     }
   }

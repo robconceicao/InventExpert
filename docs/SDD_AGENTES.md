@@ -90,7 +90,7 @@ New-Item -ItemType File -Path specs\README.md, specs\TEMPLATE.md, AGENTS.md -For
 **`CLAUDE.md` (escritor).** Neste repositório ele já existe e já é bom: stack, estrutura
 de módulos, regras de negócio críticas, decisões arquiteturais e uma lista "O que NÃO
 fazer". A Fase 0 acrescentou nele apenas a seção **"SDD com dois agentes"**, que aponta
-para `specs/`, e três linhas novas em "O que NÃO fazer".
+para `specs/`, e quatro linhas novas em "O que NÃO fazer".
 
 **`AGENTS.md` (verificador).** Contém o papel, a proibição de escrever, as treze regras
 invioláveis (R1–R13) e o formato obrigatório do relatório. Leia-o inteiro uma vez —
@@ -599,7 +599,7 @@ mas não o risco de perder o seu tempo. Os guardrails abaixo protegem o segundo.
 **1. Branch dedicada, sempre.**
 
 ```powershell
-git switch -c auto/0002-repository-historico
+git switch -c auto/0003-repository-historico
 ```
 
 **2. Proibição de push em `main`.** Não existe travessura útil aqui: o agente não faz
@@ -638,7 +638,7 @@ uma coisa com mais fôlego.
 ### Prompt de sessão longa
 
 ```
-Leia specs/0002-repository-historico.md por inteiro.
+Leia specs/0003-repository-historico.md por inteiro.
 
 Trabalhe SOZINHO até completar os critérios de aceitação da seção 9.
 
@@ -777,7 +777,7 @@ minutos; se um dia render menos, empurre o resto — a ordem importa mais que o 
 | **3** | **Primeiro ciclo (Fase 3).** Prompt literal, escritor, ⚠️ revisão do diff, commit | 424 testes verdes, 3 arquivos no diff, você leu tudo |
 | **4** | **Primeira verificação (Fase 4).** Codex em sandbox de leitura, relatório no formato | Relatório com todo achado classificado bug/lacuna |
 | **5** | **Realimentação (Fase 5).** Classificar destinos, atualizar seções 3, 7 e 10, corrigir, reverificar, merge. Anotar M1 e M3 | Spec `IMPLEMENTADA`, merge feito, duas métricas anotadas |
-| **6** | Escrever `specs/0002-repository-historico.md` — fatia 2, o repository seguindo o padrão de `modalidadeRepository.ts` (Supabase é verdade, AsyncStorage é cache, `null` nunca vira default) | Spec passa no critério de pronto da Fase 1 |
+| **6** | Escrever `specs/0003-repository-historico.md` — fatia 2, o repository seguindo o padrão de `modalidadeRepository.ts` (Supabase é verdade, AsyncStorage é cache, `null` nunca vira default) | Spec passa no critério de pronto da Fase 1 |
 | **7** | Folga ou revisão. Reler a spec 0001 já implementada: ela ainda descreve o código? | Spec e código concordam, ou a divergência virou linha na seção 10 |
 
 ### Semana 2 — autonomia com guardrail
