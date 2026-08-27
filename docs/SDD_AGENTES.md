@@ -784,9 +784,9 @@ minutos; se um dia render menos, empurre o resto — a ordem importa mais que o 
 
 | Dia | O quê | Pronto quando |
 |-----|-------|---------------|
-| **8** | Ciclo 2 (spec 0002), ainda com você aprovando cada edição. Agora tem IO: mock de Supabase nos testes | `check` verde, diff dentro do escopo |
-| **9** | Verificação do ciclo 2 + realimentação. Comparar M1 com o ciclo 1 | M1 caiu? Se sim, a spec 0001 ensinou a spec 0002 |
-| **10** | Escrever `specs/0003-bloco-evolucao-ficha.md` — fatia 3, o bloco na ficha. ⚠️ Casos extremos de modalidade: no FREE, evolução própria pode aparecer, comparação com a equipe não. Trave com teste, no padrão de `relatorioV3Modalidade.test.ts` | Spec com os casos de modalidade escritos e um teste nomeado para cada |
+| **8** | Ciclo 2 (spec 0003), ainda com você aprovando cada edição. Agora tem IO: mock de Supabase nos testes | `check` verde, diff dentro do escopo |
+| **9** | Verificação do ciclo 2 + realimentação. Comparar M1 com o ciclo 1 | M1 caiu? Se sim, a spec 0001 ensinou a spec 0003 |
+| **10** | Escrever `specs/0004-bloco-evolucao-ficha.md` — fatia 3, o bloco na ficha. ⚠️ Casos extremos de modalidade: no FREE, evolução própria pode aparecer, comparação com a equipe não. Trave com teste, no padrão de `relatorioV3Modalidade.test.ts` | Spec com os casos de modalidade escritos e um teste nomeado para cada |
 | **11** | Ciclo 3 em modo mais solto: aprove em blocos, não a cada edição. Cronometre M3 | M3 anotado. Se o primeiro desvio veio antes dos 30 min, adie a sessão longa e fatie mais |
 | **12** | Verificação + realimentação do ciclo 3. Fechar a entrega "evolução do conferente" inteira. Atualizar `CLAUDE.md` com a decisão arquitetural nova (uma linha na tabela) | Três specs `IMPLEMENTADA`, `CLAUDE.md` atualizado |
 | **13** | **Primeira sessão longa (Fase 6), supervisionada.** Escolha uma spec pequena (ex.: extrair um hook de `InventExpImportScreen`), rode a checklist pré-sessão, deixe rodar 60 a 90 minutos **com você por perto**. Observe sem interromper, salvo desvio real | O agente parou sozinho com `PARADA.md` ou `RESUMO.md` escrito |
