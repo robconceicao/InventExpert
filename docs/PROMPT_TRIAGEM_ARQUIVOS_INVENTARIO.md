@@ -14,20 +14,20 @@ se dá para rodar a avaliação com aquilo. Este prompt responde três perguntas
 
 ## Como usar
 
-Abra o Claude Code **dentro deste repositório** — o prompt manda o agente conferir os
-parsers de verdade, e isso só funciona com o código à mão. Depois cole o bloco abaixo,
-substituindo `<NOME-DA-PASTA>` e a linha `OPERAÇÃO`.
+Abra o Claude Code **dentro deste repositório**, na máquina onde a pasta está — o
+prompt manda o agente conferir os parsers de verdade, e isso só funciona com o código à
+mão. Depois cole o bloco abaixo, ajustando o caminho e a linha `OPERAÇÃO`.
 
 ```
 Analise uma pasta de arquivos de inventário e me diga o que dela serve para o
 módulo Avaliação deste repositório.
 
-PASTA: $env:USERPROFILE\Desktop\<NOME-DA-PASTA>
+PASTA: C:\Users\<usuário>\Downloads\<NOME-DA-PASTA>
 OPERAÇÃO: supermercado (não é farmácia)
 
 REGRAS DE TRABALHO — leia antes de tocar em qualquer coisa
 - Somente leitura. Não mova, renomeie, converta, salve por cima nem apague nada
-  na pasta. Se precisar manipular, copie para uma pasta temporária fora do Desktop.
+  na pasta. Se precisar manipular, copie para uma pasta temporária fora dela.
 - Nunca abra os arquivos no Excel: ele reescreve o XLS e destrói o formato que o
   parser espera.
 - Os arquivos contêm CPF e nome de pessoas. No relatório, cite contagens e amostras
@@ -51,13 +51,18 @@ Liste recursivamente nome, caminho relativo, tamanho e data de modificação de
 TODOS os arquivos, inclusive subpastas e arquivos sem extensão.
 
 PASSO 3 — Descubra o formato REAL de cada arquivo
-Não confie na extensão nem no ícone. Leia os primeiros bytes e classifique:
-  50 4B 03 04                → XLSX
-  D0 CF 11 E0                → XLS binário
-  09 00 / 09 02 / 09 04 / 09 08 → BIFF cru
-  "<html", "<table", "MIME-Version" → HTML ou MHTML (o "Excel" do Crystal Reports
+Não confie na extensão nem no ícone. Leia os primeiros bytes e classifique, na
+mesma ordem que detectarFormato() usa:
+  50 4B 03 04                     → XLSX (contêiner ZIP)
+  D0 CF 11 E0 A1 B1 1A E1         → XLS binário (CFB, Excel 97-2003)
+  09 00 / 09 02 / 09 04 / 09 08   → XLS (BIFF2-5 cru)
+  "MIME-Version:" ou
+  "Content-Type: multipart/related" → HTML (MHTML — o "Excel" do Crystal Reports
                                       costuma ser isto, com extensão .xls)
-  qualquer outra coisa       → texto
+  "<?xml" + "spreadsheet"/"<workbook" → XML (SpreadsheetML 2003)
+  "<?xml" + "<table"/"<html"      → HTML
+  "<!doctype html", "<html", "<table" → HTML
+  qualquer outra coisa            → TEXTO
 Para os de texto, diga se são UTF-8 válido ou windows-1252 (se "SEÇÃO" chegar como
 "SE?ÃO", o encoding está errado e a normalização de área falha).
 Marque com destaque todo arquivo em que a extensão mente sobre o conteúdo.
@@ -82,44 +87,95 @@ Entradas que o módulo Avaliação conhece:
 
 Identifique cada arquivo por CONTEÚDO, não por nome: relatório do Crystal sai com
 título e filtros antes do cabeçalho e colunas espalhadas por posições vazias, e o
-nome do arquivo varia por loja. Para cada candidato, abra como matriz, mostre as
-5 primeiras linhas úteis e confirme que os rótulos de cabeçalho que o parser
-procura existem de fato. Se o cabeçalho não bater, o arquivo NÃO é usável — diga
-isso, com a linha que você encontrou no lugar.
+nome do arquivo varia por loja.
+
+RÓTULOS QUE CADA PARSER PROCURA (conferidos em src/utils/avaliacaoV3Parsers.ts).
+Comparação é feita em maiúsculas e sem acento, por igualdade OU substring, e
+localizarCabecalho() desiste depois de 200 linhas:
+
+  PROD_SEÇÃO   obrigatórios: AREA + MATRICULA
+               demais: NOME · SECOES CONTADAS/SECOES · QTD(C1) · QTD(A1) ·
+                       QTD(A2) · QTD(A3) · QTD(FINAL)
+  ACURACIDADE  obrigatórios: SECAO + C1
+               demais: BARRA/EAN · DESCRICAO · QTD(A1..A3) · QTD(FINAL) · AJST/AJUSTE
+  NAO CONTADOS obrigatórios: ORDEM + DESCRICAO
+               demais: DEP · PRECO UNIT/PRECO
+  DOBRO        obrigatórios: SECAO + COD.COLETADO
+               demais: DESCRICAO · FAMILIA · QTDE(INV)
+  BLOCO        obrigatórios: SECAO + CODIGO COLETADO
+               demais: DESCRICAO · FAMILIA · QTDE (C FINAL)
+               CPF e nome NÃO têm rótulo: saem de SECAO+2 e SECAO+5
+  PRODUÇÃO     header CSV, separador ; , ou tab:
+               NOME DO CONFERENTE;PRODUTIVIDADE;QTDE. VOLUMES;1a1;BLOCO;
+               HORAS ESTIMADAS;ERRO;% ERRO
+               (aceita também o simplificado Nome,Qtde,Qtde1a1,Produtividade,Erro)
+
+ATENÇÃO — cabeçalho que não bate NÃO produz erro visível.
+Só parseAcuracidadeMatrix lança exceção quando não acha o cabeçalho. PROD_SEÇÃO,
+NAO CONTADOS, DOBRO e BLOCO caem em ÍNDICES DE COLUNA FIXOS (area=1, matricula=6,
+nome=9 …; ean=5, secao=15 …; secao=3, ean=14 …) e leem a coluna errada em
+silêncio, produzindo número plausível e falso. Portanto:
+
+  - Abra cada candidato como matriz, mostre as 5 primeiras linhas úteis e diga
+    em que linha o cabeçalho foi encontrado.
+  - Confirme, rótulo a rótulo, que os obrigatórios existem.
+  - Classifique o arquivo como:
+      USÁVEL                            → cabeçalho encontrado, obrigatórios batem
+      RISCO DE LEITURA SILENCIOSA ERRADA → parece ser este relatório, mas o
+                                           cabeçalho não bate; o app não vai
+                                           reclamar, vai inventar número
+      NÃO É ESTE ARQUIVO                → conteúdo é outra coisa
+    Nunca diga só "não usável": isso sugere falha visível, e não é o que acontece.
 
 Para os .prc, confirme o layout antes de dar como bom:
-- comprimento das linhas (83 ou 84)
-- existência do prefixo "PI" dentro da janela 44-58 (não numa posição fixa)
-- quantidade nos 9 últimos dígitos (÷ 1000)
-- amostra de datas: relógio de coletor fora de data é comum e não invalida o arquivo
+- comprimento das linhas (mínimo 83; variante de 84 desloca +1 a partir da 44)
+- endereço no padrão /^0{7}PI\d{6}$/ na janela 44-58; fora do padrão, a seção sai
+  dos últimos 4 dígitos depois do "PI" (digitação manual no coletor)
+- quantidade nos 9 últimos dígitos, dividida por 1000
+- is_bloco = quantidade > 1, nunca a flag da posição 43
+- datasDistintas: mais de uma data indica relógio de coletor desconfigurado, e
+  isso NÃO invalida o arquivo
 
 PASSO 5 — Ressalvas de SUPERMERCADO (não pule esta parte)
 O módulo nasceu para farmácia. Diga explicitamente, para esta pasta:
-- Bloco NÃO é penalizado fora de FARMACIA: detectarViolacoesBloco() devolve [] de
-  imediato. Então BLOCO.xls aqui não vale como penalidade — vale como conferência
-  independente de seção/CPF/EAN e como detector de mudança de layout do coletor.
-- limites_bloco_area tem seed de farmácia. Em supermercado, área sem limite
-  cadastrado é o esperado, não é erro, e não pode virar penalidade.
-- Os aliases de normalizarNomeArea() são nomes de farmácia. Liste as áreas reais
-  que aparecem nos arquivos desta pasta e diga quantas casariam hoje.
+
+- Bloco não penaliza fora de FARMACIA, e a guarda aparece em QUATRO funções:
+  getLimitesBlocoFallback(), lookupLimiteBlocoArea() e getViolacoesBloco() em
+  src/config/inventoryEvalConfig.ts, e detectarViolacoesBloco() em
+  src/services/InventoryEvaluationService.ts. Então BLOCO.xls aqui não vale como
+  penalidade — vale como conferência independente de seção/CPF/EAN e como
+  detector de mudança de layout do coletor.
+- limites_bloco_area e LIMITES_BLOCO_FARMACIA são seed de farmácia. Em
+  supermercado, área sem limite cadastrado é o esperado, não é erro, e não pode
+  virar penalidade.
+- AREA_ALIASES (src/utils/inventExpUtils.ts) tem só sete entradas, todas de
+  farmácia: F CAIXA, GELADEIRAS CAIXA, AVARIAS, B ATENDIMENTO, P OTC e duas
+  grafias de OTC/MIP. Nenhuma serve aqui.
+- canonizarGondola() é a peça que DE FATO serve a supermercado: casa RUA 3 FRENTE,
+  R3 e G 03 FUNDO na mesma GONDOLA 3. Liste as áreas reais desta pasta e conte
+  quantas casam por ela.
 - Classificação legal A1/A2/A3, B1/B2, C1/C2/C3 do invent_DSP é conceito de
   farmácia; aqui o arquivo interessa por EAN e descrição.
-- qualityDecayK é por perfil de operação: confira em src/config/inventoryEvalConfig.ts
-  qual valor vale para SUPERMERCADO/HIPERMERCADO/ATACADO e diga qual se aplica.
+- Perfil SUPERMERCADO em src/config/inventoryEvalConfig.ts: qualityDecayK 0,8
+  (farmácia é 1,5), pesos qualidade 0,45 / produtividade 0,40 / aderência 0,15,
+  meta de 1.200 peças/h, tolerância de erro 1,0% e crítico 2,0%. Confirme que
+  esses valores continuam esses no código e diga qual perfil se aplica à loja.
 
 FORMATO DA RESPOSTA
 
 1) Tabela, um arquivo por linha:
    arquivo | formato real | extensão mente? | encoding | o que é | parser que lê |
-   usável: SIM / NÃO / COM RESSALVA | motivo em uma linha
+   USÁVEL / RISCO DE LEITURA SILENCIOSA ERRADA / NÃO É ESTE ARQUIVO |
+   linha do cabeçalho | motivo em uma linha
 
 2) Veredito:
    - Com o que está nesta pasta, qual motor responde: v2.1, v3, ou nenhum?
    - O que falta para o v3 (liste por nome os arquivos ausentes)
    - O que falta para rodar qualquer coisa (as duas entradas obrigatórias)
 
-3) Riscos e ressalvas, em ordem de gravidade — comece pelos arquivos cuja extensão
-   mente, pelos cabeçalhos que não bateram e pelas ressalvas de supermercado.
+3) Riscos e ressalvas, em ordem de gravidade — comece pelos arquivos em risco de
+   leitura silenciosa errada, depois os cuja extensão mente, depois as ressalvas
+   de supermercado.
 
 4) O que NÃO dá para saber só olhando a pasta (ex.: modalidade de contratação de
    cada conferente, que é marcada pelo líder e bloqueia o processamento quando nula).
@@ -131,20 +187,22 @@ Se algum arquivo não se encaixar em nenhuma entrada conhecida, não force: list
 ## Por que o prompt insiste nessas três coisas
 
 **Formato pelo conteúdo, não pela extensão.** O export "Excel" do Crystal Reports é
-HTML com extensão `.xls`. Um relatório que parece pronto pode não abrir no parser — e
-o inverso também: arquivo sem extensão pode ser perfeitamente utilizável. É a mesma
-regra que `fileFormat.ts` aplica em produção, e ela existe porque a extensão já mentiu
-aqui antes.
+HTML (às vezes MHTML) com extensão `.xls`. Um relatório que parece pronto pode não abrir
+no parser — e o inverso também: arquivo sem extensão pode ser perfeitamente utilizável.
+É a mesma regra que `fileFormat.ts` aplica em produção, e ela existe porque a extensão
+já mentiu aqui antes.
 
-**Confirmar o cabeçalho, não só o nome do arquivo.** Cada parser localiza a própria
-linha de cabeçalho pelos rótulos, porque o Crystal espalha as colunas. Sem essa
-checagem, "usável" é chute — e o erro só aparece na hora de rodar, com o líder
-esperando.
+**Confirmar o cabeçalho rótulo a rótulo — porque o erro NÃO aparece sozinho.** Este é o
+ponto que mais importa e o mais fácil de errar. Só o `ACURACIDADE` lança exceção quando
+o cabeçalho não bate; os outros quatro parsers caem em índices de coluna fixos e leem a
+coluna errada **em silêncio**, entregando número plausível. Não existe mensagem de erro
+para esperar: ou a triagem confere o rótulo, ou o problema só aparece quando alguém
+questionar a nota de um conferente.
 
-**As ressalvas de supermercado.** Fora de farmácia o bloco não penaliza nada e os
-limites por área são um seed de farmácia. Sem esse aviso escrito no relatório, é fácil
-olhar o `BLOCO.xls` e concluir que há algo a cobrar de um conferente que o motor vai
-ignorar por completo.
+**As ressalvas de supermercado.** Fora de farmácia o bloco não penaliza nada — a guarda
+está em quatro funções diferentes — e os limites por área são seed de farmácia. Sem esse
+aviso escrito no relatório, é fácil olhar o `BLOCO.xls` e concluir que há algo a cobrar
+de um conferente que o motor vai ignorar por completo.
 
 ## Adaptando para farmácia
 
@@ -152,3 +210,9 @@ Troque a linha `OPERAÇÃO` e, no Passo 5, inverta a leitura: em FARMÁCIA o blo
 penaliza, os limites de `limites_bloco_area` valem, e área sem limite cadastrado passa
 a ser **lacuna de cadastro** — tem que aparecer no aviso da tela e na aba Ressalvas do
 consolidado, nunca só num `console.warn`.
+
+## Candidato a issue (não é conserto de passagem)
+
+O fallback por índice fixo dos quatro parsers pode ser bug de verdade: hoje um relatório
+com layout novo é lido errado sem avisar. Corrigir isso muda o comportamento do motor e
+merece spec própria — não entra numa edição de documentação.

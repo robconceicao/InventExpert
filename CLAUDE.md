@@ -328,7 +328,8 @@ para o cache pode vir sem extensão. Por isso:
 - **Formato decidido por magic bytes** em `fileFormat.ts`:
   `PK\x03\x04` = XLSX · `D0CF11E0` = XLS · BOF `09 00/02/04/08` = BIFF cru ·
   `<html>/<table>/MIME-Version` = HTML/MHTML (export "Excel" do Crystal
-  Reports é isso) · resto = texto.
+  Reports é isso) · `<?xml` + `spreadsheet`/`<workbook>` = XML (SpreadsheetML
+  2003) · resto = texto.
 - **Encoding decidido pelo conteúdo:** UTF-8 quando válido, senão
   windows-1252 — sem esse fallback "SEÇÃO" chega como "SE?ÃO" e
   `normalizarNomeArea()` não acha a área.
