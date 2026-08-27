@@ -12,7 +12,8 @@
     "export:web": "npx expo export -p web",
     "export:web:pages": "node scripts/export-web-pages.mjs",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "check": "npx tsc --noEmit && jest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
