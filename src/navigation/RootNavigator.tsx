@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
-import React, { useEffect, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 
 import SyncStatus from "../components/SyncStatus";
 import AcompanhamentoMenuScreen from "../screens/AcompanhamentoMenuScreen";
@@ -25,9 +25,16 @@ import ReportIScreen from "../screens/ReportIScreen";
 import ReportJScreen from "../screens/ReportJScreen";
 import ResumoMenuScreen from "../screens/ResumoMenuScreen";
 import ScannerScreen from "../screens/ScannerScreen";
+import TadeuLicenseScreen from "../screens/TadeuLicenseScreen";
+import { LicenseProvider } from "../services/licenseContext";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
 import { registerDefaultSyncHandlers } from "../services/syncHandlers";
 import { syncQueue } from "../services/sync";
+import {
+  fetchTadeuLicense,
+  isTadeuLicenseConfigured,
+  type TadeuLicense,
+} from "../services/tadeuLicense";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -91,6 +98,25 @@ function HeaderTitle({ children }: { children: React.ReactNode }) {
 
 export default function RootNavigator() {
   const [session, setSession] = useState<Session | null>(null);
+  const [license, setLicense] = useState<TadeuLicense | null>(null);
+  const [licenseLoading, setLicenseLoading] = useState(isTadeuLicenseConfigured);
+
+  const refreshLicense = useCallback(async () => {
+    if (!isTadeuLicenseConfigured) {
+      setLicenseLoading(false);
+      return;
+    }
+
+    setLicenseLoading(true);
+    try {
+      const next = await fetchTadeuLicense();
+      setLicense(next);
+    } catch {
+      setLicense(null);
+    } finally {
+      setLicenseLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     registerDefaultSyncHandlers();
@@ -98,107 +124,77 @@ export default function RootNavigator() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session ?? null);
-      if (data.session) void syncQueue();
+      if (data.session) {
+        void syncQueue();
+        void refreshLicense();
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      // Ao entrar, tenta enviar a fila local de relatórios/presenças
-      if (newSession) void syncQueue();
+      if (newSession) {
+        void syncQueue();
+        void refreshLicense();
+      } else {
+        setLicense(null);
+      }
     });
 
     return () => {
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [refreshLicense]);
 
   if (!session) {
     return <AuthScreen />;
   }
 
+  if (isTadeuLicenseConfigured && licenseLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={{ marginTop: 12, color: "#475569" }}>Validando licença Tadeu Apps…</Text>
+      </View>
+    );
+  }
+
+  if (isTadeuLicenseConfigured && !license) {
+    return <TadeuLicenseScreen onActivated={() => void refreshLicense()} />;
+  }
+
   return (
-    <Stack.Navigator
-      initialRouteName="Home"
-      screenOptions={{
-        headerStyle: { backgroundColor: "#2563EB" },
-        headerTintColor: "#fff",
-        headerTitle: (props) => <HeaderTitle>{props.children}</HeaderTitle>,
-        headerRight: () => <HeaderRight session={session} />,
-        headerBackTitle: "Voltar",
-        contentStyle: { backgroundColor: "#F8FAFC" },
-      }}
-    >
-      <Stack.Screen name="Home" component={HomeScreen} options={{ title: "Início" }} />
-      <Stack.Screen
-        name="AcompanhamentoMenu"
-        component={AcompanhamentoMenuScreen}
-        options={{ title: "Acompanhamento" }}
-      />
-      <Stack.Screen
-        name="ResumoMenu"
-        component={ResumoMenuScreen}
-        options={{ title: "Resumo" }}
-      />
-      <Stack.Screen name="ReportA" component={ReportAScreen} options={{ title: "DSP" }} />
-      <Stack.Screen
-        name="ReportB"
-        component={ReportBScreen}
-        options={{ title: "Farmaconde" }}
-      />
-      <Stack.Screen
-        name="ReportC"
-        component={ReportCScreen}
-        options={{ title: "Farmácias em Geral" }}
-      />
-      <Stack.Screen name="ReportD" component={ReportDScreen} options={{ title: "Mercados" }} />
-      <Stack.Screen
-        name="ReportE"
-        component={ReportEScreen}
-        options={{ title: "Outros Estabelecimentos" }}
-      />
-      <Stack.Screen name="ReportF" component={ReportFScreen} options={{ title: "Assaí" }} />
-      <Stack.Screen
-        name="ReportG"
-        component={ReportGScreen}
-        options={{ title: "Resumo Final" }}
-      />
-      <Stack.Screen
-        name="ReportH"
-        component={ReportHScreen}
-        options={{ title: "Resumo Farmaconde" }}
-      />
-      <Stack.Screen
-        name="ReportI"
-        component={ReportIScreen}
-        options={{ title: "Resumo Mercados" }}
-      />
-      <Stack.Screen
-        name="ReportJ"
-        component={ReportJScreen}
-        options={{ title: "Demais Estabelecimentos" }}
-      />
-      <Stack.Screen
-        name="Attendance"
-        component={AttendanceScreen}
-        options={{ title: "Presenças" }}
-      />
-      <Stack.Screen name="Escala" component={EscalaDashboardScreen} options={{ title: "Escala" }} />
-      <Stack.Screen
-        name="InventExp"
-        component={InventExpImportScreen}
-        options={{ title: "Avaliação" }}
-      />
-      <Stack.Screen
-        name="AuditoriaAAE"
-        component={AuditoriaAtribuicaoScreen}
-        options={{ title: "Auditoria" }}
-      />
-      <Stack.Screen
-        name="Management"
-        component={ManagementScreen}
-        options={{ title: "Gestão" }}
-      />
-      <Stack.Screen name="Scanner" component={ScannerScreen} options={{ title: "Scanner" }} />
-    </Stack.Navigator>
+    <LicenseProvider license={license} refresh={refreshLicense}>
+      <Stack.Navigator
+        initialRouteName="Home"
+        screenOptions={{
+          headerStyle: { backgroundColor: "#2563EB" },
+          headerTintColor: "#fff",
+          headerTitle: (props) => <HeaderTitle>{props.children}</HeaderTitle>,
+          headerRight: () => <HeaderRight session={session} />,
+          headerBackTitle: "Voltar",
+          contentStyle: { backgroundColor: "#F8FAFC" },
+        }}
+      >
+        <Stack.Screen name="Home" component={HomeScreen} options={{ title: "Início" }} />
+        <Stack.Screen name="AcompanhamentoMenu" component={AcompanhamentoMenuScreen} options={{ title: "Acompanhamento" }} />
+        <Stack.Screen name="ResumoMenu" component={ResumoMenuScreen} options={{ title: "Resumo" }} />
+        <Stack.Screen name="ReportA" component={ReportAScreen} options={{ title: "DSP" }} />
+        <Stack.Screen name="ReportB" component={ReportBScreen} options={{ title: "Farmaconde" }} />
+        <Stack.Screen name="ReportC" component={ReportCScreen} options={{ title: "Farmácias em Geral" }} />
+        <Stack.Screen name="ReportD" component={ReportDScreen} options={{ title: "Mercados" }} />
+        <Stack.Screen name="ReportE" component={ReportEScreen} options={{ title: "Outros Estabelecimentos" }} />
+        <Stack.Screen name="ReportF" component={ReportFScreen} options={{ title: "Assaí" }} />
+        <Stack.Screen name="ReportG" component={ReportGScreen} options={{ title: "Resumo Final" }} />
+        <Stack.Screen name="ReportH" component={ReportHScreen} options={{ title: "Resumo Farmaconde" }} />
+        <Stack.Screen name="ReportI" component={ReportIScreen} options={{ title: "Resumo Mercados" }} />
+        <Stack.Screen name="ReportJ" component={ReportJScreen} options={{ title: "Demais Estabelecimentos" }} />
+        <Stack.Screen name="Attendance" component={AttendanceScreen} options={{ title: "Presenças" }} />
+        <Stack.Screen name="Escala" component={EscalaDashboardScreen} options={{ title: "Escala" }} />
+        <Stack.Screen name="InventExp" component={InventExpImportScreen} options={{ title: "Avaliação" }} />
+        <Stack.Screen name="AuditoriaAAE" component={AuditoriaAtribuicaoScreen} options={{ title: "Auditoria" }} />
+        <Stack.Screen name="Management" component={ManagementScreen} options={{ title: "Gestão" }} />
+        <Stack.Screen name="Scanner" component={ScannerScreen} options={{ title: "Scanner" }} />
+      </Stack.Navigator>
+    </LicenseProvider>
   );
 }
