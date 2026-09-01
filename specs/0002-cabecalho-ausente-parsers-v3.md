@@ -43,6 +43,8 @@ receber um número plausível e falso dentro da nota do conferente.
 | D2 | O diagnóstico viaja no retorno do parser, seguindo `PrcParseResult` | `parsePrcFileDetalhado()` já devolve `{ contagens, linhasIgnoradas, enderecosForaPadrao, datasDistintas }`. Repetir o padrão mantém uma única forma de "resultado com ressalva" no módulo | Variável de módulo, callback de aviso, ou função paralela `...ComDiagnostico()` — todas criam duas formas de ler o mesmo arquivo |
 | D3 | A lacuna aparece na tela **e** na aba Ressalvas | Regra já registrada no `CLAUDE.md`: `console.warn` ninguém lê em produção. O caminho já existe — `areasSemLimiteBloco` em `DiagnosticoConsolidado` e `abaRessalvas()` | Só `console.warn`; só alerta na tela (o consolidado é o que sobra depois da importação) |
 | D4 | O aviso não impede o uso do arquivo | O líder pode ter um relatório legítimo de layout novo. Quem decide se confia é ele, com a informação na mão | Descartar o arquivo automaticamente |
+| D6 | A ressalva vive em `ContextoConsolidado`, não em `DiagnosticoConsolidado` | O diagnóstico é do motor v3 e é `null` quando ele não roda. Mas o PROD_SEÇÃO alimenta o **v2.1** também, e é justamente aí que a planilha é mais pobre: pendurar a ressalva no diagnóstico a fazia sumir no caminho que mais precisa dela | Pendurar em `DiagnosticoConsolidado` — foi o que eu fiz na primeira implementação, e a verificação pegou |
+| D7 | Ler o arquivo com cabeçalho **remove** o nome da lista | O líder que corrige o relatório e reimporta não pode continuar vendo a ressalva do arquivo antigo. Acumular sem nunca remover transforma o aviso em ruído permanente | Só acumular |
 | D5 | `linhaCabecalho` viaja junto com o booleano | Saber **em que linha** o cabeçalho foi achado é o que permite diagnosticar layout novo sem abrir a planilha; e `null` diz "não foi achado" sem ambiguidade | Só o booleano |
 
 ## 4. Restrições
@@ -77,7 +79,8 @@ export function parseBlocoMatrix(m: any[][]): ResultadoParseMatriz<BlocoRow>;
 // parseAcuracidadeMatrix NÃO muda: continua devolvendo AcuracidadeRow[] e lançando.
 ```
 
-Em `DiagnosticoConsolidado` (`src/utils/avaliacaoConsolidadaXlsx.ts`):
+Em `ContextoConsolidado` (`src/utils/avaliacaoConsolidadaXlsx.ts`) — **não** em
+`DiagnosticoConsolidado`, ver D6:
 
 ```typescript
 /** Arquivos lidos por índice fixo, sem cabeçalho reconhecido. Ex.: ['BLOCO', 'DOBRO']. */
@@ -103,6 +106,8 @@ arquivosSemCabecalho?: string[];
 | E4 | Cabeçalho encontrado, mas falta uma coluna **opcional** (ex.: FAMILIA no DOBRO) | `cabecalhoEncontrado: true`. A ressalva é sobre a linha de cabeçalho, não sobre cada coluna — coluna opcional ausente já é tratada pelos índices de reserva |
 | E5 | Cabeçalho ausente **e** o fallback produz linhas plausíveis | O caso perigoso, e o motivo desta spec: `cabecalhoEncontrado: false` mesmo com `linhas.length > 0`. A tela avisa e a aba Ressalvas registra |
 | E6 | Cabeçalho ausente e o fallback produz zero linhas | Além da ressalva, a tela mostra o alerta de "nenhuma linha reconhecida" que hoje só o PROD_SEÇÃO tem |
+| E8 | O líder corrige o relatório e reimporta, agora com cabeçalho | O nome sai de `arquivosSemCabecalho`. A ressalva não sobrevive ao conserto |
+| E9 | Avaliação cai no motor v2.1 (falta um dos três arquivos do v3) e o PROD_SEÇÃO foi lido às cegas | A aba Ressalvas do consolidado v2.1 traz a mesma linha. O caminho mais pobre é o que mais precisa do aviso |
 | E7 | Dois ou mais arquivos lidos às cegas na mesma importação | `arquivosSemCabecalho` acumula os nomes, em ordem de importação |
 
 ## 8. Questões em aberto
@@ -123,8 +128,11 @@ arquivosSemCabecalho?: string[];
   - [ ] E1/E5 → `parseDobroMatrix` · `denuncia leitura por indice fixo quando nao acha cabecalho`
   - [ ] E1/E5 → `parseBlocoMatrix` · `denuncia leitura por indice fixo quando nao acha cabecalho`
 - [ ] A aba Ressalvas mostra a linha quando `arquivosSemCabecalho` vem preenchido, e
-      **não** a mostra quando vem vazio (dois testes em
+      **não** a mostra quando vem vazio — nos **dois** motores (quatro testes em
       `src/utils/__tests__/avaliacaoConsolidadaXlsx.test.ts`)
+- [ ] E6: no PROD_SEÇÃO, a leitura é registrada **antes** do `return` de zero linhas,
+      e a mensagem não culpa colunas que existem no arquivo
+- [ ] E8: `registrarLeitura(arquivo, true)` remove o nome da lista
 - [ ] Suíte total ≥ 419 testes, 28 suites, zero regressão
 - [ ] Diff toca apenas: `src/utils/avaliacaoV3Parsers.ts`,
       `src/utils/__tests__/avaliacaoV3Parsers.test.ts`,
@@ -140,4 +148,7 @@ arquivosSemCabecalho?: string[];
 |------|--------|---------------|-----------------|
 | 2026-08-27 | Quatro parsers leem por índice fixo em silêncio quando o cabeçalho não bate | LACUNA DE SPEC | Origem desta spec. Verificado que os índices nasceram junto com `localizarCabecalho()` (`d3557b2`), logo são deliberados; o que faltava era decidir a visibilidade |
 | 2026-08-27 | A spec listou os arquivos do diff, mas esqueceu `src/utils/__tests__/avaliacaoConsolidadaXlsx.test.ts`. A decisão D3 exige que a ressalva chegue à aba Ressalvas, e afirmar isso pede teste — que mora naquele arquivo | LACUNA DE SPEC | Arquivo acrescentado à seção 9, com dois critérios novos (mostra quando há; não mostra quando não há). Encontrado na revisão do diff, antes do commit |
+| 2026-08-27 | Verificação do diff antes do merge: a ressalva só chegava ao consolidado no ramo v3. Caindo no `montarWorkbookConsolidadoV21`, o líder recebia a planilha sem sinal nenhum — apesar de o PROD_SEÇÃO lido às cegas alimentar aquele motor | BUG DE CÓDIGO | D3 já exigia "tela **e** aba Ressalvas". O campo mudou de `DiagnosticoConsolidado` para `ContextoConsolidado` (D6) e é renderizado nos dois motores, com dois testes novos. Caso E9 |
+| 2026-08-27 | `registrarLeituraAsCegas` só acumulava: reimportar o relatório corrigido mantinha a ressalva do arquivo antigo | LACUNA DE SPEC | Ninguém tinha decidido o que acontece na reimportação. Virou D7 e caso E8; a função passou a `registrarLeitura(arquivo, cabecalhoEncontrado)`, que adiciona ou remove |
+| 2026-08-27 | No PROD_SEÇÃO o `return` de zero linhas vinha **antes** do registro, então o caso E6 perdia a ressalva e a mensagem culpava colunas que existem no arquivo | BUG DE CÓDIGO | E6 já dizia "além da ressalva". Registro movido para antes do `return` e a mensagem passou a distinguir os dois casos |
 | 2026-08-27 | Ao escrever o teste do BLOCO sem cabeçalho, o dano real mostrou-se **pior** que o previsto em E5: além de ler outra coluna, o início fixo (linha 8) engole a primeira linha de dados. Duas bipadas em bloco viram uma | LACUNA DE SPEC | E5 falava só em "linhas plausíveis lidas de outra coluna". O teste passou a travar a perda de linha (`toHaveLength(1)` vs `toHaveLength(2)`), e o texto do aviso na tela e na aba Ressalvas diz "linhas podem ter ficado de fora" |

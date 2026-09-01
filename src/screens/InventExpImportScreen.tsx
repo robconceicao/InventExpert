@@ -244,11 +244,17 @@ export default function InventExpImportScreen() {
     }
   };
 
-    /** Registra que um arquivo foi lido às cegas; a aba Ressalvas consome isto. */
-  const registrarLeituraAsCegas = (arquivo: string) =>
-    setArquivosSemCabecalho((atual) =>
-      atual.includes(arquivo) ? atual : [...atual, arquivo],
-    );
+    /**
+   * Registra como o arquivo foi lido; a tela e a aba Ressalvas consomem isto.
+   *
+   * Remove o nome quando o cabeçalho é encontrado: o líder que reimporta o
+   * relatório corrigido não pode continuar vendo a ressalva do arquivo antigo.
+   */
+  const registrarLeitura = (arquivo: string, cabecalhoEncontrado: boolean) =>
+    setArquivosSemCabecalho((atual) => {
+      if (cabecalhoEncontrado) return atual.filter((a) => a !== arquivo);
+      return atual.includes(arquivo) ? atual : [...atual, arquivo];
+    });
 
   /** Frase acrescentada ao alerta de sucesso quando o cabeçalho não foi achado. */
   const avisoLeituraAsCegas = (cabecalhoEncontrado: boolean) =>
@@ -361,14 +367,17 @@ const handlePickFile = async () => {
       }
 
       const { linhas, cabecalhoEncontrado } = parseProdSecaoMatrix(matriz);
+      registrarLeitura("PROD_SEÇÃO", cabecalhoEncontrado);
       if (linhas.length === 0) {
         Alert.alert(
           "PROD_SEÇÃO",
-          "Nenhuma linha reconhecida. Confira se o arquivo tem as colunas AREA, MATRICULA e Qtd(C1).",
+          cabecalhoEncontrado
+            ? "Nenhuma linha reconhecida. Confira se o arquivo tem as colunas AREA, MATRICULA e Qtd(C1)."
+            : "Cabeçalho não reconhecido e nenhuma linha lida. O arquivo não parece ser o PROD_SEÇÃO, " +
+              "ou o cabeçalho está abaixo da linha 200.",
         );
         return;
       }
-      if (!cabecalhoEncontrado) registrarLeituraAsCegas("PROD_SEÇÃO");
       setProdSecaoRows(linhas);
       setProducaoSecao(prodSecaoParaSecoes(linhas));
       const areas = new Set(linhas.map((l) => l.area)).size;
@@ -423,7 +432,7 @@ const handlePickFile = async () => {
       }
       const { linhas: itens, cabecalhoEncontrado } = parseNaoContadosMatrix(matriz);
       setNaoContadosArq(itens);
-      if (!cabecalhoEncontrado) registrarLeituraAsCegas("NÃO CONTADOS");
+      registrarLeitura("NÃO CONTADOS", cabecalhoEncontrado);
       Alert.alert(
         "NÃO CONTADOS carregado",
         `${itens.length} produto(s) sem coleta` + avisoLeituraAsCegas(cabecalhoEncontrado),
@@ -445,7 +454,7 @@ const handlePickFile = async () => {
       }
       const { linhas, cabecalhoEncontrado } = parseDobroMatrix(matriz);
       setDobroRows(linhas);
-      if (!cabecalhoEncontrado) registrarLeituraAsCegas("DOBRO");
+      registrarLeitura("DOBRO", cabecalhoEncontrado);
       Alert.alert(
         "DOBRO carregado",
         `${linhas.length} bipada(s) em duplicidade` + avisoLeituraAsCegas(cabecalhoEncontrado),
@@ -467,7 +476,7 @@ const handlePickFile = async () => {
       }
       const { linhas, cabecalhoEncontrado } = parseBlocoMatrix(matriz);
       setBlocoRows(linhas);
-      if (!cabecalhoEncontrado) registrarLeituraAsCegas("BLOCO");
+      registrarLeitura("BLOCO", cabecalhoEncontrado);
       Alert.alert(
         "BLOCO carregado",
         `${linhas.length} linha(s). Serve de conferência independente da seção e da regra de bloco.` +
@@ -1218,6 +1227,10 @@ const handlePickFile = async () => {
         operacao: operationType,
         medianaEquipe,
         emitidoPor: leaderName.trim() || undefined,
+        // Spec 0002: vale para os dois motores — o PROD_SEÇÃO alimenta o v2.1
+        // também, então a leitura às cegas não pode ficar só na planilha do v3.
+        arquivosSemCabecalho:
+          arquivosSemCabecalho.length > 0 ? arquivosSemCabecalho : undefined,
       };
       // Sem os três arquivos do v3 a planilha sai reduzida, com uma aba de
       // ressalvas dizendo o que falta — melhor que não entregar nada ao líder.
@@ -1232,8 +1245,6 @@ const handlePickFile = async () => {
                     datasDistintas: prcInfo?.datas,
                     arquivosPrc: prcInfo?.count,
                     areasSemLimiteBloco,
-                    arquivosSemCabecalho:
-                      arquivosSemCabecalho.length > 0 ? arquivosSemCabecalho : undefined,
                   }
                 : null,
             })

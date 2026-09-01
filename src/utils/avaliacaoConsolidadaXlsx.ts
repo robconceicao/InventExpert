@@ -43,12 +43,6 @@ export interface DiagnosticoConsolidado {
   arquivosPrc?: number;
   /** Áreas do inventário sem limite de bloco na tabela — bloco não verificado. */
   areasSemLimiteBloco?: string[];
-  /**
-   * Relatórios lidos por índice fixo, sem cabeçalho reconhecido (spec 0002).
-   * Ex.: ['BLOCO', 'DOBRO']. Os números daquele arquivo podem ser de outra
-   * coluna, e linhas podem ter ficado de fora.
-   */
-  arquivosSemCabecalho?: string[];
 }
 
 export interface ContextoConsolidado {
@@ -60,6 +54,16 @@ export interface ContextoConsolidado {
   diagnostico?: DiagnosticoConsolidado | null;
   /** Nome de quem gerou — entra no rodapé da metodologia. */
   emitidoPor?: string;
+  /**
+   * Relatórios lidos por índice fixo, sem cabeçalho reconhecido (spec 0002).
+   * Ex.: ['BLOCO', 'DOBRO']. Os números daquele arquivo podem ser de outra
+   * coluna, e linhas podem ter ficado de fora.
+   *
+   * Vive no contexto, não no diagnóstico do v3: descreve COMO as entradas
+   * foram lidas, e vale igual quando quem responde é o motor v2.1 — que também
+   * consome o PROD_SEÇÃO.
+   */
+  arquivosSemCabecalho?: string[];
 }
 
 type Linha = (string | number | null)[];
@@ -488,16 +492,18 @@ function abaRessalvas(
         `Relógio de coletor fora de data (${d.datasDistintas.join(", ")}) — horas medidas por janela diária`,
       ]);
     }
-    // Spec 0002: leitura por índice fixo é indistinguível de leitura correta.
-    // A ressalva é o único sinal que sobra depois que a importação termina.
-    if (d.arquivosSemCabecalho && d.arquivosSemCabecalho.length > 0) {
-      linhas.push([
-        "Relatórios lidos sem cabeçalho reconhecido",
-        d.arquivosSemCabecalho.length,
-        `${d.arquivosSemCabecalho.join(", ")} — colunas vindas das posições padrão; ` +
-          "os números podem ser de outra coluna e linhas podem ter ficado de fora. Conferir o arquivo",
-      ]);
-    }
+  }
+
+  // Spec 0002: leitura por índice fixo é indistinguível de leitura correta.
+  // A ressalva é o único sinal que sobra depois que a importação termina.
+  // Fora do `if (d)` de propósito: não depende do diagnóstico do v3.
+  if (ctx.arquivosSemCabecalho && ctx.arquivosSemCabecalho.length > 0) {
+    linhas.push([
+      "Relatórios lidos sem cabeçalho reconhecido",
+      ctx.arquivosSemCabecalho.length,
+      `${ctx.arquivosSemCabecalho.join(", ")} — colunas vindas das posições padrão; ` +
+        "os números podem ser de outra coluna e linhas podem ter ficado de fora. Conferir o arquivo",
+    ]);
   }
 
   const semRelogio = avaliacoes.filter((a) => !a.relogioOk);
@@ -822,6 +828,16 @@ export function montarWorkbookConsolidadoV21(
       "Anexar .prc, PROD_SEÇÃO e ACURACIDADE e processar de novo — a planilha sai com as oito abas",
     ],
   ];
+
+  // Spec 0002: o PROD_SEÇÃO alimenta este motor também, então a leitura às
+  // cegas precisa aparecer aqui — não só na planilha do v3.
+  if (ctx.arquivosSemCabecalho && ctx.arquivosSemCabecalho.length > 0) {
+    ressalvas.push([
+      `Relatórios lidos sem cabeçalho reconhecido: ${ctx.arquivosSemCabecalho.join(", ")}`,
+      "Colunas vindas das posições padrão; os números podem ser de outra coluna e " +
+        "linhas podem ter ficado de fora. Conferir o arquivo antes de publicar",
+    ]);
+  }
 
   const abas: [string, Linha[], number[]][] = [
     ["Resumo", resumo, [42, 18, 34]],
