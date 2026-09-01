@@ -808,5 +808,6 @@ para jogar fora.
 | [`specs/decisions/0001-historico-le-produtividade.md`](../specs/decisions/0001-historico-le-produtividade.md) | ADR real |
 | [`AGENTS.md`](../AGENTS.md) | Contexto e regras do verificador |
 | [`CLAUDE.md`](../CLAUDE.md) | Contexto do escritor — regras de negócio do projeto |
+| [`docs/METRICAS_SDD.md`](METRICAS_SDD.md) | Registro por ciclo das seis métricas |
 | [`docs/PROCEDIMENTO_AVALIACAO.md`](PROCEDIMENTO_AVALIACAO.md) | Procedimento de campo da avaliação |
 | [`docs/SUPABASE_ESTADO.md`](SUPABASE_ESTADO.md) | O que está de fato aplicado no banco |
