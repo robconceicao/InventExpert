@@ -31,8 +31,14 @@ const tadeuAppsUrl = (
   'https://tadeu-apps-core-test2.vercel.app'
 ).replace(/\/$/, '');
 
-const tadeuSupabaseUrl = process.env.EXPO_PUBLIC_TADEU_APPS_SUPABASE_URL || '';
-const tadeuSupabaseAnonKey = process.env.EXPO_PUBLIC_TADEU_APPS_SUPABASE_ANON_KEY || '';
+// Estes valores são públicos por definição (URL + publishable key).
+// Variáveis de ambiente continuam tendo prioridade para facilitar futuras rotações.
+const tadeuSupabaseUrl =
+  process.env.EXPO_PUBLIC_TADEU_APPS_SUPABASE_URL ||
+  'https://chpcviinqqdjfsczvrvf.supabase.co';
+const tadeuSupabaseAnonKey =
+  process.env.EXPO_PUBLIC_TADEU_APPS_SUPABASE_ANON_KEY ||
+  'sb_publishable_HGw-TdmBFPq4Lg8VvO_AOA_LygQWV01';
 
 export const isTadeuLicenseConfigured = Boolean(
   tadeuAppsUrl && tadeuSupabaseUrl && tadeuSupabaseAnonKey,
