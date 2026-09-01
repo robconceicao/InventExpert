@@ -204,6 +204,25 @@ describe("montarWorkbookConsolidado", () => {
     expect(t).toContain("Datas distintas");
   });
 
+  it("Ressalvas registra os relatórios lidos sem cabeçalho reconhecido", () => {
+    // Spec 0002 / D3: leitura por índice fixo é indistinguível de leitura
+    // correta. Depois que a importação termina, esta linha é o único sinal
+    // que sobra para o líder.
+    const wb = montarWorkbookConsolidado(
+      [avaliacao()],
+      { ...CTX, arquivosSemCabecalho: ["BLOCO", "DOBRO"] },
+    );
+    const t = texto(aba(wb, "Ressalvas"));
+    expect(t).toContain("Relatórios lidos sem cabeçalho reconhecido");
+    expect(t).toContain("BLOCO, DOBRO");
+    expect(t).toContain("podem ter ficado de fora");
+  });
+
+  it("Ressalvas não inventa a linha quando todos os cabeçalhos foram achados", () => {
+    const t = texto(aba(montarWorkbookConsolidado([avaliacao()], CTX), "Ressalvas"));
+    expect(t).not.toContain("sem cabeçalho reconhecido");
+  });
+
   it("Ressalvas detalha cada conferente quando a reconciliação não fecha", () => {
     const wb = montarWorkbookConsolidado([avaliacao()], {
       ...CTX,
@@ -297,6 +316,30 @@ describe("montarWorkbookConsolidadoV21", () => {
       ],
       ...over,
     }) as InventoryCheckerEvaluation;
+
+  it("Ressalvas do v2.1 também registra leitura sem cabeçalho", () => {
+    // O PROD_SEÇÃO alimenta o motor v2.1 também. Quando falta um dos arquivos
+    // do v3, é esta planilha que o líder recebe — e ela precisa carregar a
+    // mesma ressalva, senão a leitura às cegas some justamente no caminho mais
+    // pobre em informação.
+    const t = texto(
+      aba(
+        montarWorkbookConsolidadoV21([ev()], {
+          ...CTX,
+          arquivosSemCabecalho: ["PROD_SEÇÃO"],
+        }),
+        "Ressalvas",
+      ),
+    );
+    expect(t).toContain("Relatórios lidos sem cabeçalho reconhecido");
+    expect(t).toContain("PROD_SEÇÃO");
+    expect(t).toContain("podem ter ficado de fora");
+  });
+
+  it("Ressalvas do v2.1 fica limpa quando os cabeçalhos foram achados", () => {
+    const t = texto(aba(montarWorkbookConsolidadoV21([ev()], CTX), "Ressalvas"));
+    expect(t).not.toContain("sem cabeçalho reconhecido");
+  });
 
   it("entrega a planilha do líder mesmo sem os arquivos do v3", () => {
     const wb = montarWorkbookConsolidadoV21([ev()], CTX);

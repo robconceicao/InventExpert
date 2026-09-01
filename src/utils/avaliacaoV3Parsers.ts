@@ -91,6 +91,32 @@ function localizarCabecalho(
   return null;
 }
 
+/**
+ * Resultado de parser de matriz do Crystal, com a ressalva de leitura junto.
+ *
+ * Por que o booleano existe
+ * -------------------------
+ * Quando `localizarCabecalho()` não acha a linha de cabeçalho, o parser não
+ * desiste: ele lê pelos índices fixos do layout observado no L2601. Isso é
+ * deliberado (ver spec 0002) e salva o import de um relatório conhecido.
+ *
+ * Mas o resultado é indistinguível de uma leitura correta. No BLOCO do L2601,
+ * a mesma planilha lida sem cabeçalho devolve `familia: "976"` (o código, na
+ * coluna 23) no lugar de `"CEREAIS"` (o nome, na coluna 27) — plausível,
+ * silencioso e errado. Por isso a ressalva viaja com as linhas, e a tela e a
+ * aba Ressalvas são obrigadas a mostrá-la.
+ *
+ * Mesma forma de `PrcParseResult` em `prcParser.ts`: resultado e diagnóstico
+ * no mesmo objeto.
+ */
+export interface ResultadoParseMatriz<T> {
+  linhas: T[];
+  /** false = colunas vieram dos índices fixos, não do cabeçalho. */
+  cabecalhoEncontrado: boolean;
+  /** Índice 0-based da linha de cabeçalho; null quando não foi encontrada. */
+  linhaCabecalho: number | null;
+}
+
 // ---------------------------------------------------------------------------
 // PROD_SEÇÃO.xlsx — área física × conferente
 // ---------------------------------------------------------------------------
@@ -103,7 +129,9 @@ function localizarCabecalho(
  * Linhas de subtotal repetem as quantidades sem matrícula — são descartadas
  * pela exigência de matrícula numérica e nome preenchido.
  */
-export function parseProdSecaoMatrix(matriz: any[][]): ProdSecaoRow[] {
+export function parseProdSecaoMatrix(
+  matriz: any[][],
+): ResultadoParseMatriz<ProdSecaoRow> {
   const cab = localizarCabecalho(
     matriz,
     ['AREA', 'MATRICULA'],
@@ -163,7 +191,7 @@ export function parseProdSecaoMatrix(matriz: any[][]): ProdSecaoRow[] {
       ajusteA3: Math.round(parseNumeroBr(l[iA3])),
     });
   }
-  return linhas;
+  return { linhas, cabecalhoEncontrado: cab !== null, linhaCabecalho: cab?.linha ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +277,9 @@ export function parseAcuracidadeMatrix(matriz: any[][]): AcuracidadeRow[] {
  * Não há coluna de seção — é justamente por isso que o `NaoContadoService`
  * precisa inferir a área pela marca.
  */
-export function parseNaoContadosMatrix(matriz: any[][]): NaoContadoInput[] {
+export function parseNaoContadosMatrix(
+  matriz: any[][],
+): ResultadoParseMatriz<NaoContadoInput> {
   const cab = localizarCabecalho(matriz, ['ORDEM', 'DESCRICAO'], {
     ordem: ['ORDEM'],
     descricao: ['DESCRICAO'],
@@ -359,7 +389,11 @@ export function parseNaoContadosMatrix(matriz: any[][]): NaoContadoInput[] {
     }
   }
 
-  return itens.filter((i) => i.descricao);
+  return {
+    linhas: itens.filter((i) => i.descricao),
+    cabecalhoEncontrado: cab !== null,
+    linhaCabecalho: cab?.linha ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -537,7 +571,9 @@ export interface DobroRow {
  *
  * A linha de produto não tem seção — é justamente assim que as duas se separam.
  */
-export function parseDobroMatrix(matriz: any[][]): DobroRow[] {
+export function parseDobroMatrix(
+  matriz: any[][],
+): ResultadoParseMatriz<DobroRow> {
   const cab = localizarCabecalho(matriz, ['SECAO', 'COD.COLETADO'], {
     ean: ['COD.COLETADO', 'COD COLETADO'],
     descricao: ['DESCRICAO'],
@@ -571,7 +607,7 @@ export function parseDobroMatrix(matriz: any[][]): DobroRow[] {
       qtde: parseNumeroBr(l[iQtde]) || 1,
     });
   }
-  return linhas;
+  return { linhas, cabecalhoEncontrado: cab !== null, linhaCabecalho: cab?.linha ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -602,7 +638,9 @@ export interface BlocoRow {
  * O relatório repete linhas idênticas; a deduplicação fica a cargo de quem
  * consome, porque a repetição às vezes é bipada real.
  */
-export function parseBlocoMatrix(matriz: any[][]): BlocoRow[] {
+export function parseBlocoMatrix(
+  matriz: any[][],
+): ResultadoParseMatriz<BlocoRow> {
   const cab = localizarCabecalho(matriz, ['SECAO', 'CODIGO COLETADO'], {
     secao: ['SECAO'],
     ean: ['CODIGO COLETADO', 'COD. COLETADO'],
@@ -641,5 +679,5 @@ export function parseBlocoMatrix(matriz: any[][]): BlocoRow[] {
       qtde: parseNumeroBr(l[iQtde]),
     });
   }
-  return linhas;
+  return { linhas, cabecalhoEncontrado: cab !== null, linhaCabecalho: cab?.linha ?? null };
 }

@@ -90,7 +90,7 @@ New-Item -ItemType File -Path specs\README.md, specs\TEMPLATE.md, AGENTS.md -For
 **`CLAUDE.md` (escritor).** Neste repositório ele já existe e já é bom: stack, estrutura
 de módulos, regras de negócio críticas, decisões arquiteturais e uma lista "O que NÃO
 fazer". A Fase 0 acrescentou nele apenas a seção **"SDD com dois agentes"**, que aponta
-para `specs/`, e três linhas novas em "O que NÃO fazer".
+para `specs/`, e quatro linhas novas em "O que NÃO fazer".
 
 **`AGENTS.md` (verificador).** Contém o papel, a proibição de escrever, as treze regras
 invioláveis (R1–R13) e o formato obrigatório do relatório. Leia-o inteiro uma vez —
@@ -599,7 +599,7 @@ mas não o risco de perder o seu tempo. Os guardrails abaixo protegem o segundo.
 **1. Branch dedicada, sempre.**
 
 ```powershell
-git switch -c auto/0002-repository-historico
+git switch -c auto/0003-repository-historico
 ```
 
 **2. Proibição de push em `main`.** Não existe travessura útil aqui: o agente não faz
@@ -638,7 +638,7 @@ uma coisa com mais fôlego.
 ### Prompt de sessão longa
 
 ```
-Leia specs/0002-repository-historico.md por inteiro.
+Leia specs/0003-repository-historico.md por inteiro.
 
 Trabalhe SOZINHO até completar os critérios de aceitação da seção 9.
 
@@ -777,16 +777,16 @@ minutos; se um dia render menos, empurre o resto — a ordem importa mais que o 
 | **3** | **Primeiro ciclo (Fase 3).** Prompt literal, escritor, ⚠️ revisão do diff, commit | 424 testes verdes, 3 arquivos no diff, você leu tudo |
 | **4** | **Primeira verificação (Fase 4).** Codex em sandbox de leitura, relatório no formato | Relatório com todo achado classificado bug/lacuna |
 | **5** | **Realimentação (Fase 5).** Classificar destinos, atualizar seções 3, 7 e 10, corrigir, reverificar, merge. Anotar M1 e M3 | Spec `IMPLEMENTADA`, merge feito, duas métricas anotadas |
-| **6** | Escrever `specs/0002-repository-historico.md` — fatia 2, o repository seguindo o padrão de `modalidadeRepository.ts` (Supabase é verdade, AsyncStorage é cache, `null` nunca vira default) | Spec passa no critério de pronto da Fase 1 |
+| **6** | Escrever `specs/0003-repository-historico.md` — fatia 2, o repository seguindo o padrão de `modalidadeRepository.ts` (Supabase é verdade, AsyncStorage é cache, `null` nunca vira default) | Spec passa no critério de pronto da Fase 1 |
 | **7** | Folga ou revisão. Reler a spec 0001 já implementada: ela ainda descreve o código? | Spec e código concordam, ou a divergência virou linha na seção 10 |
 
 ### Semana 2 — autonomia com guardrail
 
 | Dia | O quê | Pronto quando |
 |-----|-------|---------------|
-| **8** | Ciclo 2 (spec 0002), ainda com você aprovando cada edição. Agora tem IO: mock de Supabase nos testes | `check` verde, diff dentro do escopo |
-| **9** | Verificação do ciclo 2 + realimentação. Comparar M1 com o ciclo 1 | M1 caiu? Se sim, a spec 0001 ensinou a spec 0002 |
-| **10** | Escrever `specs/0003-bloco-evolucao-ficha.md` — fatia 3, o bloco na ficha. ⚠️ Casos extremos de modalidade: no FREE, evolução própria pode aparecer, comparação com a equipe não. Trave com teste, no padrão de `relatorioV3Modalidade.test.ts` | Spec com os casos de modalidade escritos e um teste nomeado para cada |
+| **8** | Ciclo 2 (spec 0003), ainda com você aprovando cada edição. Agora tem IO: mock de Supabase nos testes | `check` verde, diff dentro do escopo |
+| **9** | Verificação do ciclo 2 + realimentação. Comparar M1 com o ciclo 1 | M1 caiu? Se sim, a spec 0001 ensinou a spec 0003 |
+| **10** | Escrever `specs/0004-bloco-evolucao-ficha.md` — fatia 3, o bloco na ficha. ⚠️ Casos extremos de modalidade: no FREE, evolução própria pode aparecer, comparação com a equipe não. Trave com teste, no padrão de `relatorioV3Modalidade.test.ts` | Spec com os casos de modalidade escritos e um teste nomeado para cada |
 | **11** | Ciclo 3 em modo mais solto: aprove em blocos, não a cada edição. Cronometre M3 | M3 anotado. Se o primeiro desvio veio antes dos 30 min, adie a sessão longa e fatie mais |
 | **12** | Verificação + realimentação do ciclo 3. Fechar a entrega "evolução do conferente" inteira. Atualizar `CLAUDE.md` com a decisão arquitetural nova (uma linha na tabela) | Três specs `IMPLEMENTADA`, `CLAUDE.md` atualizado |
 | **13** | **Primeira sessão longa (Fase 6), supervisionada.** Escolha uma spec pequena (ex.: extrair um hook de `InventExpImportScreen`), rode a checklist pré-sessão, deixe rodar 60 a 90 minutos **com você por perto**. Observe sem interromper, salvo desvio real | O agente parou sozinho com `PARADA.md` ou `RESUMO.md` escrito |
@@ -808,5 +808,6 @@ para jogar fora.
 | [`specs/decisions/0001-historico-le-produtividade.md`](../specs/decisions/0001-historico-le-produtividade.md) | ADR real |
 | [`AGENTS.md`](../AGENTS.md) | Contexto e regras do verificador |
 | [`CLAUDE.md`](../CLAUDE.md) | Contexto do escritor — regras de negócio do projeto |
+| [`docs/METRICAS_SDD.md`](METRICAS_SDD.md) | Registro por ciclo das seis métricas |
 | [`docs/PROCEDIMENTO_AVALIACAO.md`](PROCEDIMENTO_AVALIACAO.md) | Procedimento de campo da avaliação |
 | [`docs/SUPABASE_ESTADO.md`](SUPABASE_ESTADO.md) | O que está de fato aplicado no banco |

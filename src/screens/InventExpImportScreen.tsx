@@ -179,6 +179,12 @@ export default function InventExpImportScreen() {
   const [paraMarcar, setParaMarcar] = useState<ConferenteParaMarcar[]>([]);
   const [salvandoModalidade, setSalvandoModalidade] = useState(false);
   const [blocoRows, setBlocoRows] = useState<BlocoRow[]>([]);
+  /**
+   * Arquivos lidos por índice fixo, sem cabeçalho reconhecido (spec 0002).
+   * Não bloqueia o processamento — mas precisa aparecer na tela e na aba
+   * Ressalvas, porque o resultado é indistinguível de uma leitura correta.
+   */
+  const [arquivosSemCabecalho, setArquivosSemCabecalho] = useState<string[]>([]);
   const [agentesMap, setAgentesMap] = useState<Map<string, AuditoriaAgenteInfo>>(new Map());
   const [avaliacoesV3, setAvaliacoesV3] = useState<AvaliacaoV3[]>([]);
   const [diagV3, setDiagV3] = useState<{
@@ -238,7 +244,27 @@ export default function InventExpImportScreen() {
     }
   };
 
-  const handlePickFile = async () => {
+    /**
+   * Registra como o arquivo foi lido; a tela e a aba Ressalvas consomem isto.
+   *
+   * Remove o nome quando o cabeçalho é encontrado: o líder que reimporta o
+   * relatório corrigido não pode continuar vendo a ressalva do arquivo antigo.
+   */
+  const registrarLeitura = (arquivo: string, cabecalhoEncontrado: boolean) =>
+    setArquivosSemCabecalho((atual) => {
+      if (cabecalhoEncontrado) return atual.filter((a) => a !== arquivo);
+      return atual.includes(arquivo) ? atual : [...atual, arquivo];
+    });
+
+  /** Frase acrescentada ao alerta de sucesso quando o cabeçalho não foi achado. */
+  const avisoLeituraAsCegas = (cabecalhoEncontrado: boolean) =>
+    cabecalhoEncontrado
+      ? ""
+      : "\n\n⚠ Cabeçalho não reconhecido. As colunas vieram das posições padrão, " +
+        "então os números podem ser de outra coluna — e linhas podem ter ficado de fora. " +
+        "Confira o arquivo antes de publicar a avaliação.";
+
+const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync(PICKER_QUALQUER_ARQUIVO);
       if (result.canceled) return;
@@ -340,11 +366,15 @@ export default function InventExpImportScreen() {
         return;
       }
 
-      const linhas = parseProdSecaoMatrix(matriz);
+      const { linhas, cabecalhoEncontrado } = parseProdSecaoMatrix(matriz);
+      registrarLeitura("PROD_SEÇÃO", cabecalhoEncontrado);
       if (linhas.length === 0) {
         Alert.alert(
           "PROD_SEÇÃO",
-          "Nenhuma linha reconhecida. Confira se o arquivo tem as colunas AREA, MATRICULA e Qtd(C1).",
+          cabecalhoEncontrado
+            ? "Nenhuma linha reconhecida. Confira se o arquivo tem as colunas AREA, MATRICULA e Qtd(C1)."
+            : "Cabeçalho não reconhecido e nenhuma linha lida. O arquivo não parece ser o PROD_SEÇÃO, " +
+              "ou o cabeçalho está abaixo da linha 200.",
         );
         return;
       }
@@ -353,7 +383,8 @@ export default function InventExpImportScreen() {
       const areas = new Set(linhas.map((l) => l.area)).size;
       Alert.alert(
         "PROD_SEÇÃO carregado",
-        `${linhas.length} combinação(ões) · ${areas} área(s) físicas`,
+        `${linhas.length} combinação(ões) · ${areas} área(s) físicas` +
+          avisoLeituraAsCegas(cabecalhoEncontrado),
       );
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler PROD_SEÇÃO: " + (e?.message ?? ""));
@@ -399,9 +430,13 @@ export default function InventExpImportScreen() {
         Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
         return;
       }
-      const itens = parseNaoContadosMatrix(matriz);
+      const { linhas: itens, cabecalhoEncontrado } = parseNaoContadosMatrix(matriz);
       setNaoContadosArq(itens);
-      Alert.alert("NÃO CONTADOS carregado", `${itens.length} produto(s) sem coleta`);
+      registrarLeitura("NÃO CONTADOS", cabecalhoEncontrado);
+      Alert.alert(
+        "NÃO CONTADOS carregado",
+        `${itens.length} produto(s) sem coleta` + avisoLeituraAsCegas(cabecalhoEncontrado),
+      );
     } catch (e: any) {
       Alert.alert("Erro", "Falha ao ler NAO CONTADOS: " + (e?.message ?? ""));
     }
@@ -417,9 +452,13 @@ export default function InventExpImportScreen() {
         Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
         return;
       }
-      const linhas = parseDobroMatrix(matriz);
+      const { linhas, cabecalhoEncontrado } = parseDobroMatrix(matriz);
       setDobroRows(linhas);
-      Alert.alert("DOBRO carregado", `${linhas.length} bipada(s) em duplicidade`);
+      registrarLeitura("DOBRO", cabecalhoEncontrado);
+      Alert.alert(
+        "DOBRO carregado",
+        `${linhas.length} bipada(s) em duplicidade` + avisoLeituraAsCegas(cabecalhoEncontrado),
+      );
     } catch {
       Alert.alert("Erro", "Falha ao ler DOBRO.");
     }
@@ -435,11 +474,13 @@ export default function InventExpImportScreen() {
         Alert.alert("Nada foi lido", `"${nome ?? "O arquivo"}" não produziu nenhuma linha.`);
         return;
       }
-      const linhas = parseBlocoMatrix(matriz);
+      const { linhas, cabecalhoEncontrado } = parseBlocoMatrix(matriz);
       setBlocoRows(linhas);
+      registrarLeitura("BLOCO", cabecalhoEncontrado);
       Alert.alert(
         "BLOCO carregado",
-        `${linhas.length} linha(s). Serve de conferência independente da seção e da regra de bloco.`,
+        `${linhas.length} linha(s). Serve de conferência independente da seção e da regra de bloco.` +
+          avisoLeituraAsCegas(cabecalhoEncontrado),
       );
     } catch {
       Alert.alert("Erro", "Falha ao ler BLOCO.");
@@ -1186,6 +1227,10 @@ export default function InventExpImportScreen() {
         operacao: operationType,
         medianaEquipe,
         emitidoPor: leaderName.trim() || undefined,
+        // Spec 0002: vale para os dois motores — o PROD_SEÇÃO alimenta o v2.1
+        // também, então a leitura às cegas não pode ficar só na planilha do v3.
+        arquivosSemCabecalho:
+          arquivosSemCabecalho.length > 0 ? arquivosSemCabecalho : undefined,
       };
       // Sem os três arquivos do v3 a planilha sai reduzida, com uma aba de
       // ressalvas dizendo o que falta — melhor que não entregar nada ao líder.

@@ -56,7 +56,7 @@ describe('parseProdSecaoMatrix', () => {
   ];
 
   it('lê as combinações e arrasta a área mesclada para baixo', () => {
-    const linhas = parseProdSecaoMatrix(matriz);
+    const { linhas } = parseProdSecaoMatrix(matriz);
     expect(linhas).toHaveLength(3);
     expect(linhas[0]).toMatchObject({ area: 'MEDICAMENTOS', matricula: '48779594832', secoes: 28, qtdC1: 972 });
     expect(linhas[1].area).toBe('MEDICAMENTOS');
@@ -64,16 +64,32 @@ describe('parseProdSecaoMatrix', () => {
   });
 
   it('descarta linha de subtotal', () => {
-    expect(parseProdSecaoMatrix(matriz).some((l) => !l.matricula)).toBe(false);
+    expect(parseProdSecaoMatrix(matriz).linhas.some((l) => !l.matricula)).toBe(false);
   });
 
   it('normaliza o nome da área', () => {
-    const linhas = parseProdSecaoMatrix(matriz);
+    const { linhas } = parseProdSecaoMatrix(matriz);
     expect(linhas[2].area).toBe('FRENTE DE CAIXA');
   });
 
+  it('denuncia leitura por indice fixo quando nao acha cabecalho', () => {
+    // E1/E5 da spec 0002: sem cabeçalho o parser não desiste — lê pelos índices
+    // fixos. O resultado é indistinguível de uma leitura correta, então precisa
+    // vir marcado.
+    const semCabecalho = matriz.filter((l) => !(l ?? []).some((c: any) => c === 'MATRICULA'));
+    const r = parseProdSecaoMatrix(semCabecalho);
+    expect(r.cabecalhoEncontrado).toBe(false);
+    expect(r.linhaCabecalho).toBeNull();
+  });
+
+  it('marca cabecalho encontrado quando ele existe', () => {
+    const r = parseProdSecaoMatrix(matriz);
+    expect(r.cabecalhoEncontrado).toBe(true);
+    expect(typeof r.linhaCabecalho).toBe('number');
+  });
+
   it('converte para o formato do motor v2.1 preservando os ajustes', () => {
-    const secoes = prodSecaoParaSecoes(parseProdSecaoMatrix(matriz));
+    const secoes = prodSecaoParaSecoes(parseProdSecaoMatrix(matriz).linhas);
     expect(secoes[0]).toMatchObject({
       area_nome: 'MEDICAMENTOS',
       matricula: '48779594832',
@@ -136,7 +152,7 @@ describe('parseNaoContadosMatrix', () => {
   ];
 
   it('agrupa os EANs sob o produto imediatamente acima', () => {
-    const itens = parseNaoContadosMatrix(matriz);
+    const { linhas: itens } = parseNaoContadosMatrix(matriz);
     expect(itens).toHaveLength(2);
     expect(itens[0].descricao).toBe('MOTILEX HA C/ 60 CAPS');
     expect(itens[0].eans).toEqual(['007896637031844', '017896637031844']);
@@ -144,14 +160,23 @@ describe('parseNaoContadosMatrix', () => {
   });
 
   it('marca todos como não encontrados e lê o valor em sistema', () => {
-    const itens = parseNaoContadosMatrix(matriz);
+    const { linhas: itens } = parseNaoContadosMatrix(matriz);
     expect(itens.every((i) => i.situacao === 'NAO_ENCONTRADO')).toBe(true);
     expect(itens[0].valor).toBeCloseTo(157.03, 2);
     expect(itens[1].valor).toBeCloseTo(142.32, 2);
   });
 
+  it('denuncia leitura por indice fixo quando nao acha cabecalho', () => {
+    const semCabecalho = matriz.filter(
+      (l) => !(l ?? []).some((c: any) => String(c ?? '').toUpperCase() === 'ORDEM'),
+    );
+    const r = parseNaoContadosMatrix(semCabecalho);
+    expect(r.cabecalhoEncontrado).toBe(false);
+    expect(r.linhaCabecalho).toBeNull();
+  });
+
   it('captura o departamento do produto', () => {
-    expect(parseNaoContadosMatrix(matriz)[0].departamento).toBe('027');
+    expect(parseNaoContadosMatrix(matriz).linhas[0].departamento).toBe('027');
   });
 });
 
@@ -259,18 +284,27 @@ describe('parseDobroMatrix', () => {
   ];
 
   it('lê só as linhas de detalhe, que são as que têm seção', () => {
-    const linhas = parseDobroMatrix(matriz);
+    const { linhas } = parseDobroMatrix(matriz);
     expect(linhas).toHaveLength(3);
     expect(linhas[0]).toMatchObject({ secao: '0342', ean: '007897595601834' });
     expect(linhas[2].secao).toBe('0255');
   });
 
+  it('denuncia leitura por indice fixo quando nao acha cabecalho', () => {
+    const semCabecalho = matriz.filter(
+      (l) => !(l ?? []).some((c: any) => String(c ?? '').toUpperCase().includes('COD.COLETADO')),
+    );
+    const r = parseDobroMatrix(semCabecalho);
+    expect(r.cabecalhoEncontrado).toBe(false);
+    expect(r.linhaCabecalho).toBeNull();
+  });
+
   it('traz o nome da família, não o código', () => {
-    expect(parseDobroMatrix(matriz)[0].familia).toBe('ESPECIALIDADE EM GERAL');
+    expect(parseDobroMatrix(matriz).linhas[0].familia).toBe('ESPECIALIDADE EM GERAL');
   });
 
   it('descarta a linha de produto, que não tem seção', () => {
-    expect(parseDobroMatrix(matriz).some((l) => !l.secao)).toBe(false);
+    expect(parseDobroMatrix(matriz).linhas.some((l) => !l.secao)).toBe(false);
   });
 });
 
@@ -299,7 +333,7 @@ describe('parseBlocoMatrix', () => {
   ];
 
   it('localiza CPF e nome pela posição relativa à seção', () => {
-    const linhas = parseBlocoMatrix(matriz);
+    const { linhas } = parseBlocoMatrix(matriz);
     expect(linhas).toHaveLength(2);
     expect(linhas[0]).toMatchObject({
       secao: '0039',
@@ -312,10 +346,28 @@ describe('parseBlocoMatrix', () => {
 
   it('exige CPF de 11 dígitos e EAN para aceitar a linha', () => {
     const semCpf = [...matriz.slice(0, 8), linha({ 1: '2915', 3: '0039', 14: '007894900530001' }, 33)];
-    expect(parseBlocoMatrix(semCpf)).toHaveLength(0);
+    expect(parseBlocoMatrix(semCpf).linhas).toHaveLength(0);
+  });
+
+  it('denuncia leitura por indice fixo quando nao acha cabecalho', () => {
+    // E5 da spec 0002 — o caso perigoso. Sem cabeçalho o parser não falha: ele
+    // começa na linha fixa 8 e devolve linhas plausíveis. Aqui isso custa a
+    // primeira bipada em bloco, que some da análise sem nenhum sinal — as duas
+    // linhas do arquivo viram uma, e a que sobra parece perfeita.
+    const semCabecalho = matriz.filter(
+      (l) => !(l ?? []).some((c: any) => String(c ?? '').toUpperCase().includes('CÓDIGO COLETADO')),
+    );
+    const r = parseBlocoMatrix(semCabecalho);
+
+    expect(r.cabecalhoEncontrado).toBe(false);
+    expect(r.linhaCabecalho).toBeNull();
+    // com cabeçalho seriam 2; sem ele, a primeira linha é engolida
+    expect(parseBlocoMatrix(matriz).linhas).toHaveLength(2);
+    expect(r.linhas).toHaveLength(1);
+    expect(r.linhas[0].descricao).toBe('BOMBOM SONHO DE VALSA');
   });
 
   it('traz o nome da família', () => {
-    expect(parseBlocoMatrix(matriz)[1].familia).toBe('CEREAIS');
+    expect(parseBlocoMatrix(matriz).linhas[1].familia).toBe('CEREAIS');
   });
 });
