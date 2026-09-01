@@ -33,6 +33,9 @@ module.exports = {
         process.env.SUPABASE_ANON_KEY ||
         expo.extra?.supabaseAnonKey ||
         "",
+      tadeuAppsUrl: process.env.EXPO_PUBLIC_TADEU_APPS_URL || "",
+      tadeuAppsSupabaseUrl: process.env.EXPO_PUBLIC_TADEU_APPS_SUPABASE_URL || "",
+      tadeuAppsSupabaseAnonKey: process.env.EXPO_PUBLIC_TADEU_APPS_SUPABASE_ANON_KEY || "",
       webBase: webBase || "",
     },
   },
