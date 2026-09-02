@@ -300,3 +300,41 @@ WHERE schemaname = 'public' AND qual = 'true'
 -- secao_lookup populada? (0 = motor v2.1 não localiza bloco por área)
 SELECT count(*) FROM public.secao_lookup;
 ```
+
+---
+
+## "Network request failed" na tela de login (02/09/2026)
+
+Sintoma: o app abre, o líder toca **Entrar** e recebe o diálogo `Erro /
+Network request failed` — texto cru em inglês, sem indicação do que fazer.
+
+O `Network request failed` do React Native é o `fetch` **não tendo com quem
+falar**: não é senha errada nem usuário inexistente (esses chegam como
+`Invalid login credentials`, com HTTP 400 e resposta do servidor). As causas
+possíveis, em ordem de probabilidade:
+
+1. **Projeto Supabase pausado ou removido.** O host `<ref>.supabase.co` deixa
+   de resolver quando o projeto é pausado por inatividade no plano free — o
+   erro no aparelho é exatamente este.
+2. **Ref divergente no build.** `app.json` → `extra.supabaseUrl` traz
+   `maoduppsngdwupokxtqr`, enquanto este documento e o `.env` de trabalho
+   apontam para `knxwuxxpbrbmhgdatgoe`. O `app.config.js` só sobrescreve o
+   valor do `app.json` quando `EXPO_PUBLIC_SUPABASE_URL` existe no ambiente do
+   build; num build EAS sem essa secret, **o valor que vai para o APK é o do
+   `app.json`**. Conferir qual dos dois refs é o de produção antes de qualquer
+   outra investigação.
+3. Aparelho sem internet / DNS do provedor.
+
+Conferência rápida, do celular ou de qualquer navegador — trocando o ref pelo
+que está no `app.json` do build instalado:
+
+```
+https://<ref>.supabase.co/auth/v1/health
+```
+
+`{"date":...,"description":"GoTrue is a user registration and authentication API"}`
+= projeto no ar. Erro de DNS / página de projeto pausado = causa 1 ou 2.
+
+> A mensagem em si passou a ser traduzida em `src/utils/authErrorMessage.ts`,
+> mas **traduzir não conserta**: o login continua impossível enquanto o projeto
+> apontado pelo build não responder.

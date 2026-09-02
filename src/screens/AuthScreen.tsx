@@ -13,6 +13,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "../services/supabase";
+import {
+  translateAuthError,
+  translateThrownAuthError,
+} from "../utils/authErrorMessage";
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -26,21 +30,6 @@ export default function AuthScreen() {
 
   const trimmedEmail = useMemo(() => email.trim(), [email]);
 
-  const translateAuthError = (message: string) => {
-    const msg = message.toLowerCase();
-    if (msg.includes("email not confirmed"))
-      return "E-mail não confirmado. Verifique seu spam.";
-    if (msg.includes("invalid login credentials"))
-      return "E-mail ou senha inválidos.";
-    if (msg.includes("user already registered"))
-      return "E-mail já cadastrado. Tente entrar ou recupere a senha.";
-    if (msg.includes("rate limit") || msg.includes("too many requests"))
-      return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
-    if (msg.includes("network error"))
-      return "Erro de conexão. Verifique sua internet.";
-    return message;
-  };
-
   const handleSignIn = async () => {
     if (!supabase) return Alert.alert("Erro", "Supabase não configurado.");
     if (!trimmedEmail || !password)
@@ -53,6 +42,8 @@ export default function AuthScreen() {
         password,
       });
       if (error) Alert.alert("Erro", translateAuthError(error.message));
+    } catch (err) {
+      Alert.alert("Erro", translateThrownAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -101,6 +92,8 @@ export default function AuthScreen() {
         setConfirmPassword("");
         setMode("login");
       }
+    } catch (err) {
+      Alert.alert("Erro", translateThrownAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -122,6 +115,8 @@ export default function AuthScreen() {
           "Um link para criar uma nova senha foi enviado para seu e-mail."
         );
       }
+    } catch (err) {
+      Alert.alert("Erro", translateThrownAuthError(err));
     } finally {
       setLoading(false);
     }
