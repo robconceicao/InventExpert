@@ -36,8 +36,12 @@ export default function AuthScreen() {
       return "E-mail já cadastrado. Tente entrar ou recupere a senha.";
     if (msg.includes("rate limit") || msg.includes("too many requests"))
       return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
-    if (msg.includes("network error"))
-      return "Erro de conexão. Verifique sua internet.";
+    if (
+      msg.includes("network error") ||
+      msg.includes("network request failed") ||
+      msg.includes("failed to fetch")
+    )
+      return "Erro de conexão. Verifique sua internet e tente novamente.";
     return message;
   };
 
@@ -53,6 +57,8 @@ export default function AuthScreen() {
         password,
       });
       if (error) Alert.alert("Erro", translateAuthError(error.message));
+    } catch (e: any) {
+      Alert.alert("Erro", translateAuthError(e?.message ?? "Falha ao conectar."));
     } finally {
       setLoading(false);
     }
@@ -101,6 +107,8 @@ export default function AuthScreen() {
         setConfirmPassword("");
         setMode("login");
       }
+    } catch (e: any) {
+      Alert.alert("Erro", translateAuthError(e?.message ?? "Falha ao conectar."));
     } finally {
       setLoading(false);
     }
@@ -122,6 +130,8 @@ export default function AuthScreen() {
           "Um link para criar uma nova senha foi enviado para seu e-mail."
         );
       }
+    } catch (e: any) {
+      Alert.alert("Erro", translateAuthError(e?.message ?? "Falha ao conectar."));
     } finally {
       setLoading(false);
     }
