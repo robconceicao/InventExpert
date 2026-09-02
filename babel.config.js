@@ -22,7 +22,10 @@ module.exports = function (api) {
           blacklist: null,
           whitelist: null,
           safe: false,
-          allowUndefined: false,
+          // Chave ausente vira undefined em vez de quebrar o bundle.
+          // handwritingEraser trata cada chave como opcional; com false,
+          // um deploy web (sem .env) derrubava o build inteiro.
+          allowUndefined: true,
         },
       ],
     ],
