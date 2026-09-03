@@ -12,7 +12,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { isSupabaseConfigured, supabase } from "../services/supabase";
+import {
+  diagnosticarFalhaDeRede,
+  isSupabaseConfigured,
+  supabase,
+} from "../services/supabase";
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -26,6 +30,15 @@ export default function AuthScreen() {
 
   const trimmedEmail = useMemo(() => email.trim(), [email]);
 
+  const ehErroDeRede = (message: string) => {
+    const msg = message.toLowerCase();
+    return (
+      msg.includes("network error") ||
+      msg.includes("network request failed") ||
+      msg.includes("failed to fetch")
+    );
+  };
+
   const translateAuthError = (message: string) => {
     const msg = message.toLowerCase();
     if (msg.includes("email not confirmed"))
@@ -36,13 +49,18 @@ export default function AuthScreen() {
       return "E-mail já cadastrado. Tente entrar ou recupere a senha.";
     if (msg.includes("rate limit") || msg.includes("too many requests"))
       return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
-    if (
-      msg.includes("network error") ||
-      msg.includes("network request failed") ||
-      msg.includes("failed to fetch")
-    )
+    if (ehErroDeRede(msg))
       return "Erro de conexão. Verifique sua internet e tente novamente.";
     return message;
+  };
+
+  /** Mostra o erro traduzido — e, quando é de rede, com a causa provável. */
+  const avisarErro = async (message: string) => {
+    if (ehErroDeRede(message)) {
+      Alert.alert("Sem acesso ao servidor", await diagnosticarFalhaDeRede());
+      return;
+    }
+    Alert.alert("Erro", translateAuthError(message));
   };
 
   const handleSignIn = async () => {
@@ -56,9 +74,9 @@ export default function AuthScreen() {
         email: trimmedEmail,
         password,
       });
-      if (error) Alert.alert("Erro", translateAuthError(error.message));
+      if (error) await avisarErro(error.message);
     } catch (e: any) {
-      Alert.alert("Erro", translateAuthError(e?.message ?? "Falha ao conectar."));
+      await avisarErro(e?.message ?? "Falha ao conectar.");
     } finally {
       setLoading(false);
     }
@@ -98,7 +116,7 @@ export default function AuthScreen() {
         password,
       });
       if (error) {
-        Alert.alert("Erro", translateAuthError(error.message));
+        await avisarErro(error.message);
       } else {
         setSuccessMessage(
           "E-mail de confirmação enviado! Verifique sua caixa de entrada (e a pasta de spam) para ativar sua conta."
@@ -108,7 +126,7 @@ export default function AuthScreen() {
         setMode("login");
       }
     } catch (e: any) {
-      Alert.alert("Erro", translateAuthError(e?.message ?? "Falha ao conectar."));
+      await avisarErro(e?.message ?? "Falha ao conectar.");
     } finally {
       setLoading(false);
     }
@@ -123,7 +141,7 @@ export default function AuthScreen() {
       setLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
       if (error) {
-        Alert.alert("Erro", translateAuthError(error.message));
+        await avisarErro(error.message);
       } else {
         Alert.alert(
           "Recuperação enviada",
@@ -131,7 +149,7 @@ export default function AuthScreen() {
         );
       }
     } catch (e: any) {
-      Alert.alert("Erro", translateAuthError(e?.message ?? "Falha ao conectar."));
+      await avisarErro(e?.message ?? "Falha ao conectar.");
     } finally {
       setLoading(false);
     }
