@@ -106,7 +106,7 @@ export type ResultadoLote = {
 | # | Pergunta | Dono | Estado |
 |---|----------|------|--------|
 | Q1 | O líder deveria ser impedido de gerar o lote quando há homônimo sem matrícula, em vez de receber fichas numeradas? | Roberto | ABERTA — resolvida como não-escopo por ora |
-| Q2 | A linha de baseline de testes do `CLAUDE.md` deveria citar `npm run check` em vez de um número congelado? O `specs/README.md` já aponta "três baselines conflitantes" como sintoma | Roberto | ABERTA |
+| Q2 | A linha de baseline de testes do `CLAUDE.md` deveria citar `npm run check` em vez de um número congelado? O `specs/README.md` já aponta "três baselines conflitantes" como sintoma | Roberto | RESOLVIDA — sim; ADR 0002 registra a decisão e o custo aceito |
 
 ## 9. Critérios de aceitação
 
@@ -124,7 +124,9 @@ export type ResultadoLote = {
   - [ ] E10 → `garante unicidade em lote grande de homônimos`
 - [ ] Nenhum arquivo fora desta lista foi tocado: `src/utils/nomeArquivo.ts`,
       `src/utils/__tests__/nomeArquivo.test.ts`, `src/utils/export.ts`,
-      `src/screens/InventExpImportScreen.tsx`, `CLAUDE.md`, `specs/0003-…`
+      `src/screens/InventExpImportScreen.tsx`, `CLAUDE.md`,
+      `specs/0003-nomes-de-ficha-em-lote.md`,
+      `specs/decisions/0002-baseline-de-teste-por-comando.md` (Q2)
 
 ## 10. Registro de realimentação
 
@@ -133,3 +135,4 @@ export type ResultadoLote = {
 | 2026-09-06 | Spec escrita depois do código, invertendo o fluxo do `specs/README.md` | LACUNA DE SPEC | Registrado aqui; spec fica RASCUNHO até leitura do Roberto, e o PR não merge antes disso |
 | 2026-09-06 | Baseline do `CLAUDE.md` estava em 428/29; o valor real na `main` é 437/29. O número foi medido numa base defasada e mergeado errado no PR #21 | BUG DE CÓDIGO (documentação) | Corrigido nesta entrega; virou a questão Q2 |
 | 2026-09-06 | Spec aprovada pelo Roberto após leitura, já com o código escrito. `npm run check` verde no commit `a56f4e6` (448 testes / 30 suites, tsc 0 erros) | — | Estado RASCUNHO → APROVADA; auditoria pelo agente verificador segue pendente |
+| 2026-09-06 | Q2 respondida pelo Roberto: trocar o número congelado pelo comando | LACUNA DE SPEC | `CLAUDE.md` passa a mandar rodar `npm run check`; decisão e alternativas descartadas em `specs/decisions/0002-baseline-de-teste-por-comando.md` |
