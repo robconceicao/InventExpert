@@ -414,13 +414,17 @@ Sufixo no campo descrição: `A1/A2/A3` = entorpecentes, `B1/B2` = psicotrópico
 ## Testes
 
 ```bash
-npm test                    # rodar todos os testes
+npm run check               # tsc --noEmit + suíte inteira — a verificação oficial
+npm test                    # só os testes
 npm test -- --coverage      # com cobertura
-npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis + limites + PDF do scanner + escala dos eixos + CSV (2026-09):**
-**452 testes / 30 suites** · `tsc --noEmit` = 0 erros.
+**Baseline:** `npm run check` termina verde, com `tsc --noEmit` = 0 erros.
+
+> Este arquivo não publica mais a contagem de testes. Um número congelado aqui
+> já divergiu da `main` quatro vezes sem nada falhar — ver
+> [`specs/decisions/0002-baseline-de-teste-por-comando.md`](specs/decisions/0002-baseline-de-teste-por-comando.md).
+> Para saber quantos são, rode o comando.
 
 Suites novas da v3:
 ```
@@ -451,8 +455,8 @@ src/services/__tests__/AuditoriaReconciliacaoService.test.ts
 src/utils/__tests__/scannerPdfHtml.test.ts                 ← orientação da página, quebras N-1, modo documento
 ```
 
-**Antes de encerrar qualquer task:** rodar `tsc --noEmit` e confirmar
-que todos os testes passam.
+**Antes de encerrar qualquer task:** rodar `npm run check` e confirmar que
+termina verde.
 
 ---
 
@@ -548,6 +552,7 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 | `csvParaMatriz` varre caractere a caractere | `split` por linha e por separador parte campo entre aspas que contém o separador ou quebra de linha; `"AMOXICILINA 500MG, 21 CPS"` virava duas colunas |
 | Texto vazio devolve `[]` em vez de `[[""]]` | É o que faz `pickSheetAsMatrix()` conseguir dizer "está vazio" em vez de seguir com uma matriz de uma célula |
 | Número do ACURACIDADE por `parseNumeroBr` | A matriz vem com `raw: true` para preservar o pt-BR; `parseFloat` cru lia 1.234 em "1.234,00" e 395 em "395,33" |
+| Baseline de teste é o comando `npm run check`, não um número no `CLAUDE.md` | Contagem congelada já divergiu da `main` quatro vezes sem nada falhar; um agente que lê o número velho "conserta" o que está certo — ver ADR 0002 |
 | qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
 | Filtro P&B do scanner via WebView + canvas (`scanFilter.ts`) | Nem `expo-image-manipulator` nem o plugin de scanner expõem operação de cor; canal de tinta = `min(R,G,B)` elimina o matiz de caneta colorida |

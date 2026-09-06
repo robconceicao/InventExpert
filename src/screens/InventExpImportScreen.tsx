@@ -1204,6 +1204,14 @@ const handlePickFile = async () => {
         "Fichas geradas",
         `${r.salvos} de ${arquivos.length} ficha(s) ${destino}.` +
           (r.falhas.length ? `\n\nFalharam: ${r.falhas.map((f) => f.nome).join(", ")}` : "") +
+          // Duas fichas com o mesmo nome (homônimos, ou relatório sem coluna
+          // de matrícula) saem numeradas em vez de uma sobrescrever a outra.
+          // O líder precisa saber qual é qual antes de entregar.
+          (r.renomeados.length
+            ? `\n\nNomes repetidos, salvos numerados: ${r.renomeados
+                .map((n) => n.para)
+                .join(", ")}`
+            : "") +
           (semPdf.length ? `\n\nNo navegador as fichas saem em HTML — imprima como PDF.` : ""),
       );
     } catch (e) {
