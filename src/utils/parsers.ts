@@ -13,6 +13,7 @@ import type {
   ReportI,
   ReportJ,
 } from "../types";
+import { csvParaMatriz } from "./csvMatriz";
 import { timeToMinutesH } from "./timeFormat";
 
 // ==========================
@@ -546,42 +547,14 @@ const parseNumberBR = (s: string): number => {
 export const parseInventoryCheckersCsv = (
   text: string,
 ): InventoryCheckerInput[] => {
-  const lines = text
-    .split(/[\r\n]+/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-  if (lines.length < 2) return [];
-
-  // Detecta o separador dominante numa linha
-  const detectSeparator = (line: string): RegExp => {
-    const semicolons = (line.match(/;/g) ?? []).length;
-    const tabs       = (line.match(/\t/g) ?? []).length;
-    const commas     = (line.match(/,/g) ?? []).length;
-    if (semicolons >= tabs && semicolons >= commas) return /;/;
-    if (tabs >= commas) return /\t/;
-    return /,/;
-  };
-
-  const parseRow = (row: string, sep: RegExp): string[] => {
-    if (!row.includes('"')) {
-      return row.split(sep).map((c) => c.trim());
-    }
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < row.length; i++) {
-      const c = row[i];
-      if (c === '"') { inQuotes = !inQuotes; continue; }
-      if (sep.test(c) && !inQuotes) {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += c;
-      }
-    }
-    result.push(current.trim());
-    return result;
-  };
+  // O fatiamento é do `csvMatriz`: um único parser de CSV no projeto (SPEC 0004).
+  // O que ficou aqui é a interpretação das colunas do RProInv_Produtividade, que
+  // não pertence a um parser genérico. O parser local que vivia neste arquivo
+  // perdia a aspa escapada de `""` e decidia o separador linha a linha.
+  const matriz = csvParaMatriz(text);
+  const temConteudo = (linha: string[]) =>
+    linha.some((c) => (c ?? "").trim().length > 0);
+  if (matriz.filter(temConteudo).length < 2) return [];
 
   const normalizeHeader = (h: string): string =>
     h.replace(/^"|"$/g, "").trim().toLowerCase()
@@ -589,7 +562,6 @@ export const parseInventoryCheckersCsv = (
 
 
   let headerRowIndex = -1;
-  let sep = /,/;
   let col = {
     nome: -1,
     qtde: -1,
@@ -602,11 +574,15 @@ export const parseInventoryCheckersCsv = (
     valorAjuste: -1,
   };
 
-  // Scan the first 30 lines to find the header row
-  for (let r = 0; r < Math.min(lines.length, 30); r++) {
-    sep = detectSeparator(lines[r]);
-    const rawHeader = parseRow(lines[r], sep);
-    const header = rawHeader.map(normalizeHeader);
+  // O limite de 30 conta linhas COM conteúdo, não posições da matriz: relatório
+  // do Crystal traz título, filtros e linhas vazias antes do cabeçalho, e o
+  // `csvParaMatriz` preserva as vazias. Contá-las deixaria o cabeçalho fora do
+  // alcance e o parser devolveria vazio, sem avisar (SPEC 0004, D2/E6).
+  let examinadas = 0;
+  for (let r = 0; r < matriz.length && examinadas < 30; r++) {
+    if (!temConteudo(matriz[r])) continue;
+    examinadas += 1;
+    const header = matriz[r].map(normalizeHeader);
 
     const matchCol = (patterns: RegExp[], exclude?: RegExp): number => {
       return header.findIndex((h) => {
@@ -653,10 +629,8 @@ export const parseInventoryCheckersCsv = (
 
   const result: InventoryCheckerInput[] = [];
 
-  for (let i = headerRowIndex + 1; i < lines.length; i++) {
-    const cells = parseRow(lines[i], sep).map((c) =>
-      (c ?? "").replace(/^"|"$/g, "").trim(),
-    );
+  for (let i = headerRowIndex + 1; i < matriz.length; i++) {
+    const cells = matriz[i].map((c) => (c ?? "").trim());
 
     // HEURÍSTICA DIRETA PARA O EXCEL DO CLIENTE:
     // Evita o problema de colunas desalinhadas (merged cells) no Excel.

@@ -548,6 +548,8 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 | Cada eixo da nota v3 preso em [0, 100] | Produtividade e cobertura já eram clampados; acuracidade e valor não. `erro` > `qtde` publicava "acuracidade -50%" na ficha do conferente, e Vlr(AJST) acima do contado tirava mais que os 25 pontos do próprio eixo |
 | `erro` e `qtde1a1` limitados a `qtde` também no ramo Crystal | São subconjuntos das peças contadas. O ramo de fallback e o motor v2.1 já limitavam; só o caminho dos arquivos reais aplicava apenas `Math.max(0, …)` |
 | `pctErroValor` publicado como medido, clampado só na nota | O percentual pode passar de 100% de verdade; quem tem de viver na escala é o eixo, não o diagnóstico |
+| Um único parser de CSV (`csvMatriz`), consumido por `parseInventoryCheckersCsv` | Dois parsers davam células diferentes para o mesmo arquivo: o local perdia a aspa escapada de `""` e partia campo com quebra de linha dentro de aspas — ver SPEC 0004 |
+| Varredura do cabeçalho conta linhas com conteúdo, não posições da matriz | O `csvParaMatriz` preserva linha vazia, e relatório do Crystal traz título e filtros antes do cabeçalho; contar as vazias no limite de 30 deixaria o cabeçalho fora do alcance e o parser devolveria vazio sem avisar |
 | Separador do CSV pela mediana por linha, não pelo `includes` do documento | Uma tabulação perdida numa descrição fatiava por tabulação um arquivo inteiro separado por `;` — cada linha virava uma célula e o parser só dizia "cabeçalho não encontrado" |
 | `csvParaMatriz` varre caractere a caractere | `split` por linha e por separador parte campo entre aspas que contém o separador ou quebra de linha; `"AMOXICILINA 500MG, 21 CPS"` virava duas colunas |
 | Texto vazio devolve `[]` em vez de `[[""]]` | É o que faz `pickSheetAsMatrix()` conseguir dizer "está vazio" em vez de seguir com uma matriz de uma célula |
@@ -602,6 +604,7 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 - ❌ Não usar `parseFloat` cru em célula de planilha do Crystal — usar `parseNumeroBr`
 - ❌ Não decidir separador de CSV por `includes` sobre o texto inteiro — usar `detectarSeparador()`
 - ❌ Não fatiar linha de CSV com `split(sep)` — aspas podem conter separador e quebra de linha
+- ❌ Não escrever um segundo parser de CSV — `csvParaMatriz()` é o único
 - ❌ Não hidratar tela a partir do AsyncStorage sem `try` e sem mesclar com o estado inicial
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
