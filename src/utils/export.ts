@@ -1,5 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+
+import { desambiguarNomes } from "./nomeArquivo";
 import { Alert, Platform } from "react-native";
 
 // ---- Web helper: trigger browser download ----
@@ -167,6 +169,12 @@ export type ResultadoLote = {
   pasta?: string;
   /** Como os arquivos foram entregues — muda a mensagem que a tela exibe. */
   via: "download" | "pasta" | "compartilhamento" | "cancelado";
+  /**
+   * Arquivos que tiveram de ser renumerados por colidirem com outro do lote.
+   * A tela avisa: renomear em silêncio é melhor que sobrescrever em silêncio,
+   * mas o líder precisa saber qual ficha saiu com nome diferente.
+   */
+  renomeados: { de: string; para: string }[];
 };
 
 /**
@@ -242,17 +250,31 @@ export const salvarArquivosEmLote = async (
   dialogTitle = "Salvar fichas de avaliação",
 ): Promise<ResultadoLote> => {
   const falhas: { nome: string; motivo: string }[] = [];
-  if (arquivos.length === 0) return { salvos: 0, falhas, via: "cancelado" };
+  if (arquivos.length === 0)
+    return { salvos: 0, falhas, via: "cancelado", renomeados: [] };
+
+  // Dois conferentes podem gerar o mesmo nome de arquivo — homônimos, ou um
+  // relatório sem coluna de matrícula, em que todos viram "sem_matricula". No
+  // iOS o segundo `writeAsStringAsync` sobrescreve o primeiro sem erro nenhum,
+  // e o lote reportava as duas fichas como salvas. Numerar aqui, na fronteira
+  // de IO, protege qualquer chamador.
+  const { nomes, renomeados } = desambiguarNomes(arquivos.map((a) => a.nome));
+  const finais = arquivos.map((a, i) => ({ ...a, nome: nomes[i] }));
 
   if (Platform.OS === "web") {
-    for (const a of arquivos) {
+    for (const a of finais) {
       try {
         downloadBinaryOnWeb(a.nome, a.base64, a.mimeType);
       } catch (e: any) {
         falhas.push({ nome: a.nome, motivo: e?.message ?? "falha no download" });
       }
     }
-    return { salvos: arquivos.length - falhas.length, falhas, via: "download" };
+    return {
+      salvos: finais.length - falhas.length,
+      falhas,
+      via: "download",
+      renomeados,
+    };
   }
 
   if (Platform.OS === "android") {
@@ -260,9 +282,9 @@ export const salvarArquivosEmLote = async (
     if (saf?.requestDirectoryPermissionsAsync) {
       const permissao = await saf.requestDirectoryPermissionsAsync();
       if (!permissao.granted) {
-        return { salvos: 0, falhas, via: "cancelado" };
+        return { salvos: 0, falhas, via: "cancelado", renomeados: [] };
       }
-      for (const a of arquivos) {
+      for (const a of finais) {
         try {
           const uri = await saf.createFileAsync(permissao.directoryUri, a.nome, a.mimeType);
           await FileSystem.writeAsStringAsync(uri, a.base64, {
@@ -273,10 +295,11 @@ export const salvarArquivosEmLote = async (
         }
       }
       return {
-        salvos: arquivos.length - falhas.length,
+        salvos: finais.length - falhas.length,
         falhas,
         pasta: permissao.directoryUri,
         via: "pasta",
+        renomeados,
       };
     }
   }
@@ -286,16 +309,17 @@ export const salvarArquivosEmLote = async (
   if (!disponivel) {
     return {
       salvos: 0,
-      falhas: arquivos.map((a) => ({
+      falhas: finais.map((a) => ({
         nome: a.nome,
         motivo: "compartilhamento indisponível",
       })),
       via: "cancelado",
+      renomeados: [],
     };
   }
 
   const directory = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
-  for (const a of arquivos) {
+  for (const a of finais) {
     try {
       const fileUri = directory.replace(/\/?$/, "/") + a.nome;
       await FileSystem.writeAsStringAsync(fileUri, a.base64, {
@@ -306,5 +330,10 @@ export const salvarArquivosEmLote = async (
       falhas.push({ nome: a.nome, motivo: e?.message ?? "falha ao compartilhar" });
     }
   }
-  return { salvos: arquivos.length - falhas.length, falhas, via: "compartilhamento" };
+  return {
+    salvos: finais.length - falhas.length,
+    falhas,
+    via: "compartilhamento",
+    renomeados,
+  };
 };

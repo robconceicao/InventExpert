@@ -419,7 +419,11 @@ npx tsc --noEmit            # type check sem compilar
 ```
 
 **Baseline v3 + entregáveis + limites + PDF do scanner + escala dos eixos (2026-09):**
-**428 testes / 29 suites** · `tsc --noEmit` = 0 erros.
+**448 testes / 30 suites** · `npm run check` = 0 erros.
+
+> O número acima é medido na `main`. O 428/29 anterior saiu de uma base
+> defasada e entrou errado no PR #21 — é o quarto "baseline conflitante"
+> que o `specs/README.md` usa como motivo para existir. Ver Q2 da SPEC 0003.
 
 Suites novas da v3:
 ```
