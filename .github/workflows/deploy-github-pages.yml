@@ -25,10 +25,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
@@ -53,9 +53,14 @@ jobs:
           ls -la dist | head -25
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
+          # A partir da v4 esta action exclui dotfiles do artefato por padrão
+          # (`--exclude=.[^/]*`). O `inject-base.js` grava `dist/.nojekyll` e o
+          # passo acima o assere — sem este input o arquivo sumiria do que vai
+          # publicado, sem falhar nada.
+          include-hidden-files: true
 
   deploy:
     name: Deploy
@@ -67,4 +72,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
