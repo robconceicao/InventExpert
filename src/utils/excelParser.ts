@@ -1,6 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as XLSX from 'xlsx';
 
+import { csvParaMatriz } from './csvMatriz';
 import { decodificarTexto } from './fileFormat';
 import { lerArquivoDetectado, readWorkbook } from './fileImport';
 import { abrirComoWorkbook, ErroLeituraArquivo } from './spreadsheetReader';
@@ -128,10 +129,11 @@ export async function pickSheetAsMatrix(): Promise<{
   }
 }
 
-/** Converte texto CSV/TSV em matriz, detectando o separador. */
-export function csvParaMatriz(texto: string): any[][] {
-  const sep = texto.includes('\t') ? '\t' : texto.includes(';') ? ';' : ',';
-  return texto
-    .split(/\r?\n/)
-    .map((linha) => linha.split(sep).map((c) => c.replace(/^"|"$/g, '').trim()));
-}
+/**
+ * Converte texto CSV/TSV em matriz, detectando o separador.
+ *
+ * A implementação vive em `csvMatriz.ts`, que não importa o DocumentPicker e
+ * por isso roda no Jest. Reexportado aqui para não mudar o caminho de import
+ * de quem já consome.
+ */
+export { csvParaMatriz, detectarSeparador } from './csvMatriz';
