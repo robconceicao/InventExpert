@@ -1,13 +1,14 @@
 # SPEC 0003 — Ficha de conferente nunca é sobrescrita por homônimo
 
-- **Estado:** RASCUNHO
+- **Estado:** APROVADA
 - **Autor:** Roberto
 - **Data:** 2026-09-06
 - **Entrega relacionada:** achado deixado em aberto na revisão do PR #21
 
 > **Nota de processo:** esta spec foi escrita *depois* do código, invertendo o fluxo do
-> `specs/README.md`. Registrado na seção 10. A implementação está no PR e não deve ser
-> mergeada antes de a spec sair de RASCUNHO.
+> `specs/README.md`, e só então aprovada pelo Roberto. Fica registrado porque o ciclo
+> seguinte precisa nascer sabendo — a spec vale como contrato daqui em diante, não como
+> descrição retroativa do que já estava pronto. Ver seção 10.
 
 ---
 
@@ -131,3 +132,4 @@ export type ResultadoLote = {
 |------|--------|---------------|-----------------|
 | 2026-09-06 | Spec escrita depois do código, invertendo o fluxo do `specs/README.md` | LACUNA DE SPEC | Registrado aqui; spec fica RASCUNHO até leitura do Roberto, e o PR não merge antes disso |
 | 2026-09-06 | Baseline do `CLAUDE.md` estava em 428/29; o valor real na `main` é 437/29. O número foi medido numa base defasada e mergeado errado no PR #21 | BUG DE CÓDIGO (documentação) | Corrigido nesta entrega; virou a questão Q2 |
+| 2026-09-06 | Spec aprovada pelo Roberto após leitura, já com o código escrito. `npm run check` verde no commit `a56f4e6` (448 testes / 30 suites, tsc 0 erros) | — | Estado RASCUNHO → APROVADA; auditoria pelo agente verificador segue pendente |
