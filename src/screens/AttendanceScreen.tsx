@@ -50,8 +50,11 @@ export default function AttendanceScreen() {
 
   useEffect(() => {
     const loadData = async () => {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
+      // Sem o try, um cache corrompido rejeitava a promise e a tela abria vazia
+      // sem dizer por quê — e o efeito seguinte gravava por cima do rascunho.
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
         const parsed = JSON.parse(stored) as AttendanceData;
         setAttendance({
           data: parsed.data ?? "",
@@ -70,6 +73,8 @@ export default function AttendanceScreen() {
             };
           }),
         });
+      } catch (err) {
+        console.warn("[Presença] Cache ilegível, iniciando em branco:", err);
       }
     };
     void loadData();

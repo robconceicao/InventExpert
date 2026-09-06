@@ -125,6 +125,10 @@ function formatarData(d: Date): string {
   );
 }
 
+/** Prende um eixo da nota na escala percentual em que os pesos foram definidos. */
+const pct = (v: number): number =>
+  Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+
 /** Mediana de peças/h. Usar sempre a mediana, nunca a média: um conferente
  *  muito rápido ou muito lento desloca a média e distorce todo o ranking. */
 export function medianaProdutividade(valores: number[]): number {
@@ -183,10 +187,13 @@ export function avaliarConferenteV3(
   const meusNC = naoContados.filter((n) => n.matricula === entrada.matricula);
 
   const unidadesEmErro = entrada.erro;
+  // Acuracidade é percentual de acerto: não existe abaixo de 0 nem acima de 100.
+  // `erro` pode chegar maior que `qtde` quando o Crystal desloca uma coluna, e
+  // sem o piso a ficha do conferente saía com "acuracidade -50%".
   const acuracidadeUnidades =
-    entrada.qtde > 0 ? 100 * (1 - unidadesEmErro / entrada.qtde) : 0;
+    entrada.qtde > 0 ? pct(100 * (1 - unidadesEmErro / entrada.qtde)) : 0;
   const acuracidadeItens =
-    itensAuditados > 0 ? 100 * (1 - minhasDiv.length / itensAuditados) : 0;
+    itensAuditados > 0 ? pct(100 * (1 - minhasDiv.length / itensAuditados)) : 0;
 
   const pctErroValor =
     entrada.valorContado > 0
@@ -211,10 +218,17 @@ export function avaliarConferenteV3(
     alta.reduce((s, n) => s + AVALIACAO_V3.penalidadeNaoContadoAlta * n.peso, 0);
 
   const { pesos } = AVALIACAO_V3;
+  // `pctErroValor` é publicado como medido (pode passar de 100% quando o ajuste
+  // vale mais que o contado), mas o que entra na nota é o eixo Valor, que como
+  // os outros três vive em [0, 100]. Sem o piso, um único conferente com ajuste
+  // acima do contado zerava a nota por um componente fora de escala, em vez de
+  // apenas perder os 25 pontos do eixo.
+  const eixoValor = pct(100 - pctErroValor);
+
   const bruto =
     pesos.acuracidade * acuracidadeUnidades +
     pesos.produtividade * indiceProdutividade +
-    pesos.valor * (100 - pctErroValor) +
+    pesos.valor * eixoValor +
     pesos.cobertura * cobertura -
     penalidade;
 

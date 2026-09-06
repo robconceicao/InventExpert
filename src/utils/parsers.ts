@@ -681,13 +681,19 @@ export const parseInventoryCheckersCsv = (
       const valorC1 = nonEmpties.length > 10 ? parseNumberBR(nonEmpties[10]) : 0;
       const valorAjuste = nonEmpties.length > 11 ? parseNumberBR(nonEmpties[11]) : 0;
 
+      // `erro` e `qtde1a1` são subconjuntos de `qtde` por definição: unidades em
+      // divergência e peças contadas uma a uma saem das peças que a pessoa
+      // contou. Sem o teto, uma coluna deslocada no Crystal faz o v3 publicar
+      // acuracidade negativa na ficha do conferente — o ramo de fallback abaixo
+      // e o motor v2.1 já limitavam, só este caminho (o dos arquivos reais) não.
+      const qtdeFinal = Math.max(0, qtde);
       result.push({
         nome,
         matricula,
-        qtde: Math.max(0, qtde),
-        qtde1a1: Math.max(0, qtde1a1),
+        qtde: qtdeFinal,
+        qtde1a1: Math.min(Math.max(0, qtde1a1), qtdeFinal),
         produtividade: Math.max(0, produtividade),
-        erro: Math.max(0, erro),
+        erro: Math.min(Math.max(0, erro), qtdeFinal),
         horas: Math.max(0, horas),
         valorC1: Math.max(0, valorC1),
         valorAjuste: Math.max(0, valorAjuste),

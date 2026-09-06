@@ -361,6 +361,32 @@ describe('AvaliacaoV3Service', () => {
     expect(r!.faixa).toBe('Excelente');
   });
 
+  /**
+   * Produtividade e cobertura já viviam presas em [0, 100]; acuracidade e valor
+   * não. Um `erro` maior que `qtde` publicava "acuracidade -50%" na ficha, e um
+   * ajuste maior que o contado tirava mais de 25 pontos do eixo Valor.
+   */
+  it('não devolve acuracidade negativa quando o erro passa das peças', () => {
+    const r = avaliar({ qtde: 1000, erro: 1500 });
+    expect(r!.acuracidadeUnidades).toBe(0);
+    expect(r!.nota).toBeGreaterThanOrEqual(0);
+  });
+
+  it('o eixo Valor perde no máximo o próprio peso', () => {
+    const base = avaliar({ valorContado: 10000, valorAjustado: 10000 });
+    const pior = avaliar({ valorContado: 10000, valorAjustado: 130000 });
+    // Vlr(AJST) 13x o contado não pode custar mais que os 25 pontos do eixo.
+    expect(pior!.nota).toBe(base!.nota);
+    // ...e o percentual medido continua sendo publicado como é.
+    expect(pior!.pctErroValor).toBeCloseTo(1300, 0);
+  });
+
+  it('mantém a nota dentro da escala em qualquer entrada', () => {
+    const r = avaliar({ qtde: 1000, erro: 99999, valorContado: 1, valorAjustado: 99999 });
+    expect(r!.nota).toBeGreaterThanOrEqual(0);
+    expect(r!.nota).toBeLessThanOrEqual(100);
+  });
+
   it('devolve null para o líder', () => {
     expect(avaliar({ role: 'LIDER' })).toBeNull();
     expect(avaliar({ nome: 'JOAO LIDER DA SILVA' })).toBeNull();

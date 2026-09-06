@@ -110,9 +110,18 @@ export default function ReportAScreen() {
 
   // ── Carrega dados salvos (apenas na montagem, sem auto-save no mount)
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((res) => {
-      if (res) setReport(JSON.parse(res));
-    });
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((res) => {
+        if (!res) return;
+        // Mescla com o estado inicial, como o ReportFormShell já fazia: um
+        // rascunho gravado por uma versão anterior do app não tem os campos
+        // novos, e sem a mesclagem esses TextInput trocam de controlado para
+        // não controlado no meio do preenchimento.
+        setReport((prev) => ({ ...prev, ...(JSON.parse(res) as ReportA) }));
+      })
+      .catch((err) => {
+        console.warn("[ReportA] Rascunho ilegível, iniciando em branco:", err);
+      });
   }, []);
 
   // ── Carrega alarmes disparados hoje do AsyncStorage para evitar disparos na inicialização

@@ -393,8 +393,8 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis + limites + PDF do scanner (2026-08):**
-**415 testes / 28 suites** · `tsc --noEmit` = 0 erros.
+**Baseline v3 + entregáveis + limites + PDF do scanner + escala dos eixos (2026-09):**
+**428 testes / 29 suites** · `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
 ```
@@ -402,6 +402,9 @@ src/utils/__tests__/prcParser.layout.test.ts      ← layout de 83 posições, b
 src/services/__tests__/AvaliacaoV3.test.ts        ← área, atribuição, não contados, nota
 src/utils/__tests__/avaliacaoV3Parsers.test.ts    ← matrizes do Crystal, custo, auditoria dirigida, DOBRO, BLOCO
 ```
+
+`src/utils/__tests__/auditoriaParsers.test.ts` cobre o ACURACIDADE lido como
+matriz em pt-BR — é a suíte que faltava para o parser da tela de Auditoria.
 
 `AuditoriaAtribuicaoService.test.ts` ganhou regressão amarrando a seção do
 `prcParser` à do ACURACIDADE: com 6 dígitos o cruzamento nunca casava e
@@ -512,6 +515,10 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 | `conferirBloco()` a cada inventário | BLOCO.xls é a única fonte com seção+CPF+EAN juntos; detecta mudança de layout do coletor antes de contaminar a avaliação (L2601: 99,7% de cobertura, 0 CPF divergente) |
 | DOBRO conta bipada repetida, não erro | O sistema consolida a duplicidade; o número mede método de marcação, não acuracidade |
 | CPF e nome do BLOCO localizados por posição relativa | O cabeçalho do relatório traz linha pontilhada no lugar do rótulo dessas duas colunas |
+| Cada eixo da nota v3 preso em [0, 100] | Produtividade e cobertura já eram clampados; acuracidade e valor não. `erro` > `qtde` publicava "acuracidade -50%" na ficha do conferente, e Vlr(AJST) acima do contado tirava mais que os 25 pontos do próprio eixo |
+| `erro` e `qtde1a1` limitados a `qtde` também no ramo Crystal | São subconjuntos das peças contadas. O ramo de fallback e o motor v2.1 já limitavam; só o caminho dos arquivos reais aplicava apenas `Math.max(0, …)` |
+| `pctErroValor` publicado como medido, clampado só na nota | O percentual pode passar de 100% de verdade; quem tem de viver na escala é o eixo, não o diagnóstico |
+| Número do ACURACIDADE por `parseNumeroBr` | A matriz vem com `raw: true` para preservar o pt-BR; `parseFloat` cru lia 1.234 em "1.234,00" e 395 em "395,33" |
 | qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
 | Filtro P&B do scanner via WebView + canvas (`scanFilter.ts`) | Nem `expo-image-manipulator` nem o plugin de scanner expõem operação de cor; canal de tinta = `min(R,G,B)` elimina o matiz de caneta colorida |
@@ -556,6 +563,10 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 - ❌ Não fixar `@page size: A4 portrait` no PDF do scanner — a folha pode ser deitada
 - ❌ Não jogar fora `width`/`height` do `manipulateAsync` — é deles que sai a orientação da página
 - ❌ Não ancorar a folha no topo da página (`object-position: top`) — a sobra vira "folha em branco embaixo"
+- ❌ Não deixar eixo da nota v3 fora de [0, 100] — os quatro pesos supõem essa escala
+- ❌ Não aceitar `erro` ou `qtde1a1` maior que `qtde` em nenhum ramo do parser
+- ❌ Não usar `parseFloat` cru em célula de planilha do Crystal — usar `parseNumeroBr`
+- ❌ Não hidratar tela a partir do AsyncStorage sem `try` e sem mesclar com o estado inicial
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
 - ❌ Não somar BLOCO.xls sem deduplicar as linhas repetidas na quebra de página

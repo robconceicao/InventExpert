@@ -1,4 +1,5 @@
 import { AuditoriaAcuracidadeRow, AuditoriaAgenteInfo } from '../types';
+import { parseNumeroBr } from './avaliacaoV3Parsers';
 
 /**
  * Lê o conteúdo do arquivo de agentes (agentes.txt ou CadFun.txt)
@@ -98,9 +99,13 @@ export function parseAcuracidadeXlsMatrix(matriz: any[][]): AuditoriaAcuracidade
     const finalStr = row[colMap.get('FINAL')!];
     const ajstStr = row[colMap.get('AJST')!];
 
-    const c1 = typeof c1Str === 'number' ? c1Str : parseFloat(c1Str || 0) || 0;
-    const final = typeof finalStr === 'number' ? finalStr : parseFloat(finalStr || 0) || 0;
-    const ajst = typeof ajstStr === 'number' ? ajstStr : parseFloat(ajstStr || 0) || 0;
+    // `pickSheetAsMatrix` lê com `raw: true` justamente para preservar o pt-BR,
+    // então estas células chegam como "1.234,00" quando o Crystal exporta em
+    // HTML/CSV. `parseFloat` cru lia 1.234 ali e 395 em "395,33": quantidade
+    // truncada, e a validação AJST = FINAL - C1 acusando divergência inexistente.
+    const c1 = parseNumeroBr(c1Str);
+    const final = parseNumeroBr(finalStr);
+    const ajst = parseNumeroBr(ajstStr);
     
     // Opcional: validação (AJST == FINAL - C1).
     if (Math.abs(ajst - (final - c1)) > 0.01) {
@@ -112,9 +117,9 @@ export function parseAcuracidadeXlsMatrix(matriz: any[][]): AuditoriaAcuracidade
       ean: (row[colMap.get('EAN')!] || '').toString().trim(),
       descricao: (row[colMap.get('DESCRICAO')!] || '').toString().trim(),
       c1,
-      a1: typeof row[colMap.get('A1')!] === 'number' ? row[colMap.get('A1')!] : parseFloat(row[colMap.get('A1')!] || 0) || 0,
-      a2: typeof row[colMap.get('A2')!] === 'number' ? row[colMap.get('A2')!] : parseFloat(row[colMap.get('A2')!] || 0) || 0,
-      a3: typeof row[colMap.get('A3')!] === 'number' ? row[colMap.get('A3')!] : parseFloat(row[colMap.get('A3')!] || 0) || 0,
+      a1: parseNumeroBr(row[colMap.get('A1')!]),
+      a2: parseNumeroBr(row[colMap.get('A2')!]),
+      a3: parseNumeroBr(row[colMap.get('A3')!]),
       final,
       ajst,
     });
