@@ -1,6 +1,6 @@
 # SPEC 0004 — Um único parser de CSV no projeto
 
-- **Estado:** RASCUNHO
+- **Estado:** APROVADA
 - **Autor:** Roberto
 - **Data:** 2026-09-06
 - **Entrega relacionada:** último item aberto da auditoria do PR #21; citado como fora de escopo no PR #23
@@ -80,7 +80,7 @@ rodada nas duas antes de escrever esta spec.
 | E2 | `"DIPIRONA; 500MG"` | correto | igual — sem mudança |
 | E3 | Quebra de linha dentro de aspas | Vira duas linhas; a segunda (`SEGUNDA`) entra no loop de dados e só é descartada por acaso, em `qtde <= 0` | Uma linha só, campo inteiro preservado |
 | E4 | Linha em branco no meio | Removida antes da varredura | Preservada como `[""]`; o loop de dados a descarta por `nome` vazio, e a varredura do cabeçalho não a conta no limite de 30 (D2) |
-| E5 | Arquivo `;` com uma linha `B,C` | Aquela linha é fatiada por vírgula | O separador do documento vence: `B,C` fica numa célula |
+| E5 | Arquivo `;` com uma linha `B,C` | **Já correto** — a detecção por linha só rodava nas candidatas a cabeçalho; as linhas de dados reusavam o separador do cabeçalho. Ver seção 10 | O separador do documento vence: `B,C` fica numa célula. Comportamento preservado, com teste que faltava |
 | E6 | Cabeçalho após 25 linhas de título/filtro do Crystal, com vazias entre elas | Encontrado | Continua encontrado (D2) |
 | E7 | Arquivo com menos de 2 linhas úteis | `[]` | `[]` |
 
@@ -88,8 +88,8 @@ rodada nas duas antes de escrever esta spec.
 
 | # | Pergunta | Dono | Estado |
 |---|----------|------|--------|
-| Q1 | E3 muda a contagem de linhas de um arquivo com quebra dentro de aspas. Algum relatório real do Crystal tem descrição multilinha? Se tiver, o parser antigo já vinha produzindo uma linha-fantasma silenciosa | Roberto | **PROPOSTA:** aceitar o novo comportamento — a linha-fantasma é bug, não contrato |
-| Q2 | E5 muda o resultado de uma linha isolada com outro separador. Vale um `console.warn` quando uma linha tem contagem de separador muito diferente da mediana? | Roberto | **PROPOSTA:** não nesta entrega; vira issue se aparecer caso real |
+| Q1 | E3 muda a contagem de linhas de um arquivo com quebra dentro de aspas | Roberto | RESOLVIDA — aceito: a linha-fantasma é bug, não contrato |
+| Q2 | Vale um `console.warn` quando uma linha tem contagem de separador muito diferente da mediana? | Roberto | RESOLVIDA — não nesta entrega; vira issue se aparecer caso real |
 
 ## 9. Critérios de aceitação
 
@@ -113,3 +113,6 @@ rodada nas duas antes de escrever esta spec.
 | Data | Achado | Classificação | O que foi feito |
 |------|--------|---------------|-----------------|
 | 2026-09-06 | Spec escrita antes do código, com as divergências medidas nas duas implementações em vez de deduzidas | — | E1 a E5 saíram de execução comparada; E6 é risco que a leitura do código revelou e que eu não tinha previsto ao propor a unificação como "trivial" no PR #23 |
+| 2026-09-06 | Spec aprovada pelo Roberto; Q1 e Q2 fechadas nas propostas | — | Estado RASCUNHO → APROVADA |
+| 2026-09-06 | **E5 estava errado.** Medi a divergência rodando `detectSeparator` linha a linha, mas `parseInventoryCheckersCsv` só a chamava nas candidatas a cabeçalho e reusava o separador nas linhas de dados — não havia divergência a corrigir | LACUNA DE SPEC | E5 reescrito como comportamento preservado. O teste ficou: passa nas duas implementações e cobre um caso que não tinha teste. Confirmado empiricamente: contra a implementação antiga só E1 e E3 falham |
+| 2026-09-06 | Restrição da seção 4 verificada: `git diff` vazio nos testes existentes, 12 testes no arquivo (6 antigos intactos + 6 novos) | — | `parsers.ts` ficou 26 linhas menor |
