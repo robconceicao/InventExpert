@@ -1,6 +1,6 @@
 # SPEC 0005 — Login sem rede diz o que aconteceu
 
-- **Estado:** RASCUNHO
+- **Estado:** APROVADA
 - **Autor:** Roberto
 - **Data:** 2026-09-06
 - **Entrega relacionada:** achado ao fechar os PRs #19 e #20, que atacavam este bug e foram encerrados sem merge
@@ -94,8 +94,8 @@ spinner some e ela não sabe se errou a senha, se o app travou, ou se deve tenta
 
 | # | Pergunta | Dono | Estado |
 |---|----------|------|--------|
-| Q1 | `tadeuLicense.ts` é o segundo ponto de login e também não traduz. Entra agora ou vira issue? | Roberto | **PROPOSTA:** issue. O erro dele é um `throw` com protocolo próprio consumido por outra tela; juntar as duas coisas dobra o risco de uma entrega pequena |
-| Q2 | A frase deve nomear "InventExpert" e mandar avisar o responsável, como no PR #19? | Roberto | **PROPOSTA:** sim. Quem usa o app em campo não distingue "minha internet" de "servidor fora"; a frase precisa dizer as duas e dar a saída |
+| Q1 | `tadeuLicense.ts` é o segundo ponto de login e também não traduz. Entra agora ou vira issue? | Roberto | RESOLVIDA — vira issue; o módulo já nasce reutilizável para quando ela for feita |
+| Q2 | A frase deve nomear "InventExpert" e mandar avisar o responsável, como no PR #19? | Roberto | RESOLVIDA — sim; há teste travando que a frase cite internet **e** servidor |
 
 ## 9. Critérios de aceitação
 
@@ -119,3 +119,6 @@ spinner some e ela não sabe se errou a senha, se o app travou, ou se deve tenta
 | Data | Achado | Classificação | O que foi feito |
 |------|--------|---------------|-----------------|
 | 2026-09-06 | Ao fechar os #19/#20 afirmei que a `main` "não trata Network request failed". Errado: ela **tem** `translateAuthError` (`AuthScreen.tsx:29`), com lista de rede incompleta. A conclusão (usuário vê inglês) estava certa; o motivo, não. Meu `grep` buscou o termo errado | LACUNA DE SPEC | Corrigido em E1. Ler o código antes de escrever a spec também revelou E2, que nenhum dos dois PRs fechados descrevia como silêncio total |
+| 2026-09-06 | Spec aprovada; Q1 e Q2 fechadas nas propostas | — | Estado RASCUNHO → APROVADA |
+| 2026-09-06 | E6 precisou de uma decisão que a spec não previa: `translateThrownAuthError(42)` não é rede nem mensagem conhecida | LACUNA DE SPEC | Volta como `"42"`, seguindo a restrição de não engolir o original. Cair na frase de rede mentiria sobre a causa; só erro **sem** mensagem cai nela |
+| 2026-09-06 | Critérios da seção 9 verificados: `translateAuthError` no `AuthScreen` só em import e usos (linhas 17/44/89/114), `grep -c "} catch"` = 3, `npm run check` verde com 478 testes | — | Nove testes, um por caso extremo mais dois de contorno |
