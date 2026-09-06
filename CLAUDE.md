@@ -149,6 +149,7 @@ src/
 │   ├── spreadsheetReader.ts            ← bytes → workbook → CSV `;` (puro, testável)
 │   ├── fileImport.ts                   ← leitura arquivos (IO: expo-file-system/legacy + web)
 │   ├── excelParser.ts                  ← pickAndParseExcel() (picker + JSON)
+│   ├── csvMatriz.ts                ← CSV/TSV → matriz (separador por mediana, aspas)
 │   └── export.ts                       ← CSV/texto/PDF (sharePdfFromHtml)
 │
 ├── components/
@@ -418,8 +419,8 @@ npm test -- --coverage      # com cobertura
 npx tsc --noEmit            # type check sem compilar
 ```
 
-**Baseline v3 + entregáveis + limites + PDF do scanner + escala dos eixos (2026-09):**
-**428 testes / 29 suites** · `tsc --noEmit` = 0 erros.
+**Baseline v3 + entregáveis + limites + PDF do scanner + escala dos eixos + CSV (2026-09):**
+**452 testes / 30 suites** · `tsc --noEmit` = 0 erros.
 
 Suites novas da v3:
 ```
@@ -543,6 +544,9 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 | Cada eixo da nota v3 preso em [0, 100] | Produtividade e cobertura já eram clampados; acuracidade e valor não. `erro` > `qtde` publicava "acuracidade -50%" na ficha do conferente, e Vlr(AJST) acima do contado tirava mais que os 25 pontos do próprio eixo |
 | `erro` e `qtde1a1` limitados a `qtde` também no ramo Crystal | São subconjuntos das peças contadas. O ramo de fallback e o motor v2.1 já limitavam; só o caminho dos arquivos reais aplicava apenas `Math.max(0, …)` |
 | `pctErroValor` publicado como medido, clampado só na nota | O percentual pode passar de 100% de verdade; quem tem de viver na escala é o eixo, não o diagnóstico |
+| Separador do CSV pela mediana por linha, não pelo `includes` do documento | Uma tabulação perdida numa descrição fatiava por tabulação um arquivo inteiro separado por `;` — cada linha virava uma célula e o parser só dizia "cabeçalho não encontrado" |
+| `csvParaMatriz` varre caractere a caractere | `split` por linha e por separador parte campo entre aspas que contém o separador ou quebra de linha; `"AMOXICILINA 500MG, 21 CPS"` virava duas colunas |
+| Texto vazio devolve `[]` em vez de `[[""]]` | É o que faz `pickSheetAsMatrix()` conseguir dizer "está vazio" em vez de seguir com uma matriz de uma célula |
 | Número do ACURACIDADE por `parseNumeroBr` | A matriz vem com `raw: true` para preservar o pt-BR; `parseFloat` cru lia 1.234 em "1.234,00" e 395 em "395,33" |
 | qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
@@ -591,6 +595,8 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 - ❌ Não deixar eixo da nota v3 fora de [0, 100] — os quatro pesos supõem essa escala
 - ❌ Não aceitar `erro` ou `qtde1a1` maior que `qtde` em nenhum ramo do parser
 - ❌ Não usar `parseFloat` cru em célula de planilha do Crystal — usar `parseNumeroBr`
+- ❌ Não decidir separador de CSV por `includes` sobre o texto inteiro — usar `detectarSeparador()`
+- ❌ Não fatiar linha de CSV com `split(sep)` — aspas podem conter separador e quebra de linha
 - ❌ Não hidratar tela a partir do AsyncStorage sem `try` e sem mesclar com o estado inicial
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
