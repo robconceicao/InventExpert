@@ -153,7 +153,8 @@ export default function AuthScreen() {
 
           {!isSupabaseConfigured && (
             <Text style={styles.errorText}>
-              Atenção: Supabase não configurado no app.json
+              Atenção: este build saiu sem as credenciais do Supabase
+              (EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY).
             </Text>
           )}
 
