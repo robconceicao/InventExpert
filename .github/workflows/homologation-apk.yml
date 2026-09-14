@@ -1,0 +1,48 @@
+name: Homologation APK
+on:
+  push:
+    branches: [main, 'codex/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APP_ENV: homologation
+      TEST_LICENSE_BYPASS: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --no-audit --no-fund
+      - run: node --test scripts/license-build-config.test.cjs scripts/license-service.test.cjs
+      - run: npm run check -- --runInBand
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Build test APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+      - name: Record test build configuration
+        run: |
+          node -e "require('fs').writeFileSync('homologation-build.json', JSON.stringify({commit:process.env.GITHUB_SHA,...require('./scripts/license-build-config.cjs').licenseBuildConfig(process.env)}, null, 2))"
+          sha256sum android/app/build/outputs/apk/release/*.apk > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inventexpert-homologation-${{ github.sha }}
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            homologation-build.json
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

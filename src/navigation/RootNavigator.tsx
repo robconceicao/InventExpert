@@ -32,7 +32,6 @@ import { registerDefaultSyncHandlers } from "../services/syncHandlers";
 import { syncQueue } from "../services/sync";
 import {
   fetchTadeuLicense,
-  isTadeuLicenseConfigured,
   type TadeuLicense,
 } from "../services/tadeuLicense";
 
@@ -99,14 +98,9 @@ function HeaderTitle({ children }: { children: React.ReactNode }) {
 export default function RootNavigator() {
   const [session, setSession] = useState<Session | null>(null);
   const [license, setLicense] = useState<TadeuLicense | null>(null);
-  const [licenseLoading, setLicenseLoading] = useState(isTadeuLicenseConfigured);
+  const [licenseLoading, setLicenseLoading] = useState(true);
 
   const refreshLicense = useCallback(async () => {
-    if (!isTadeuLicenseConfigured) {
-      setLicenseLoading(false);
-      return;
-    }
-
     setLicenseLoading(true);
     try {
       const next = await fetchTadeuLicense();
@@ -149,7 +143,7 @@ export default function RootNavigator() {
     return <AuthScreen />;
   }
 
-  if (isTadeuLicenseConfigured && licenseLoading) {
+  if (licenseLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
         <ActivityIndicator size="large" color="#2563EB" />
@@ -158,7 +152,7 @@ export default function RootNavigator() {
     );
   }
 
-  if (isTadeuLicenseConfigured && !license) {
+  if (!license) {
     return <TadeuLicenseScreen onActivated={() => void refreshLicense()} />;
   }
 
