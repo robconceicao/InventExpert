@@ -23,6 +23,11 @@ const REDE = [
   "fetch failed",
   "timeout",
   "timed out",
+  // Erros de socket, que sobem crus quando o fetch nem chega a falar HTTP.
+  // ENOTFOUND é o que aparece quando o host não resolve — o caso do projeto
+  // pausado ou do ref errado no app.json, que foi a origem deste bug.
+  "enotfound",
+  "econnrefused",
 ];
 
 /**

@@ -85,4 +85,15 @@ describe("authErrorMessage", () => {
     expect(isNetworkAuthError("connection timed out")).toBe(true);
     expect(isNetworkAuthError("Invalid login credentials")).toBe(false);
   });
+
+  // O incidente que originou esta spec: o app.json apontava para um projeto
+  // Supabase inexistente, então o host não resolvia e o erro subia como
+  // ENOTFOUND — sem cair na lista, chegava em inglês à tela de login.
+  it.each(["getaddrinfo ENOTFOUND xyz.supabase.co", "connect ECONNREFUSED 127.0.0.1:443"])(
+    "reconhece o erro de socket %p como falha de rede",
+    (bruto) => {
+      expect(isNetworkAuthError(bruto)).toBe(true);
+      expect(translateAuthError(bruto)).toBe(MENSAGEM_ERRO_REDE);
+    },
+  );
 });
