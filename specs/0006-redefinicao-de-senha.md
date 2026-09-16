@@ -1,6 +1,6 @@
 # SPEC 0006 — Redefinir a senha pelo link do e-mail
 
-- **Estado:** RASCUNHO
+- **Estado:** APROVADA
 - **Autor:** Roberto
 - **Data:** 2026-09-16
 - **Entrega relacionada:** incidente de 16/09 — líder sem acesso por 5 dias; a senha teve de ser reescrita no banco à mão
@@ -15,7 +15,8 @@ recuperação nunca se completa.
 
 ## 2. Escopo
 
-- [ ] Tela de redefinição no app, alcançável pela URL do link do e-mail
+- [ ] Tela de redefinição no app, escolhida antes do early return de sessão (D7)
+- [ ] `redirectTo` no `resetPasswordForEmail`, apontando para essa tela
 - [ ] Leitura do token de recuperação vindo no fragmento da URL (E1, E7)
 - [ ] Formulário: senha nova + confirmação, com a mesma regra do cadastro (E4, E5)
 - [ ] Gravação via `supabase.auth.updateUser({ password })`
@@ -50,6 +51,9 @@ recuperação nunca se completa.
 | D4 | Regra de senha extraída para `passwordPolicy.ts`, consumida pelas duas telas | Duas telas gravando senha com regras diferentes é como o usuário acaba com senha que uma aceita e a outra recusa. Hoje já há divergência entre o texto e a validação (E5) | Copiar a `validatePassword` para a tela nova — garante a divergência em vez de evitá-la |
 | D5 | Sessão de recuperação é encerrada (`signOut`) após gravar a senha | O token de recuperação vale como sessão; deixá-la viva faria o app entrar sem a pessoa digitar a senha nova, e ninguém confirmaria que ela foi anotada | Redirecionar direto para a tela logada — conveniente, mas a pessoa sai sem saber se decorou a senha |
 | D6 | Erro traduzido pelo `authErrorMessage.ts` que já existe | É o módulo da SPEC 0005, já cobre rede e as mensagens do GoTrue. `updateUser` devolve erro no mesmo formato | Mensagens próprias na tela nova — recria o problema que a 0005 fechou |
+| D7 | A escolha da tela acontece **antes** do `if (!session)` do `RootNavigator` | Hoje esse early return devolve `AuthScreen` para qualquer URL sem sessão — é literalmente por isso que o link do e-mail caiu na tela de login. Quem chega com token de recuperação não tem sessão por definição, então depender dela é garantir o bug de volta | Rota registrada no `Stack.Navigator` — o navegador só é montado depois do early return, e nunca seria alcançado |
+| D8 | Sem deep link `inventexpert://` no caminho de entrada (resposta a Q2) | App Links no Android exigem `assetlinks.json` publicado e verificado no domínio; Universal Links no iOS, o `apple-app-site-association`. Quando a verificação falha — domínio fora do ar, cache do sistema — o link não abre nada e a pessoa fica presa, sem alternativa. O navegador abre sempre | Configurar App Links agora: mais elegante, mas troca um caminho que funciona sempre por um que funciona quase sempre, para resolver um problema de conveniência |
+| D9 | Depois de gravar, a tela confirma e oferece `inventexpert://` como **atalho**, com instrução de abrir o app manualmente ao lado (resposta a Q3) | Deep link como atalho é diferente de deep link como caminho: se não abrir, a instrução ao lado resolve. É o padrão que a `docs/confirm-email.html` já usa, e funciona | Redirecionar automaticamente para o app — sem retorno se falhar, e a pessoa nem lê a confirmação de que a senha mudou |
 
 ## 4. Restrições
 
@@ -97,6 +101,37 @@ export function mensagemDeSenha(falha: FalhaDeSenha): string;
 export const REGRA_DE_SENHA: string;
 ```
 
+### Ponto de entrada — `RootNavigator.tsx`
+
+A tela é escolhida **antes** do early return de sessão (D7). Hoje a linha 148 é o
+motivo de o link cair no login: sem sessão, devolve `AuthScreen` para qualquer URL.
+
+```typescript
+// Sem sessão é a condição NORMAL de quem chega por link de recuperação.
+const link = parseRecoveryLink(urlDeEntrada);
+if (link.tipo !== "ausente") {
+  return <RedefinirSenhaScreen link={link} />;
+}
+if (!session) {
+  return <AuthScreen />;   // ← comportamento atual, preservado
+}
+```
+
+`urlDeEntrada` vem de `window.location.href` na web e de `Linking.getInitialURL()` no
+nativo — a mesma tela serve os dois, porque o parse recebe string.
+
+### `redirectTo` — `AuthScreen.handleResetPassword`
+
+```typescript
+await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+  // Sem isto o Supabase usa o Site URL, que hoje leva à raiz e portanto ao login.
+  redirectTo: urlDeRedefinicao(),   // web: origin + path atual; nativo: a URL pública
+});
+```
+
+A URL resultante precisa casar com **Redirect URLs** já configurado no painel
+(`https://robconceicao.github.io/InventExpert/**`) — senão o Supabase recusa o envio.
+
 ## 6. Dependências
 
 | Dependência | Estado | No escopo? |
@@ -122,15 +157,17 @@ export const REGRA_DE_SENHA: string;
 | E7 | `type=signup` no fragmento (link de confirmação de cadastro, não de recuperação) | `parseRecoveryLink` devolve `ausente`; a tela não assume que é recuperação |
 | E8 | Rede cai entre abrir a tela e salvar | Frase da SPEC 0005 (rede), e o formulário continua preenchido para tentar de novo |
 | E9 | Senha com 73 caracteres | Recusa por "longa" — acima de 72 o bcrypt trunca silenciosamente, e a pessoa não conseguiria entrar com o que digitou |
+| E10 | Cota de e-mail do plano free estourada ao pedir a recuperação | A frase de "muitas tentativas, aguarde" que o `authErrorMessage` já produz — a tela não pode engolir esse erro nem traduzi-lo por conta própria |
+| E11 | Token válido, mas a pessoa fecha e reabre a tela antes de salvar | O fragmento ainda está na URL, então a tela se reconstrói no mesmo estado. Não guardar o token em estado fora da URL |
 
 ## 8. Questões em aberto
 
 | # | Pergunta | Dono | Estado |
 |---|----------|------|--------|
-| Q1 | A `docs/confirm-email.html` deve ser absorvida pelo app também? No incidente ela apareceu servindo a tela de login em vez do próprio conteúdo — comportamento não explicado | Roberto | ABERTA |
-| Q2 | Vale configurar deep link `inventexpert://` para o link do e-mail abrir o app no celular em vez do navegador? | Roberto | ABERTA |
-| Q3 | Depois de redefinir, a pessoa volta para a tela de login do app web ou recebe instrução de abrir o app instalado? Muda conforme Q2 | Roberto | ABERTA |
-| Q4 | O limite de e-mails do plano free (poucos por hora) precisa de aviso na tela quando o envio for recusado por cota? | Roberto | ABERTA |
+| Q1 | A `docs/confirm-email.html` deve ser absorvida pelo app também? No incidente ela apareceu servindo a tela de login em vez do próprio conteúdo | Roberto | **RESPONDIDA 16/09 — não nesta entrega.** O comportamento está explicado: `RootNavigator.tsx:148` faz `if (!session) return <AuthScreen />`, então qualquer URL sem sessão cai na tela de login. Não era o deploy sobrescrevendo a página. A `confirm-email.html` segue tratando `type=signup`; unificar os dois callbacks é entrega própria, e vira SPEC 0007 se o segundo fluxo também precisar de tela |
+| Q2 | Vale configurar deep link `inventexpert://` para o link do e-mail abrir o app no celular em vez do navegador? | Roberto | **RESPONDIDA 16/09 — não.** Ver D8: App Links exigem verificação de domínio, e quando ela falha o link não abre nada. O navegador abre sempre, e a web pública é o mesmo app |
+| Q3 | Depois de redefinir, a pessoa volta para a tela de login do app web ou recebe instrução de abrir o app instalado? | Roberto | **RESPONDIDA 16/09 — as duas coisas.** Ver D9: confirmação na tela, botão `inventexpert://` como atalho e instrução de abrir o app ao lado. Quem está no navegador do desktop ignora o botão; quem está no celular ganha um toque a menos |
+| Q4 | O limite de e-mails do plano free precisa de aviso na tela quando o envio for recusado por cota? | Roberto | **RESPONDIDA 16/09 — já coberto.** `translateAuthError` trata `rate limit` e `too many requests` desde a SPEC 0005, e o `handleResetPassword` já o consome. Nada a fazer além de não contornar esse caminho na tela nova (E10) |
 
 ## 9. Critérios de aceitação
 
@@ -148,11 +185,22 @@ export const REGRA_DE_SENHA: string;
   - [ ] `a regra exibida corresponde ao que a validação aceita`
 - [ ] O texto de instrução do cadastro vem de `REGRA_DE_SENHA` — não há string de regra
       escrita à mão em `AuthScreen.tsx`
+- [ ] `handleResetPassword` passa `redirectTo`; a chamada sem opções não permanece
+- [ ] A escolha da tela ocorre antes do `if (!session)` em `RootNavigator.tsx`, e o
+      comportamento atual (sem sessão e sem token → `AuthScreen`) continua valendo
 - [ ] Verificação manual no navegador do celular: pedir recuperação, abrir o link,
       definir senha, entrar no app com ela
+- [ ] Verificação manual do caminho triste: abrir a URL de redefinição **sem** fragmento
+      e confirmar que cai no login, sem formulário de senha (E3)
 - [ ] Arquivos tocados, e só estes: `src/utils/recoveryLink.ts`,
       `src/utils/passwordPolicy.ts`, as duas suítes novas, a tela nova,
       `src/screens/AuthScreen.tsx`, `src/navigation/RootNavigator.tsx`
+
+> **Fora do `npm run check`:** a tela em si não ganha teste automatizado — o Jest deste
+> projeto roda em `testEnvironment: node`, sem React Native. É a mesma razão que empurrou
+> a lógica para `recoveryLink.ts` e `passwordPolicy.ts`: o que dá para testar sem montar
+> RN está lá, e o que sobra na tela é ligação. As duas verificações manuais acima cobrem
+> essa ligação.
 
 ## 10. Registro de realimentação
 
