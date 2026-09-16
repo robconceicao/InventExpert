@@ -1,42 +1,61 @@
 /**
- * Traduz o erro do Supabase Auth para a frase que o líder lê na tela.
+ * Tradução das mensagens de erro de autenticação do Supabase.
  *
- * Fora da tela porque falha de rede tem muitas grafias e cada uma que escapa
- * chega ao usuário em inglês: aqui o conjunto fica travado por teste, sem
- * precisar montar React Native.
+ * Vive fora da tela por dois motivos. O primeiro é poder ser testado sem montar
+ * o React Native — o Jest aqui roda em `testEnvironment: node`, sem mock de RN,
+ * a mesma razão que separou `fileFormat` de `fileImport`. O segundo é servir
+ * mais de um ponto de login: hoje o `AuthScreen`, amanhã a licença Tadeu Apps.
+ *
+ * A falha de rede chega com texto diferente conforme a plataforma e a versão do
+ * supabase-js: "Network request failed" no Android/RN, "Failed to fetch" no
+ * browser, "network error" em algumas versões. A lista da tela cobria só a
+ * terceira — justamente a que o app não produz — e as outras duas chegavam ao
+ * usuário em inglês cru. Por isso lista de substrings, e não `switch` por código:
+ * o supabase-js não expõe código estável para falha de transporte.
  */
 
-/** Grafias de "o fetch não teve com quem falar", por plataforma e motor. */
-const PADROES_DE_REDE = [
-  "network error", //          navegador
-  "network request failed", // React Native (Android/iOS)
-  "failed to fetch", //        Chrome/Edge
-  "load failed", //            Safari/WebKit
-  "fetch failed", //           undici (Node 18+)
-  "timeout", //                estouro de tempo
+/** Formas conhecidas de falha de transporte. Estender é acrescentar uma linha. */
+const REDE = [
+  "network request failed",
+  "failed to fetch",
+  "network error",
+  "load failed",
+  "fetch failed",
+  "timeout",
   "timed out",
-  "econnrefused", //           servidor no ar mas recusando
-  "enotfound", //              DNS não resolve — projeto pausado ou ref errado
+  // Erros de socket, que sobem crus quando o fetch nem chega a falar HTTP.
+  // ENOTFOUND é o que aparece quando o host não resolve — o caso do projeto
+  // pausado ou do ref errado no app.json, que foi a origem deste bug.
+  "enotfound",
+  "econnrefused",
 ];
 
 /**
- * Falha de rede não distingue aparelho offline de servidor fora do ar, então a
- * frase precisa cobrir as duas: verificar a internet resolve a primeira, e
- * quem cuida do projeto reconhece a segunda pela menção ao servidor.
+ * Frase única para qualquer falha de transporte.
+ *
+ * Nomeia as duas causas possíveis de propósito: o caso que originou isto foi o
+ * Supabase inacessível com a internet do usuário funcionando, e o texto
+ * anterior — "Verifique sua internet" — mandava procurar defeito onde não havia.
  */
-const MENSAGEM_DE_REDE =
-  "Não foi possível falar com o servidor. Verifique sua internet e tente novamente; " +
-  "se o problema persistir, o serviço pode estar fora do ar.";
+export const MENSAGEM_ERRO_REDE =
+  "Não foi possível falar com o servidor. Verifique sua internet; se ela estiver " +
+  "funcionando, o servidor do InventExpert pode estar fora do ar — avise o responsável.";
 
-export function ehErroDeRede(message: string): boolean {
+/** true quando a mensagem indica falha de transporte, em qualquer das formas. */
+export function isNetworkAuthError(message: string): boolean {
   const msg = message.toLowerCase();
-  return PADROES_DE_REDE.some((padrao) => msg.includes(padrao));
+  return REDE.some((termo) => msg.includes(termo));
 }
 
-/** Traduz a mensagem de erro. Texto desconhecido volta como veio. */
+/**
+ * Traduz o erro RETORNADO pelo supabase-js.
+ *
+ * Mensagem desconhecida volta inalterada: engolir o texto original tiraria a
+ * única pista disponível quando aparecer um erro que ninguém previu.
+ */
 export function translateAuthError(message: string): string {
   const msg = message.toLowerCase();
-
+  if (isNetworkAuthError(msg)) return MENSAGEM_ERRO_REDE;
   if (msg.includes("email not confirmed"))
     return "E-mail não confirmado. Verifique seu spam.";
   if (msg.includes("invalid login credentials"))
@@ -45,20 +64,20 @@ export function translateAuthError(message: string): string {
     return "E-mail já cadastrado. Tente entrar ou recupere a senha.";
   if (msg.includes("rate limit") || msg.includes("too many requests"))
     return "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.";
-  if (ehErroDeRede(msg)) return MENSAGEM_DE_REDE;
-
   return message;
 }
 
 /**
- * Traduz o que vier de um `catch`.
+ * Traduz o erro LANÇADO — rede, DNS, JSON inválido.
  *
- * O bloco recebe `unknown`: o cliente pode lançar Error, string, ou rejeitar
- * sem valor. Sem isto, `e.message` de um throw não-Error vira "undefined" na
- * tela.
+ * Recebe `unknown` porque `catch` não tipa. Para quem está na tela, exceção e
+ * erro retornado são o mesmo evento: não entrou. Por isso a mesma frase, e não
+ * um "erro inesperado" genérico — que devolveria ao silêncio de hoje com outra
+ * roupa. Erro sem mensagem também cai na frase de rede: é o caso em que o
+ * `fetch` morreu antes de produzir texto.
  */
-export function translateThrownAuthError(erro: unknown): string {
-  if (erro instanceof Error) return translateAuthError(erro.message);
-  if (typeof erro === "string" && erro.trim()) return translateAuthError(erro);
-  return MENSAGEM_DE_REDE;
+export function translateThrownAuthError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (!message.trim()) return MENSAGEM_ERRO_REDE;
+  return translateAuthError(message);
 }

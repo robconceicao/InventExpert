@@ -1,91 +1,99 @@
 import {
-  ehErroDeRede,
+  MENSAGEM_ERRO_REDE,
+  isNetworkAuthError,
   translateAuthError,
   translateThrownAuthError,
 } from "../authErrorMessage";
 
-/** Detecta texto que passou sem tradução — o defeito que este módulo existe para impedir. */
-const pareceIngles = (texto: string) =>
-  /\b(network|failed|fetch|error|request|timeout|refused|not found)\b/i.test(texto);
-
-describe("translateAuthError — falha de rede", () => {
-  // Cada plataforma tem a sua grafia; todas chegavam cruas ao líder porque a
-  // tela só cobria "network error".
-  const grafias = [
-    "Network request failed", // React Native — o do print do aparelho
-    "network error",
-    "TypeError: Failed to fetch",
-    "Load failed",
-    "fetch failed",
-    "The request timed out",
-    "connect ECONNREFUSED 127.0.0.1:443",
-    "getaddrinfo ENOTFOUND xyz.supabase.co",
-  ];
-
-  it.each(grafias)("reconhece %p como falha de rede", (bruto) => {
-    expect(ehErroDeRede(bruto)).toBe(true);
+/**
+ * SPEC 0005. Cada teste é um caso extremo da seção 7, levantado lendo o
+ * `AuthScreen` da main — não deduzido.
+ */
+describe("authErrorMessage", () => {
+  it("traduz as tres formas de falha de rede", () => {
+    // A lista da tela cobria só "network error", que é justamente a forma que o
+    // app não produz: o RN manda "Network request failed" e o browser
+    // "Failed to fetch". As duas chegavam ao usuário em inglês cru.
+    expect(translateAuthError("Network request failed")).toBe(MENSAGEM_ERRO_REDE);
+    expect(translateAuthError("TypeError: Failed to fetch")).toBe(MENSAGEM_ERRO_REDE);
+    expect(translateAuthError("network error")).toBe(MENSAGEM_ERRO_REDE);
   });
 
-  it.each(grafias)("traduz %p sem deixar inglês na tela", (bruto) => {
-    const traduzido = translateAuthError(bruto);
-    expect(traduzido).not.toBe(bruto);
-    expect(pareceIngles(traduzido)).toBe(false);
-  });
-
-  it("cita internet e servidor, porque a causa pode ser qualquer um dos dois", () => {
-    const msg = translateAuthError("Network request failed");
-    expect(msg).toMatch(/internet/i);
-    expect(msg).toMatch(/servidor/i);
-  });
-
-  it("não confunde credencial inválida com problema de rede", () => {
-    expect(ehErroDeRede("Invalid login credentials")).toBe(false);
-  });
-});
-
-describe("translateAuthError — demais casos", () => {
-  it.each([
-    ["Email not confirmed", /spam/i],
-    ["Invalid login credentials", /senha inválidos/i],
-    ["User already registered", /já cadastrado/i],
-    ["Email rate limit exceeded", /aguarde/i],
-    ["Too many requests", /aguarde/i],
-  ])("traduz %p", (bruto, esperado) => {
-    expect(translateAuthError(bruto)).toMatch(esperado);
-  });
-
-  it("devolve intacto o que não conhece, para não esconder erro novo", () => {
-    const desconhecido = "Erro inesperado do provedor";
-    expect(translateAuthError(desconhecido)).toBe(desconhecido);
-  });
-
-  it("é indiferente à caixa do texto", () => {
-    expect(translateAuthError("INVALID LOGIN CREDENTIALS")).toMatch(
-      /senha inválidos/i,
-    );
-  });
-});
-
-describe("translateThrownAuthError", () => {
-  it("lê a mensagem de um Error", () => {
-    const msg = translateThrownAuthError(new Error("Network request failed"));
-    expect(pareceIngles(msg)).toBe(false);
-    expect(msg).toMatch(/servidor/i);
-  });
-
-  it("aceita throw de string", () => {
-    expect(translateThrownAuthError("Invalid login credentials")).toMatch(
-      /senha inválidos/i,
+  it("erro lancado recebe a mesma frase do erro retornado", () => {
+    // Para quem está na tela, `{ error }` e `throw` são o mesmo evento.
+    expect(translateThrownAuthError(new Error("Network request failed"))).toBe(
+      translateAuthError("Network request failed"),
     );
   });
 
-  // Um throw sem valor não pode virar "undefined" na tela.
-  it.each([[undefined], [null], [""], ["   "], [{}], [42]])(
-    "devolve frase útil para %p",
-    (valor) => {
-      const msg = translateThrownAuthError(valor);
-      expect(msg.trim()).not.toBe("");
-      expect(msg).not.toMatch(/undefined|null|\[object/i);
+  it("traducoes existentes seguem com o mesmo texto", () => {
+    expect(translateAuthError("Email not confirmed")).toBe(
+      "E-mail não confirmado. Verifique seu spam.",
+    );
+    expect(translateAuthError("Invalid login credentials")).toBe(
+      "E-mail ou senha inválidos.",
+    );
+    expect(translateAuthError("User already registered")).toBe(
+      "E-mail já cadastrado. Tente entrar ou recupere a senha.",
+    );
+    expect(translateAuthError("Email rate limit exceeded")).toBe(
+      "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.",
+    );
+    expect(translateAuthError("Too many requests")).toBe(
+      "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.",
+    );
+  });
+
+  it("mensagem desconhecida volta inalterada", () => {
+    // Engolir o original tiraria a única pista num erro que ninguém previu.
+    expect(translateAuthError("Database trigger raised exception X99")).toBe(
+      "Database trigger raised exception X99",
+    );
+  });
+
+  it("catch vazio nunca exibe undefined", () => {
+    for (const vazio of [undefined, null, "", "   "]) {
+      expect(translateThrownAuthError(vazio)).toBe(MENSAGEM_ERRO_REDE);
+    }
+  });
+
+  it("erro que nao e Error vira texto antes de traduzir", () => {
+    expect(translateThrownAuthError("Network request failed")).toBe(MENSAGEM_ERRO_REDE);
+    expect(translateThrownAuthError({ toString: () => "Failed to fetch" })).toBe(
+      MENSAGEM_ERRO_REDE,
+    );
+    // Objeto sem mensagem útil não pode virar "[object Object]" na tela...
+    // ...mas também não é rede: volta como veio, para não mentir sobre a causa.
+    expect(translateThrownAuthError(42)).toBe("42");
+  });
+
+  it("casa ignorando caixa", () => {
+    expect(translateAuthError("NETWORK REQUEST FAILED")).toBe(MENSAGEM_ERRO_REDE);
+    expect(translateAuthError("INVALID LOGIN CREDENTIALS")).toBe(
+      "E-mail ou senha inválidos.",
+    );
+  });
+
+  it("a frase de rede nomeia as duas causas possiveis", () => {
+    // O caso real foi o Supabase fora do ar com a internet do usuário boa.
+    expect(MENSAGEM_ERRO_REDE).toMatch(/internet/i);
+    expect(MENSAGEM_ERRO_REDE).toMatch(/servidor/i);
+  });
+
+  it("isNetworkAuthError separa rede de credencial", () => {
+    expect(isNetworkAuthError("Network request failed")).toBe(true);
+    expect(isNetworkAuthError("connection timed out")).toBe(true);
+    expect(isNetworkAuthError("Invalid login credentials")).toBe(false);
+  });
+
+  // O incidente que originou esta spec: o app.json apontava para um projeto
+  // Supabase inexistente, então o host não resolvia e o erro subia como
+  // ENOTFOUND — sem cair na lista, chegava em inglês à tela de login.
+  it.each(["getaddrinfo ENOTFOUND xyz.supabase.co", "connect ECONNREFUSED 127.0.0.1:443"])(
+    "reconhece o erro de socket %p como falha de rede",
+    (bruto) => {
+      expect(isNetworkAuthError(bruto)).toBe(true);
+      expect(translateAuthError(bruto)).toBe(MENSAGEM_ERRO_REDE);
     },
   );
 });
