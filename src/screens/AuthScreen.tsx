@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -17,6 +18,28 @@ import {
   translateAuthError,
   translateThrownAuthError,
 } from "../utils/authErrorMessage";
+import {
+  REGRA_DE_SENHA,
+  mensagemDeSenha,
+  validarSenha,
+} from "../utils/passwordPolicy";
+
+/**
+ * Para onde o link do e-mail deve voltar.
+ *
+ * Sem isto o Supabase usa o Site URL, que leva à raiz — e a raiz sem sessão é a
+ * tela de login, que foi exatamente onde a recuperação morreu. Precisa casar com
+ * as Redirect URLs do painel (`.../InventExpert/**`).
+ */
+const WEB_PUBLICA = "https://robconceicao.github.io/InventExpert/";
+
+function urlDeRedefinicao(): string {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const { origin, pathname } = window.location ?? {};
+    if (origin) return `${origin}${pathname ?? "/"}`;
+  }
+  return WEB_PUBLICA;
+}
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -49,14 +72,6 @@ export default function AuthScreen() {
     }
   };
 
-  /** Min 8 chars, letter + digit. Max 72 (bcrypt practical limit). No max-8 cap. */
-  const validatePassword = (pass: string) => {
-    const hasLetter = /[a-zA-Z]/.test(pass);
-    const hasNumber = /[0-9]/.test(pass);
-    const isRightLength = pass.length >= 8 && pass.length <= 72;
-    return hasLetter && hasNumber && isRightLength;
-  };
-
   const handleSignUp = async () => {
     if (!supabase) return;
     if (!trimmedEmail || !password || !confirmPassword) {
@@ -68,10 +83,9 @@ export default function AuthScreen() {
       return;
     }
 
-    if (!validatePassword(password)) {
-      setPasswordError(
-        "A senha deve ter no mínimo 8 caracteres e conter letras e números."
-      );
+    const falhaDeSenha = validarSenha(password);
+    if (falhaDeSenha) {
+      setPasswordError(mensagemDeSenha(falhaDeSenha));
       return;
     }
     setPasswordError("");
@@ -106,7 +120,9 @@ export default function AuthScreen() {
     }
     try {
       setLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: urlDeRedefinicao(),
+      });
       if (error) {
         Alert.alert("Erro", translateAuthError(error.message));
       } else {
@@ -170,11 +186,7 @@ export default function AuthScreen() {
             <View style={styles.instructionsContainer}>
               <Text style={styles.instructionsText}>
                 <Text style={{ fontWeight: "700" }}>Criando sua conta:</Text>{"\n"}
-                Digite seu e-mail e crie uma senha. A senha deve ter:{"\n"}
-                • Máximo de 8 caracteres{"\n"}
-                • Pelo menos 1 letra{"\n"}
-                • Pelo menos 1 número{"\n"}
-                • Pelo menos 1 símbolo (ex: @, #, !)
+                Digite seu e-mail e crie uma senha. {REGRA_DE_SENHA}
               </Text>
             </View>
           )}
