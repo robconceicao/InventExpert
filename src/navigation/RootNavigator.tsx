@@ -2,13 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Session } from "@supabase/supabase-js";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Platform, Pressable, Text, View } from "react-native";
 
 import SyncStatus from "../components/SyncStatus";
 import AcompanhamentoMenuScreen from "../screens/AcompanhamentoMenuScreen";
 import AttendanceScreen from "../screens/AttendanceScreen";
 import AuditoriaAtribuicaoScreen from "../screens/AuditoriaAtribuicaoScreen";
 import AuthScreen from "../screens/AuthScreen";
+import RedefinirSenhaScreen from "../screens/RedefinirSenhaScreen";
 import EscalaDashboardScreen from "../screens/EscalaDashboardScreen";
 import HomeScreen from "../screens/HomeScreen";
 import InventExpImportScreen from "../screens/InventExpImportScreen";
@@ -35,6 +36,21 @@ import {
   isTadeuLicenseConfigured,
   type TadeuLicense,
 } from "../services/tadeuLicense";
+import { parseRecoveryLink, type RecoveryLink } from "../utils/recoveryLink";
+
+/**
+ * Lê a URL de entrada sem esperar, quando dá.
+ *
+ * Na web ela está em `window.location` desde o primeiro render — e é o caso que
+ * importa, porque o link do e-mail abre no navegador. Resolver de forma
+ * síncrona evita piscar a tela de login antes da de redefinição.
+ */
+function lerLinkDeEntrada(): RecoveryLink {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return parseRecoveryLink(window.location?.href);
+  }
+  return { tipo: "ausente" };
+}
 
 export type RootStackParamList = {
   Home: undefined;
@@ -100,6 +116,8 @@ export default function RootNavigator() {
   const [session, setSession] = useState<Session | null>(null);
   const [license, setLicense] = useState<TadeuLicense | null>(null);
   const [licenseLoading, setLicenseLoading] = useState(isTadeuLicenseConfigured);
+  const [linkRecuperacao, setLinkRecuperacao] =
+    useState<RecoveryLink>(lerLinkDeEntrada);
 
   const refreshLicense = useCallback(async () => {
     if (!isTadeuLicenseConfigured) {
@@ -116,6 +134,24 @@ export default function RootNavigator() {
     } finally {
       setLicenseLoading(false);
     }
+  }, []);
+
+  // No nativo a URL inicial só chega de forma assíncrona. Hoje não há deep link
+  // configurado (SPEC 0006, Q2), então isto não dispara — fica pronto para o dia
+  // em que disparar, sem custo para a web.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    let vivo = true;
+    Linking.getInitialURL()
+      .then((url) => {
+        if (!vivo || !url) return;
+        const link = parseRecoveryLink(url);
+        if (link.tipo !== "ausente") setLinkRecuperacao(link);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -144,6 +180,27 @@ export default function RootNavigator() {
       listener.subscription.unsubscribe();
     };
   }, [refreshLicense]);
+
+  // Antes da sessão, e de propósito. Quem chega por link de recuperação não tem
+  // sessão — foi este early return que mandou o link do e-mail para a tela de
+  // login. E vem antes também porque `setSession()` na tela de redefinição
+  // dispara `onAuthStateChange`: sem esta precedência, o app entraria sozinho no
+  // meio da troca de senha.
+  if (linkRecuperacao.tipo !== "ausente") {
+    return (
+      <RedefinirSenhaScreen
+        link={linkRecuperacao}
+        onConcluir={() => {
+          // Some com o fragmento, senão recarregar a página reabre esta tela
+          // com um token já gasto.
+          if (Platform.OS === "web" && typeof window !== "undefined") {
+            window.history?.replaceState?.(null, "", window.location.pathname);
+          }
+          setLinkRecuperacao({ tipo: "ausente" });
+        }}
+      />
+    );
+  }
 
   if (!session) {
     return <AuthScreen />;

@@ -1,6 +1,6 @@
 # SPEC 0006 — Redefinir a senha pelo link do e-mail
 
-- **Estado:** APROVADA
+- **Estado:** IMPLEMENTADA (verificação manual pendente — ver seção 9)
 - **Autor:** Roberto
 - **Data:** 2026-09-16
 - **Entrega relacionada:** incidente de 16/09 — líder sem acesso por 5 dias; a senha teve de ser reescrita no banco à mão
@@ -206,4 +206,6 @@ A URL resultante precisa casar com **Redirect URLs** já configurado no painel
 
 | Data | Achado | Classificação | O que foi feito |
 |------|--------|---------------|-----------------|
-| | | BUG DE CÓDIGO / LACUNA DE SPEC | |
+| 16/09 | `setSession()` dispara `onAuthStateChange`, que preenche `session` no `RootNavigator`. A spec justificava D7 só por "quem chega pelo link não tem sessão" — mas havia um segundo motivo, mais grave: assim que a tela aceitasse o token, o app entraria sozinho e trocaria de tela **no meio da redefinição**, antes de gravar a senha | LACUNA DE SPEC | D7 mantida, com a justificativa ampliada no código e aqui. A ordem já estava certa; o que faltava era saber por que ela não podia ser invertida |
+| 16/09 | Recarregar a página depois de concluir reabriria a tela com um token já gasto, porque o fragmento continua na URL | LACUNA DE SPEC | `onConcluir` limpa o fragmento com `history.replaceState` antes de devolver ao login. E11 previa o oposto (reabrir preservando estado) e continua valendo **antes** de salvar |
+| 16/09 | A tela não tem teste automatizado, como a spec já antecipava | — | As duas verificações manuais da seção 9 seguem pendentes e são a única cobertura desse trecho |
