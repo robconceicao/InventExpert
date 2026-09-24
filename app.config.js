@@ -10,6 +10,8 @@
 const appJson = require("./app.json");
 
 const expo = appJson.expo || appJson;
+const { licenseBuildConfig } = require('./scripts/license-build-config.cjs');
+const licenseBuild = licenseBuildConfig(process.env);
 
 /** Base path GitHub Pages (sem trailing slash). Ex.: /InventExpert */
 const webBase = (process.env.EXPO_WEB_BASE || "").replace(/\/$/, "") || undefined;
@@ -23,6 +25,7 @@ module.exports = {
     },
     extra: {
       ...(expo.extra || {}),
+      ...licenseBuild,
       supabaseUrl:
         process.env.EXPO_PUBLIC_SUPABASE_URL ||
         process.env.SUPABASE_URL ||
