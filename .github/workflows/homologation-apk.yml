@@ -35,7 +35,7 @@ jobs:
         run: npx expo prebuild --platform android --no-install
       - name: Build test APK
         working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+        run: chmod +x gradlew && ./gradlew :app:assembleRelease --no-daemon --no-parallel --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
       - name: Record test build configuration
         run: |
           node -e "require('fs').writeFileSync('homologation-build.json', JSON.stringify({commit:process.env.GITHUB_SHA,...require('./scripts/license-build-config.cjs').licenseBuildConfig(process.env)}, null, 2))"
