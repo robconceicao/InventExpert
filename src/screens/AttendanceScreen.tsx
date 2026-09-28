@@ -135,6 +135,7 @@ export default function AttendanceScreen() {
   };
 
   const handleArchive = async (clearForm = false) => {
+    let savedLocally = false;
     try {
       const storedHistory = await AsyncStorage.getItem(HISTORY_KEY);
       const history = storedHistory
@@ -145,9 +146,10 @@ export default function AttendanceScreen() {
         attendance,
       });
       await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      savedLocally = true;
       await enqueueSyncItem("attendance", { attendance });
     } catch {
-      Alert.alert("Erro", "Não foi possível arquivar os dados.");
+      Alert.alert("Não sincronizado", savedLocally ? "Histórico salvo no aparelho, mas a fila falhou. O formulário foi mantido; faça login e tente novamente." : "Falha ao salvar no aparelho. O formulário foi mantido.");
       return;
     }
 
@@ -157,9 +159,9 @@ export default function AttendanceScreen() {
     if (clearForm) {
       setRawText("");
       setAttendance(emptyData);
-      Alert.alert("Arquivado", "Dados salvos e tela limpa.");
+      Alert.alert("Arquivado", "Dados salvos no aparelho e na fila; tela limpa. A sincronização pode estar pendente.");
     } else {
-      Alert.alert("Arquivado", "Dados salvos com sucesso.");
+      Alert.alert("Arquivado", "Dados salvos no aparelho e na fila. A sincronização pode estar pendente.");
     }
   };
 

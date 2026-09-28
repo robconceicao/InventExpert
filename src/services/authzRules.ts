@@ -20,8 +20,8 @@ export function parseAppRole(raw: unknown): AppRole | null {
 }
 
 export function roleAtLeast(role: AppRole | null, min: AppRole): boolean {
-  // null = legado sem perfil → não restringe
-  if (role === null) return true;
+  // Missing profile never grants a privileged action.
+  if (role === null) return false;
   return ROLE_RANK[role] >= ROLE_RANK[min];
 }
 

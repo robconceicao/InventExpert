@@ -8,7 +8,7 @@ import {
   FIELD_EVENT_KINDS,
   upsertFieldEventFromQueueItem,
 } from "./fieldEventSync";
-import { registerSyncHandler, type SyncQueueItem } from "./sync";
+import { configureSyncOwner, registerSyncHandler, type SyncQueueItem } from "./sync";
 
 let registered = false;
 
@@ -34,6 +34,11 @@ async function handleFieldEvent(item: SyncQueueItem): Promise<void> {
 export function registerDefaultSyncHandlers(): void {
   if (registered) return;
   registered = true;
+  configureSyncOwner(async () => {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user.id ?? null;
+  });
 
   for (const kind of FIELD_EVENT_KINDS) {
     registerSyncHandler(kind, handleFieldEvent);

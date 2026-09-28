@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
 import React, { useCallback, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { getSyncQueueLength, syncQueue } from "../services/sync";
 import { registerDefaultSyncHandlers } from "../services/syncHandlers";
@@ -15,7 +15,7 @@ export default function SyncStatus() {
   const [pending, setPending] = useState(0);
 
   const refreshPending = useCallback(() => {
-    void getSyncQueueLength().then(setPending);
+    void getSyncQueueLength().then(setPending).catch(() => setPending(-1));
   }, []);
 
   useEffect(() => {
@@ -36,9 +36,10 @@ export default function SyncStatus() {
   }, [refreshPending]);
 
   const onPress = () => {
-    if (pending <= 0) return;
+    if (pending === 0) return;
     void syncQueue().then((r) => {
       refreshPending();
+      if (!r.ok) Alert.alert("Sincronização pendente", r.message);
       if (__DEV__ && r.message) {
         console.log("[SYNC]", r.message);
       }
@@ -47,12 +48,12 @@ export default function SyncStatus() {
 
   const color = !isOnline
     ? "#F87171"
-    : pending > 0
+    : pending !== 0
       ? "#FBBF24"
       : "#4ADE80";
   const icon = !isOnline
     ? "cloud-offline"
-    : pending > 0
+    : pending !== 0
       ? "cloud-upload-outline"
       : "cloud-done";
 
@@ -63,6 +64,7 @@ export default function SyncStatus() {
       accessibilityLabel={
         !isOnline
           ? "Offline"
+          : pending < 0 ? "Falha ao ler a fila local. Dados preservados."
           : pending > 0
             ? `${pending} itens pendentes de sincronização`
             : "Online, fila vazia"
