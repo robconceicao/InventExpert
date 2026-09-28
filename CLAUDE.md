@@ -566,6 +566,7 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 | Formato do arquivo por magic bytes, não por extensão/MIME | Android manda `octet-stream` e o cache do picker pode perder o nome; extensão só serve para mensagem e `console.warn` |
 | Picker sempre `type: "*/*"` | Filtro de MIME deixava .xls/.prc/.txt cinza e inselecionáveis no Android |
 | IO separado da conversão (`fileImport` vs `spreadsheetReader`/`fileFormat`) | O miolo (bytes → planilha → CSV) roda no Jest sem mock de React Native |
+| Host do Supabase na tela de login e no alerta de rede (`supabaseDiagnostico`) | URL e chave ficam gravadas no build; no incidente de 28/09 o projeto estava no ar e sem nenhuma requisição — só o print do aparelho diz para onde o build aponta. Ref da URL × ref da chave divergentes = aviso vermelho — ver SPEC 0007 |
 | `readAsStringAsync` sempre de `expo-file-system/legacy` | No SDK 54 o import raiz **lança em runtime** — foi a causa de "Não foi possível ler a planilha" |
 
 ---

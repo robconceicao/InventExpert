@@ -1,4 +1,5 @@
 import {
+  anexarServidor,
   ehErroDeRede,
   translateAuthError,
   translateThrownAuthError,
@@ -88,4 +89,28 @@ describe("translateThrownAuthError", () => {
       expect(msg).not.toMatch(/undefined|null|\[object/i);
     },
   );
+});
+
+describe("anexarServidor — SPEC 0007", () => {
+  const HOST = "knxwuxxpbrbmhgdatgoe.supabase.co";
+
+  it("anexa o host ao alerta de falha de rede", () => {
+    const msg = anexarServidor(translateAuthError("Network request failed"), HOST);
+    expect(msg).toContain("Não foi possível falar com o servidor");
+    expect(msg.endsWith(`Servidor: ${HOST}`)).toBe(true);
+  });
+
+  it("anexa também quando a falha veio de um throw sem mensagem", () => {
+    expect(anexarServidor(translateThrownAuthError(undefined), HOST)).toContain(`Servidor: ${HOST}`);
+  });
+
+  it("E6: erro que não é de rede sai sem o host", () => {
+    const msg = translateAuthError("Invalid login credentials");
+    expect(anexarServidor(msg, HOST)).toBe(msg);
+  });
+
+  it("sem host conhecido, devolve a mensagem como veio", () => {
+    const msg = translateAuthError("Network request failed");
+    expect(anexarServidor(msg, null)).toBe(msg);
+  });
 });

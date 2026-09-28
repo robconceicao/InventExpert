@@ -28,6 +28,15 @@ const MENSAGEM_DE_REDE =
   "Não foi possível falar com o servidor. Verifique sua internet e tente novamente; " +
   "se o problema persistir, o serviço pode estar fora do ar.";
 
+/**
+ * Anexa o host ao alerta de falha de rede (SPEC 0007, D2). Nos outros erros o
+ * servidor respondeu, então o host não ajuda e fica de fora.
+ */
+export function anexarServidor(mensagem: string, host: string | null): string {
+  if (mensagem !== MENSAGEM_DE_REDE || !host) return mensagem;
+  return `${mensagem}\n\nServidor: ${host}`;
+}
+
 export function ehErroDeRede(message: string): boolean {
   const msg = message.toLowerCase();
   return PADROES_DE_REDE.some((padrao) => msg.includes(padrao));

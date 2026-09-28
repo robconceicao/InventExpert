@@ -13,8 +13,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { isSupabaseConfigured, supabase } from "../services/supabase";
 import {
+  isSupabaseConfigured,
+  supabase,
+  supabaseDiagnostico,
+} from "../services/supabase";
+import {
+  anexarServidor,
   translateAuthError,
   translateThrownAuthError,
 } from "../utils/authErrorMessage";
@@ -32,6 +37,11 @@ import {
  * as Redirect URLs do painel (`.../InventExpert/**`).
  */
 const WEB_PUBLICA = "https://robconceicao.github.io/InventExpert/";
+
+/** Alerta de erro; na falha de rede, diz qual servidor o build tentou (SPEC 0007). */
+function alertarErro(mensagem: string) {
+  Alert.alert("Erro", anexarServidor(mensagem, supabaseDiagnostico.host));
+}
 
 function urlDeRedefinicao(): string {
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -64,9 +74,9 @@ export default function AuthScreen() {
         email: trimmedEmail,
         password,
       });
-      if (error) Alert.alert("Erro", translateAuthError(error.message));
+      if (error) alertarErro(translateAuthError(error.message));
     } catch (e) {
-      Alert.alert("Erro", translateThrownAuthError(e));
+      alertarErro(translateThrownAuthError(e));
     } finally {
       setLoading(false);
     }
@@ -97,7 +107,7 @@ export default function AuthScreen() {
         password,
       });
       if (error) {
-        Alert.alert("Erro", translateAuthError(error.message));
+        alertarErro(translateAuthError(error.message));
       } else {
         setSuccessMessage(
           "E-mail de confirmação enviado! Verifique sua caixa de entrada (e a pasta de spam) para ativar sua conta."
@@ -107,7 +117,7 @@ export default function AuthScreen() {
         setMode("login");
       }
     } catch (e) {
-      Alert.alert("Erro", translateThrownAuthError(e));
+      alertarErro(translateThrownAuthError(e));
     } finally {
       setLoading(false);
     }
@@ -124,7 +134,7 @@ export default function AuthScreen() {
         redirectTo: urlDeRedefinicao(),
       });
       if (error) {
-        Alert.alert("Erro", translateAuthError(error.message));
+        alertarErro(translateAuthError(error.message));
       } else {
         Alert.alert(
           "Recuperação enviada",
@@ -132,7 +142,7 @@ export default function AuthScreen() {
         );
       }
     } catch (e) {
-      Alert.alert("Erro", translateThrownAuthError(e));
+      alertarErro(translateThrownAuthError(e));
     } finally {
       setLoading(false);
     }
@@ -166,6 +176,13 @@ export default function AuthScreen() {
             <Text style={styles.errorText}>
               Atenção: este build saiu sem as credenciais do Supabase
               (EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY).
+            </Text>
+          )}
+
+          {supabaseDiagnostico.divergente && (
+            <Text style={styles.errorText}>
+              Atenção: a URL deste build é do projeto {supabaseDiagnostico.refUrl}, mas a
+              chave é do projeto {supabaseDiagnostico.refChave}.
             </Text>
           )}
 
@@ -288,6 +305,12 @@ export default function AuthScreen() {
               </Pressable>
             )}
           </View>
+
+          {isSupabaseConfigured && supabaseDiagnostico.host && (
+            <Text style={styles.serverText} selectable>
+              Servidor: {supabaseDiagnostico.host}
+            </Text>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -368,6 +391,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 8,
     fontWeight: "500",
+    textAlign: "center",
+  },
+  serverText: {
+    marginTop: 16,
+    color: "#9CA3AF",
+    fontSize: 11,
     textAlign: "center",
   },
   errorText: {
