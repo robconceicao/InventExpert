@@ -555,6 +555,10 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 | Texto vazio devolve `[]` em vez de `[[""]]` | É o que faz `pickSheetAsMatrix()` conseguir dizer "está vazio" em vez de seguir com uma matriz de uma célula |
 | Número do ACURACIDADE por `parseNumeroBr` | A matriz vem com `raw: true` para preservar o pt-BR; `parseFloat` cru lia 1.234 em "1.234,00" e 395 em "395,33" |
 | Baseline de teste é o comando `npm run check`, não um número no `CLAUDE.md` | Contagem congelada já divergiu da `main` quatro vezes sem nada falhar; um agente que lê o número velho "conserta" o que está certo — ver ADR 0002 |
+| Erro de auth traduzido em `authErrorMessage.ts`, não na tela | Closure dentro do `AuthScreen` não roda no Jest (`testEnvironment: node`) e não serve ao segundo ponto de login; a lista de rede ficou incompleta por anos sem ninguém notar |
+| Falha de rede reconhecida por lista de substrings | O mesmo erro chega como "Network request failed" (RN), "Failed to fetch" (browser) ou "network error" conforme a versão do supabase-js; não há código estável para falha de transporte |
+| Exceção lançada no login recebe a mesma frase do erro retornado | Os três fluxos eram `try`/`finally` sem `catch`: o supabase-js lança em falha de rede, a exceção escapava e a tela não mostrava nada. Silêncio é pior que inglês |
+| A frase de rede cita internet **e** servidor | O caso real foi o Supabase fora do ar com a internet do usuário funcionando; "verifique sua conexão" mandava procurar defeito onde não havia |
 | qualityDecayK por perfil de operação | Farmácia mais rigorosa que supermercado/atacado |
 | Modalidade canônica FREE (+ aliases FREE_LANCE/FREELANCE) | Um valor canônico; parse tolerante |
 | Filtro P&B do scanner via WebView + canvas (`scanFilter.ts`) | Nem `expo-image-manipulator` nem o plugin de scanner expõem operação de cor; canal de tinta = `min(R,G,B)` elimina o matiz de caneta colorida |
@@ -606,6 +610,8 @@ acima, senão este arquivo passa a mentir sobre o que está publicado.
 - ❌ Não fatiar linha de CSV com `split(sep)` — aspas podem conter separador e quebra de linha
 - ❌ Não escrever um segundo parser de CSV — `csvParaMatriz()` é o único
 - ❌ Não hidratar tela a partir do AsyncStorage sem `try` e sem mesclar com o estado inicial
+- ❌ Não deixar chamada de auth em `try`/`finally` sem `catch` — o supabase-js lança em falha de rede
+- ❌ Não traduzir erro de auth dentro da tela — usar `translateAuthError()`/`translateThrownAuthError()`
 - ❌ Não editar migrations já aplicadas — criar patch migrations novas
 - ❌ Não cadastrar área de farmácia com `limite = 9999` (sem limite) — nenhuma tem
 - ❌ Não somar BLOCO.xls sem deduplicar as linhas repetidas na quebra de página

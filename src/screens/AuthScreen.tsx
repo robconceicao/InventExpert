@@ -66,6 +66,9 @@ export default function AuthScreen() {
       });
       if (error) Alert.alert("Erro", translateAuthError(error.message));
     } catch (e) {
+      // Em falha de rede o supabase-js LANÇA em vez de devolver `error`. Sem
+      // este catch a exceção escapava, o `finally` desligava o spinner e nada
+      // aparecia: a pessoa não sabia se errou a senha ou se o app travou.
       Alert.alert("Erro", translateThrownAuthError(e));
     } finally {
       setLoading(false);
