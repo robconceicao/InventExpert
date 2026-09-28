@@ -6,16 +6,28 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_ENV": "homologation",
+        "TEST_LICENSE_BYPASS": "true"
+      }
     },
     "preview": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "homologation",
+        "TEST_LICENSE_BYPASS": "true"
       }
     },
     "production": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "TEST_LICENSE_BYPASS": "false"
       }
     }
   },

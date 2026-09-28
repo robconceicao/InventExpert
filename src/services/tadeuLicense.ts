@@ -1,8 +1,9 @@
+import { testLicenseBypass } from './licenseBuild';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-export type TadeuPlanSlug = 'free' | 'pro' | 'premium' | 'legacy';
+export type TadeuPlanSlug = 'free' | 'pro' | 'premium' | 'legacy' | 'homologation';
 
 export type LicensedFeature = {
   key: string;
@@ -100,6 +101,7 @@ async function readCachedLicense(): Promise<TadeuLicense | null> {
     const parsed = JSON.parse(raw) as TadeuLicense;
     const checkedAt = new Date(parsed.checkedAt).getTime();
     if (!Number.isFinite(checkedAt) || Date.now() - checkedAt > MAX_OFFLINE_MS) return null;
+    if (parsed.plan === 'homologation') return null;
     if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() <= Date.now()) return null;
     return { ...parsed, offline: true };
   } catch {
@@ -112,6 +114,8 @@ async function cacheLicense(license: TadeuLicense) {
 }
 
 export async function fetchTadeuLicense(): Promise<TadeuLicense> {
+  // Test grant exists only in memory and is never cached as a commercial license.
+  if (testLicenseBypass) return { ok: true, license: 'active', application: APP_SLUG, recheckAfterSeconds: 0, plan: 'homologation', features: [], expiresAt: null, checkedAt: new Date().toISOString() };
   const client = getTadeuLicenseAuthClient();
   if (!client) throw new Error('Licenciamento Tadeu Apps não configurado neste build.');
 
@@ -156,12 +160,14 @@ export async function fetchTadeuLicense(): Promise<TadeuLicense> {
 }
 
 export function hasLicensedFeature(license: TadeuLicense | null, key: string) {
+  if (testLicenseBypass) return true;
   if (!license) return false;
   if (license.plan === 'legacy') return true;
   return license.features.some((feature) => feature.key === key);
 }
 
 export function getLicensedLimit(license: TadeuLicense | null, key: string) {
+  if (testLicenseBypass) return null;
   if (!license) return null;
   const feature = license.features.find((item) => item.key === key);
   if (!feature || feature.limitValue == null) return null;
