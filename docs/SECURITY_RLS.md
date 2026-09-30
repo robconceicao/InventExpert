@@ -1,7 +1,7 @@
 # Segurança Supabase — RLS, Auth e SECURITY DEFINER
 
 Última actualização: 2026-07-17  
-Projeto: `maoduppsngdwupokxtqr`
+Projeto: `knxwuxxpbrbmhgdatgoe`
 
 ## Fase 0 — Diagnóstico (estado pré-patch Security Advisor)
 
