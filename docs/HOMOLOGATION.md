@@ -22,3 +22,15 @@ Configure APP_ENV=homologation e TEST_LICENSE_BYPASS=true somente na instância 
 3. Nos servidores, remover TEST_LICENSE_BYPASS e fixar APP_ENV=production. Validar conta sem licença, expirada, cancelada, offline e com limite esgotado.
 4. Confirmar assinatura Android oficial, applicationId e canal de distribuição production. Testar instalação e atualização em aparelho real.
 5. Billing permanece BILLING_MODE=test e BILLING_PROVIDER=mock durante esta entrega. A ativação financeira real é uma etapa posterior explícita.
+
+## Finalização de 2026-10-01
+
+Projeto operacional confirmado pelo usuário: `knxwuxxpbrbmhgdatgoe`.
+A conexão Supabase do Codex ainda precisa de acesso à organização correta.
+Não aplicar a migration de perfis nem configurar o APK apontando ao projeto antigo.
+Versão reservada para teste: 1.8.2 (23). Main incorporada preservando a correção
+de mensagem de rede no login e a SPEC 0007 de proxy IA adicionada pelo usuário.
+A correção de fila/autorização está em `0007-auditoria-fila-e-autorizacao.md`;
+a spec de proxy IA é outro documento e não significa implantação concluída.
+Produção exige bypass false/ausente, migration validada e nenhuma chave privada
+de provedor embutida no cliente, além da liberação comercial explícita.

@@ -14,7 +14,7 @@ Estado: implementação local para homologação; sem APK, deploy ou alteração
 - Conta B não enxerga nem envia itens de A; legado sem autor permanece intacto; upsert rejeita divergência antes de tocar no banco.
 - Falha/corrupção de armazenamento rejeita enqueue e não sobrescreve a cópia existente.
 - Metadado editável não concede ADMIN; sessão/perfil ausentes ou erro negam gestão.
-- npm run check deve preservar os 530 testes existentes (alterando apenas a expectativa antiga de null permitir acesso) e incluir regressões.
+- npm run check deve passar, conforme ADR 0002, preservando as regressões de fila/autorização e regras R1–R13.
 
 ## Escopo de arquivos
 src/services/{sync,syncHandlers,fieldEventSync,authz,authzRules}.ts; testes em src/services/__tests__; mensagens dos três formulários (ReportFormShell, ReportAScreen, AttendanceScreen); SyncStatus para erro de leitura; esta spec.
@@ -25,3 +25,10 @@ Reatribuir dados legados, apagar histórico, sincronização entre dispositivos 
 ## Revisão após verificação independente
 - INV-03 inclui o servidor: nova migration_20260927_staff_writer_requires_profile.sql remove o acesso legado sem perfil de is_staff_writer. Aplicação remota separada; validar auth.uid nulo, perfil ausente, OPERADOR (false), LIDER/ADMIN (true).
 - SyncStatus deve mostrar um alerta visível ao tocar, inclusive fora de __DEV__, quando a fila falha.
+
+## Reconciliação do baseline em 2026-10-01
+
+Após incorporar main, authErrorMessage.test.ts passou de 33 para 11 casos Jest:
+vários parametrizados foram agrupados em testes com múltiplas asserções.
+Assim, 539 - 33 + 11 = 517 testes em 36 suítes. Os nove testes novos de fila/
+autorização permanecem e o verificador não encontrou regressão nas correções INV.
