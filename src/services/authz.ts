@@ -2,9 +2,9 @@
  * RBAC leve do InventExpert — resolução assíncrona de papel + re-export das regras.
  *
  * Fontes (por ordem):
- *  1) user.app_metadata.role ou user_metadata.role (JWT)
+ *  1) user.app_metadata.role (administrado pelo servidor)
  *  2) tabela app_profiles.role
- *  3) null → modo legado (acesso total) se não houver perfil
+ *  3) null → acesso privilegiado negado
  */
 
 import { isSupabaseConfigured, supabase } from "./supabase";
@@ -24,7 +24,7 @@ export {
 
 /**
  * Resolve o papel do utilizador autenticado.
- * null = sem restrição (compat / sem migration aplicada).
+ * null = perfil ausente ou indisponível, sem privilégios.
  */
 export async function resolveAppRole(): Promise<AppRole | null> {
   if (!isSupabaseConfigured || !supabase) return null;
@@ -35,9 +35,7 @@ export async function resolveAppRole(): Promise<AppRole | null> {
     } = await supabase.auth.getSession();
     if (!session?.user) return null;
 
-    const meta =
-      parseAppRole(session.user.app_metadata?.role) ||
-      parseAppRole(session.user.user_metadata?.role);
+    const meta = parseAppRole(session.user.app_metadata?.role);
     if (meta) return meta;
 
     const { data, error } = await supabase

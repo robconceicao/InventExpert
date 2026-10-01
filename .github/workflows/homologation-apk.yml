@@ -31,6 +31,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node --test scripts/license-build-config.test.cjs scripts/license-service.test.cjs
       - run: npm run check -- --runInBand
+      - name: Verify the user-confirmed operational project
+        run: |
+          node -e "if(process.env.EXPO_PUBLIC_SUPABASE_URL!=='https://knxwuxxpbrbmhgdatgoe.supabase.co')throw Error('InventExpert must target the user-confirmed homologation project; update repository build settings')"
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
       - name: Build test APK

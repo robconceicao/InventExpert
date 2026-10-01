@@ -462,7 +462,7 @@ termina verde.
 
 ## Build e Release
 
-**Versão atual: 1.8.1 · versionCode 22** (commit `1c2d011`). A fonte da verdade
+**Versão atual: 1.8.2 · versionCode 23** (commit `1c2d011`). A fonte da verdade
 é o `app.json`; esta linha é só referência rápida e precisa ser atualizada junto
 com ele a cada release.
 

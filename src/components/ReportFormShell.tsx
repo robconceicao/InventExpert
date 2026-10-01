@@ -216,6 +216,7 @@ export default function ReportFormShell<T extends object>({
   };
 
   const handleArchive = async (clearForm: boolean) => {
+    let savedLocally = false;
     try {
       const stored = await AsyncStorage.getItem(historyKey);
       const history = stored
@@ -223,16 +224,17 @@ export default function ReportFormShell<T extends object>({
         : [];
       history.push({ savedAt: new Date().toISOString(), report: { ...report } });
       await AsyncStorage.setItem(historyKey, JSON.stringify(history));
+      savedLocally = true;
       await enqueueSyncItem(syncKind, { report });
       void syncQueue();
       if (clearForm) {
         setReport(initialState);
-        Alert.alert("Arquivado", "Dados salvos e formulário limpo.");
+        Alert.alert("Arquivado", "Dados salvos no aparelho e na fila; formulário limpo. A sincronização pode estar pendente.");
       } else {
-        Alert.alert("Arquivado", "Dados salvos com sucesso.");
+        Alert.alert("Arquivado", "Dados salvos no aparelho e na fila. A sincronização pode estar pendente.");
       }
     } catch {
-      Alert.alert("Erro", "Não foi possível arquivar.");
+      Alert.alert("Não sincronizado", savedLocally ? "Histórico salvo no aparelho, mas a fila falhou. O formulário foi mantido; faça login e tente novamente." : "Falha ao salvar no aparelho. O formulário foi mantido.");
     }
   };
 

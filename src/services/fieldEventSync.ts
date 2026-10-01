@@ -119,6 +119,9 @@ export async function upsertFieldEventFromQueueItem(
   item: SyncQueueItem,
   userId: string,
 ): Promise<void> {
+  if (!item.ownerId || item.ownerId !== userId) {
+    throw new Error("Autor da fila difere da sessão. Registro preservado no aparelho.");
+  }
   if (!FIELD_EVENT_KINDS.includes(item.type as FieldEventKind)) {
     throw new Error(`Tipo de sync não suportado: ${item.type}`);
   }
