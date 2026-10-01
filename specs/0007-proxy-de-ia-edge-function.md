@@ -1,6 +1,6 @@
 # SPEC 0007 — Chaves de IA saem do app para uma Edge Function
 
-- **Estado:** RASCUNHO
+- **Estado:** APROVADA
 - **Autor:** Roberto
 - **Data:** 2026-09-30
 - **Entrega relacionada:** levantamento de agentes de 30/09/2026 (seção 1.5) — quatro
@@ -358,3 +358,4 @@ casos. Requisição barrada antes (E1–E5) não grava linha.
 | 2026-09-30 | Spec escrita a partir do levantamento de agentes; Q1–Q7 abertas | Claude Code (sessão principal) | RASCUNHO |
 | 2026-09-30 | Q1 = somente Anthropic; Q2 = pseudonimizar. Cadeia de provedores vira repetição (E6, E7, E20); tela passa linhas do ranking (D11, E17–E19); `deepseek.ts` dá lugar a `analiseEquipe.ts` | Roberto / Claude Code | RASCUNHO |
 | 2026-09-30 | Q3–Q7 respondidas com as recomendações: limites 60/20, `apagar_escrita` para todo staff e `analisar_equipe` só escrita, Sonnet 5.5 / Haiku 4.5, retenção de 90 dias, `geminiVision.ts` removido. Limites da Edge Function confirmados na documentação (150 s, 2 s de CPU, 256 MB). Nada aberto; falta só a aprovação do Roberto | Roberto / Claude Code | RASCUNHO |
+| 2026-09-30 | Spec aprovada; Q1–Q7 fechadas e limites da Edge Function confirmados | Roberto | RASCUNHO → APROVADA |
